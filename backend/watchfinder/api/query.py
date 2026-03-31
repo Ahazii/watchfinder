@@ -151,9 +151,3 @@ def count_listings(db: Session, stmt: Select) -> int:
     c_stmt = select(func.count()).select_from(subq)
     n = db.scalar(c_stmt)
     return int(n or 0)
-
-</think>
-
-
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-StrReplace
