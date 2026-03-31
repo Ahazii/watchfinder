@@ -1,0 +1,65 @@
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    database_url: str = Field(
+        ...,
+        alias="DATABASE_URL",
+        description="SQLAlchemy URL, e.g. postgresql+psycopg://user:pass@host:5432/db",
+    )
+    ebay_client_id: str = Field(..., alias="EBAY_CLIENT_ID")
+    ebay_client_secret: str = Field(..., alias="EBAY_CLIENT_SECRET")
+    ebay_environment: str = Field(
+        "production",
+        alias="EBAY_ENVIRONMENT",
+        description="production | sandbox",
+    )
+    tz: str = Field("UTC", alias="TZ")
+    app_port: int = Field(8080, alias="APP_PORT")
+    log_level: str = Field("INFO", alias="LOG_LEVEL")
+
+    # Ingestion defaults (tune later / move to DB settings)
+    ebay_search_query: str = Field(
+        "wristwatch",
+        alias="EBAY_SEARCH_QUERY",
+        description="Browse API search query for scheduled ingest",
+    )
+    ebay_search_limit: int = Field(50, alias="EBAY_SEARCH_LIMIT", ge=1, le=200)
+    ebay_marketplace_id: str = Field(
+        "EBAY_GB",
+        alias="EBAY_MARKETPLACE_ID",
+        description="e.g. EBAY_GB, EBAY_US — must match developer key + listings region",
+    )
+    ebay_category_tree_id: str | None = Field(
+        None,
+        alias="EBAY_CATEGORY_TREE_ID",
+        description="Optional taxonomy category tree id for get_category_tree calls",
+    )
+    ingest_interval_minutes: int = Field(
+        30,
+        alias="INGEST_INTERVAL_MINUTES",
+        ge=5,
+        le=1440,
+        description="APScheduler interval for Browse ingest",
+    )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+def database_url_for_psycopg(url: str) -> str:
+    """psycopg.connect() expects postgresql:// not postgresql+psycopg://."""
+    if url.startswith("postgresql+psycopg://"):
+        return "postgresql://" + url.removeprefix("postgresql+psycopg://")
+    return url

@@ -1,0 +1,56 @@
+WATCHFINDER — CURSOR PROMPT (BUILD SPEC)
+========================================
+
+NOTE: This repository already implements this spec (see root README.md + PROGRESS.md). Use this file as a **reference** or paste into Cursor for **extensions / refactors**.
+
+**Unraid install:** `SIMPLIFIED_NOVICE_SETUP.md` (folders, `watchfinder-net`, `postgres:16`, GHCR image). **Template:** `deploy/unraid/watchfinder.xml`.
+
+Build a production-style app **WatchFinder** for Unraid: self-hosted eBay watch sourcing via **official eBay APIs**, data in **PostgreSQL**, repair/resale signals, modern searchable web UI.
+
+DEPLOYMENT
+- Runs on **Unraid Docker** only (not Docker Desktop–centric). **Two containers:** your app + **postgres:16**. App image built in **GitHub Actions**, pushed to **GHCR**; Unraid **pulls** the image.
+- App + Postgres on user-defined network **`watchfinder-net`** so hostname **`watchfinder-postgres`** works in `DATABASE_URL`.
+- Secrets/config via **environment variables**. Startup: wait for Postgres → **Alembic** migrate → **FastAPI** + **scheduler** (lifespan or documented process) → serve frontend.
+
+ARCHITECTURE
+- Official eBay APIs only. **PostgreSQL** (not SQLite).
+- Paths (host → container): `.../appdata/watchfinder` → `/app/config`; `.../logs` → `/app/logs`; `.../data` → `/app/data`; `.../imports` → `/imports`. Postgres data: `.../appdata/postgres-watchfinder` → `/var/lib/postgresql/data`.
+- Example: `DATABASE_URL=postgresql+psycopg://watchfinder:CHANGE_ME@watchfinder-postgres:5432/watchfinder`
+- Startup script: **psycopg** wait loop must use a URL **psycopg accepts** (strip `+psycopg` from SQLAlchemy URLs if needed).
+
+STACK
+- Backend: Python 3.12, FastAPI, SQLAlchemy, Alembic, APScheduler, psycopg, httpx.
+- Frontend: Next.js 14, TypeScript, Tailwind, shadcn/ui.
+- Deliver: **Dockerfile** (expose **8080**), **start script**, **.env.example** (`DATABASE_URL`, `EBAY_*`, `EBAY_ENVIRONMENT`, `TZ`, optional `APP_PORT`, `LOG_LEVEL`), **GitHub Actions** → GHCR (`latest` on default branch, optional `v*` tags), **Unraid XML** (`ghcr.io/YOUR_GITHUB_USERNAME/watchfinder:latest`, all envs/paths/port **8080**, friendly descriptions), **README** with short Unraid section pointing to `SIMPLIFIED_NOVICE_SETUP.md` where useful.
+
+EBAY
+- OAuth for **Buy APIs**. **Buy Browse** (active listings), **Taxonomy** (categories/aspects). Persist raw JSON + normalized fields (item id, title, subtitle, URL, images, prices, shipping, currency, seller info, condition, category, times, aspects JSON, first/last seen, active flag, etc.).
+
+PARSING (RULES-FIRST)
+- Extract where possible: brand, model, ref, movement, caliber, defect keywords, running/parts signals. Dictionaries + regex; not LLM-only.
+
+SCORING (RULES-FIRST, TUNABLE)
+- Flag repair/resale candidates from seller text (e.g. not running, for parts/repair, untested, overwound, missing crown/stem, water damage, rust, crystal/dial damage — extend via dictionaries).
+- Per candidate: estimated resale, repair cost, max buy, profit, **confidence**, **risk**, and **human-readable explanation list** (why flagged).
+
+UI
+- Dashboard, searchable listings + filters, repair candidates, listing detail, score explanation. Filters: brand, price, repair keywords, condition, movement, caliber known/unknown, confidence, profit.
+
+DATA MODEL (POSTGRES)
+- Tables including: listings, listing_snapshots, parsed_attributes, repair_signals, opportunity_scores, saved_searches, settings as needed. Keep raw eBay payloads for future imports.
+
+SCHEDULER
+- Ingest jobs run **inside** the app container on a schedule.
+
+STYLE
+- Production-practical, modular, typed where it helps, no overengineering. Comment non-obvious assumptions.
+
+IF VAGUE: generate **real files** — prioritise backend, models, eBay client, ingestion, then Docker/CI/XML.
+
+PHASES (ORDER)
+1. Structure, architecture note, backend skeleton, SQLAlchemy models, Alembic, config, DB session, eBay auth + Browse + Taxonomy clients, first ingestion job, startup script.
+2. Parsing, keyword dicts, scoring + explanations, API routes (listings, candidates, filters, dashboard).
+3. Next.js: dashboard, listings, detail, repair candidates.
+4. Dockerfile, .env.example, GitHub Actions, Unraid XML, README.
+
+START NOW WITH: folder layout, architecture summary, backend skeleton, models, initial migration, settings module, eBay auth + Browse clients, ingestion job, startup script.

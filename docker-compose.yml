@@ -1,0 +1,54 @@
+# Local stack: Postgres + WatchFinder (build from Dockerfile).
+# Usage:
+#   copy .env.example to .env and set EBAY_CLIENT_ID / EBAY_CLIENT_SECRET
+#   docker compose up --build
+# UI + API: http://localhost:8080
+#
+# For GHCR image instead of build:
+#   image: ghcr.io/<you>/watchfinder:latest
+#   (remove build:)
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: watchfinder-postgres
+    environment:
+      POSTGRES_USER: watchfinder
+      POSTGRES_PASSWORD: watchfinder
+      POSTGRES_DB: watchfinder
+      TZ: Europe/London
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U watchfinder -d watchfinder"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  watchfinder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: watchfinder
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql+psycopg://watchfinder:watchfinder@postgres:5432/watchfinder
+      EBAY_CLIENT_ID: ${EBAY_CLIENT_ID}
+      EBAY_CLIENT_SECRET: ${EBAY_CLIENT_SECRET}
+      EBAY_ENVIRONMENT: ${EBAY_ENVIRONMENT:-production}
+      EBAY_MARKETPLACE_ID: ${EBAY_MARKETPLACE_ID:-EBAY_GB}
+      EBAY_SEARCH_QUERY: ${EBAY_SEARCH_QUERY:-wristwatch}
+      EBAY_SEARCH_LIMIT: ${EBAY_SEARCH_LIMIT:-50}
+      TZ: ${TZ:-Europe/London}
+      APP_PORT: "8080"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      INGEST_INTERVAL_MINUTES: ${INGEST_INTERVAL_MINUTES:-30}
+
+volumes:
+  postgres_data:

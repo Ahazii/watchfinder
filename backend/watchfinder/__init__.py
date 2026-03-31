@@ -1,0 +1,1 @@
+"""WatchFinder application package."""

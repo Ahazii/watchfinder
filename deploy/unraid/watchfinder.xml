@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>WatchFinder</Name>
+  <Repository>ghcr.io/YOUR_GITHUB_USERNAME/watchfinder:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/YOUR_GITHUB_USERNAME/watchfinder</Support>
+  <Project>https://github.com/YOUR_GITHUB_USERNAME/watchfinder</Project>
+  <Overview>WatchFinder — eBay Browse ingest, PostgreSQL, web UI + API on port 8080. Replace YOUR_GITHUB_USERNAME. Create Docker network watchfinder-net; add Extra Parameters: --network=watchfinder-net (or set Network type) on this container and on watchfinder-postgres. Start Postgres first. Full steps: repo Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+
+  <Config Name="Web UI Port" Target="8080" Default="8080" Mode="tcp" Description="HTTP port (UI + /api + /docs on same port)" Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+
+  <Config Name="App config" Target="/app/config" Default="/mnt/user/appdata/watchfinder" Mode="rw" Description="Host folder for app config (mounted read/write at /app/config)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/watchfinder</Config>
+  <Config Name="App logs" Target="/app/logs" Default="/mnt/user/appdata/watchfinder/logs" Mode="rw" Description="Host folder for application logs" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/watchfinder/logs</Config>
+  <Config Name="App data" Target="/app/data" Default="/mnt/user/appdata/watchfinder/data" Mode="rw" Description="Host folder for cache / exports / app data" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/watchfinder/data</Config>
+  <Config Name="Imports" Target="/imports" Default="/mnt/user/appdata/watchfinder/imports" Mode="rw" Description="Optional host folder for manual file drops (/imports in container)" Type="Path" Display="advanced" Required="false" Mask="false">/mnt/user/appdata/watchfinder/imports</Config>
+
+  <Config Name="DATABASE_URL" Target="DATABASE_URL" Default="postgresql+psycopg://watchfinder:CHANGE_ME@watchfinder-postgres:5432/watchfinder" Mode="" Description="SQLAlchemy URL; password must match Postgres container; host must be container name on watchfinder-net" Type="Variable" Display="always" Required="true" Mask="true">postgresql+psycopg://watchfinder:CHANGE_ME@watchfinder-postgres:5432/watchfinder</Config>
+  <Config Name="EBAY_CLIENT_ID" Target="EBAY_CLIENT_ID" Default="" Mode="" Description="eBay developer application client ID (Buy API)" Type="Variable" Display="always" Required="true" Mask="false"></Config>
+  <Config Name="EBAY_CLIENT_SECRET" Target="EBAY_CLIENT_SECRET" Default="" Mode="" Description="eBay developer application client secret" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="EBAY_ENVIRONMENT" Target="EBAY_ENVIRONMENT" Default="production" Mode="" Description="production or sandbox" Type="Variable" Display="always" Required="true" Mask="false">production</Config>
+  <Config Name="EBAY_MARKETPLACE_ID" Target="EBAY_MARKETPLACE_ID" Default="EBAY_GB" Mode="" Description="Marketplace header, e.g. EBAY_GB or EBAY_US" Type="Variable" Display="always" Required="true" Mask="false">EBAY_GB</Config>
+  <Config Name="EBAY_SEARCH_QUERY" Target="EBAY_SEARCH_QUERY" Default="wristwatch" Mode="" Description="Browse API scheduled search query string" Type="Variable" Display="advanced" Required="false" Mask="false">wristwatch</Config>
+  <Config Name="EBAY_SEARCH_LIMIT" Target="EBAY_SEARCH_LIMIT" Default="50" Mode="" Description="Max items per scheduled Browse search (1–200)" Type="Variable" Display="advanced" Required="false" Mask="false">50</Config>
+  <Config Name="EBAY_CATEGORY_TREE_ID" Target="EBAY_CATEGORY_TREE_ID" Default="" Mode="" Description="Optional taxonomy category tree id (advanced)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="INGEST_INTERVAL_MINUTES" Target="INGEST_INTERVAL_MINUTES" Default="30" Mode="" Description="Minutes between scheduled ingest runs (5–1440)" Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
+  <Config Name="APP_PORT" Target="APP_PORT" Default="8080" Mode="" Description="Must match mapped container port (uvicorn listen port)" Type="Variable" Display="advanced" Required="false" Mask="false">8080</Config>
+  <Config Name="LOG_LEVEL" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Python logging level (DEBUG, INFO, WARNING, …)" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+  <Config Name="TZ" Target="TZ" Default="Europe/London" Mode="" Description="Container timezone" Type="Variable" Display="always" Required="true" Mask="false">Europe/London</Config>
+</Container>

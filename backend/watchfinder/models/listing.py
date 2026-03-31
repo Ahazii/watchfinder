@@ -1,0 +1,155 @@
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from decimal import Decimal
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from watchfinder.db import Base
+
+
+class Listing(Base):
+    __tablename__ = "listings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    ebay_item_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+
+    title: Mapped[str | None] = mapped_column(Text)
+    subtitle: Mapped[str | None] = mapped_column(Text)
+    web_url: Mapped[str | None] = mapped_column(Text)
+    image_urls: Mapped[list | None] = mapped_column(JSONB)
+    current_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    shipping_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str | None] = mapped_column(String(8))
+    seller_username: Mapped[str | None] = mapped_column(String(255))
+    condition_id: Mapped[str | None] = mapped_column(String(64))
+    condition_description: Mapped[str | None] = mapped_column(Text)
+    buying_options: Mapped[list | None] = mapped_column(JSONB)
+    category_path: Mapped[str | None] = mapped_column(Text)
+    listing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    listing_ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    item_aspects: Mapped[dict | None] = mapped_column(JSONB)
+    raw_item_json: Mapped[dict | None] = mapped_column(JSONB)
+
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    snapshots = relationship("ListingSnapshot", back_populates="listing")
+    parsed_attributes = relationship("ParsedAttribute", back_populates="listing")
+    repair_signals = relationship("RepairSignal", back_populates="listing")
+    opportunity_scores = relationship("OpportunityScore", back_populates="listing")
+
+
+class ListingSnapshot(Base):
+    __tablename__ = "listing_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    raw_item_json: Mapped[dict | None] = mapped_column(JSONB)
+
+    listing = relationship("Listing", back_populates="snapshots")
+
+
+class ParsedAttribute(Base):
+    __tablename__ = "parsed_attributes"
+    __table_args__ = (UniqueConstraint("listing_id", "namespace", "key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+    )
+    namespace: Mapped[str] = mapped_column(String(64), default="watch")
+    key: Mapped[str] = mapped_column(String(128))
+    value_text: Mapped[str | None] = mapped_column(Text)
+
+    listing = relationship("Listing", back_populates="parsed_attributes")
+
+
+class RepairSignal(Base):
+    __tablename__ = "repair_signals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+    )
+    signal_type: Mapped[str] = mapped_column(String(64))
+    matched_text: Mapped[str | None] = mapped_column(String(512))
+    source_field: Mapped[str | None] = mapped_column(String(64))
+
+    listing = relationship("Listing", back_populates="repair_signals")
+
+
+class OpportunityScore(Base):
+    __tablename__ = "opportunity_scores"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+    )
+    estimated_resale: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    estimated_repair_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    advised_max_buy: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    potential_profit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    risk: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    explanations: Mapped[list | None] = mapped_column(JSONB)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    listing = relationship("Listing", back_populates="opportunity_scores")
+
+
+class SavedSearch(Base):
+    __tablename__ = "saved_searches"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    filter_json: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value_text: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
