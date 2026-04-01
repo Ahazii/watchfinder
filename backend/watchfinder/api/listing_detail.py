@@ -73,7 +73,6 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
         seller_username=listing.seller_username,
         category_path=listing.category_path,
         first_seen_at=listing.first_seen_at,
-        is_active=listing.is_active,
         parsed_attributes=[
             ParsedAttributeOut.model_validate(x) for x in listing.parsed_attributes
         ],
