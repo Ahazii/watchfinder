@@ -13,13 +13,46 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-function newLine(): IngestQueryLine {
+/** randomUUID() is not available on http:// LAN origins in some browsers — breaks "Add line" silently. */
+function newClientKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      /* insecure context */
+    }
+  }
+  return `k-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function newEmptyLine(): IngestQueryLine {
   return {
-    clientKey: crypto.randomUUID(),
+    clientKey: newClientKey(),
     label: "",
     query: "",
     enabled: true,
   };
+}
+
+/** Show saved rows, or one row pre-filled with the server env default (e.g. wristwatch). */
+function linesFromSettings(d: AppSettings): IngestQueryLine[] {
+  if (d.ingest_queries.length > 0) {
+    return d.ingest_queries.map((q) => ({
+      clientKey: q.id,
+      label: q.label,
+      query: q.query,
+      enabled: q.enabled,
+    }));
+  }
+  const q = (d.env_fallback_query || "").trim();
+  return [
+    {
+      clientKey: newClientKey(),
+      label: "Default (server env)",
+      query: q,
+      enabled: true,
+    },
+  ];
 }
 
 export default function SettingsPage() {
@@ -36,16 +69,7 @@ export default function SettingsPage() {
       .then((d) => {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
-        setLines(
-          d.ingest_queries.length
-            ? d.ingest_queries.map((q) => ({
-                clientKey: q.id,
-                label: q.label,
-                query: q.query,
-                enabled: q.enabled,
-              }))
-            : [newLine()],
-        );
+        setLines(linesFromSettings(d));
       })
       .catch((e: Error) => setErr(e.message));
   }, []);
@@ -83,16 +107,7 @@ export default function SettingsPage() {
       .then((d) => {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
-        setLines(
-          d.ingest_queries.length
-            ? d.ingest_queries.map((q) => ({
-                clientKey: q.id,
-                label: q.label,
-                query: q.query,
-                enabled: q.enabled,
-              }))
-            : [newLine()],
-        );
+        setLines(linesFromSettings(d));
       })
       .catch((e: Error) => setErr(e.message))
       .finally(() => setSaving(false));
@@ -137,8 +152,9 @@ export default function SettingsPage() {
             ). eBay treats it as keywords, not Boolean algebra — combine words on one line for
             phrases like <em>pocket watch spares repair</em>. Use <strong>several lines</strong> for
             different angles (e.g. one for brands, one for &quot;broken&quot;, one for military).
-            Disabled lines are skipped. With <strong>no saved lines</strong> (or all empty), the app
-            uses the server env default: <code className="rounded bg-muted px-1">{data.env_fallback_query}</code>.
+            Disabled lines are skipped. Until you click <strong>Save</strong>, the first row shows
+            your server env default (<code className="rounded bg-muted px-1">{data.env_fallback_query}</code>
+            ) so you can edit it or add more lines.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
@@ -225,13 +241,17 @@ export default function SettingsPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setLines(lines.filter((_, i) => i !== idx))}
+                onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
               >
                 Remove
               </Button>
             </div>
           ))}
-          <Button type="button" variant="secondary" onClick={() => setLines([...lines, newLine()])}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setLines((prev) => [...prev, newEmptyLine()])}
+          >
             Add search line
           </Button>
         </CardContent>
