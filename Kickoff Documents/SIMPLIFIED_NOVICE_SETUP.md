@@ -145,6 +145,7 @@ A full list of path and variable fields (copy-paste friendly) is in **`deploy/un
 
 - **Web UI:** `http://YOUR_UNRAID_IP:HOST_PORT/` (e.g. `:8080`)
 - **Settings (ingest queries, interval, “Ingest now”):** `http://YOUR_UNRAID_IP:HOST_PORT/settings/`
+- **Listing detail (valuation edits, internal comps):** open any listing → detail URL; first deploy after **DB migration 002** is applied automatically on container start (`alembic upgrade head` in the image entrypoint).
 - **API docs:** `http://YOUR_UNRAID_IP:HOST_PORT/docs`
 - **Health:** `http://YOUR_UNRAID_IP:HOST_PORT/health` (used by the image healthcheck)
 

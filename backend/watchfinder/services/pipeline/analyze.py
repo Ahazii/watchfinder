@@ -5,7 +5,13 @@ from __future__ import annotations
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from watchfinder.models import Listing, OpportunityScore, ParsedAttribute, RepairSignal
+from watchfinder.models import (
+    Listing,
+    ListingEdit,
+    OpportunityScore,
+    ParsedAttribute,
+    RepairSignal,
+)
 from watchfinder.services.parsing import build_listing_corpus, parse_watch_attributes
 from watchfinder.services.repair import extract_repair_signals
 from watchfinder.services.scoring import compute_opportunity_score
@@ -40,7 +46,14 @@ def analyze_listing(db: Session, listing: Listing) -> None:
             )
         )
 
-    score = compute_opportunity_score(listing, signals, parsed)
+    edit = db.get(ListingEdit, listing.id)
+    score = compute_opportunity_score(
+        listing,
+        signals,
+        parsed,
+        repair_supplement=edit.repair_supplement if edit else None,
+        donor_cost=edit.donor_cost if edit else None,
+    )
     if score:
         db.add(
             OpportunityScore(

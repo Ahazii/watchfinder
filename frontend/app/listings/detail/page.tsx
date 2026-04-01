@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { fetchJson } from "@/lib/api";
+import { apiUrl, fetchJson } from "@/lib/api";
 import type { ListingDetail } from "@/lib/types";
 import { money, dateShort } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+
+const SOURCE_OPTIONS = ["M", "I", "S", "R", "O", "H", "P"] as const;
 
 export default function ListingDetailPage() {
   return (
@@ -26,21 +29,172 @@ export default function ListingDetailPage() {
   );
 }
 
+function Hint({ text }: { text: string }) {
+  return (
+    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{text}</p>
+  );
+}
+
+function SourceSelect({
+  value,
+  onChange,
+  id,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  id: string;
+}) {
+  return (
+    <select
+      id={id}
+      className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+      value={value || "M"}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {SOURCE_OPTIONS.map((x) => (
+        <option key={x} value={x}>
+          {x}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function DetailBody() {
   const sp = useSearchParams();
   const id = sp.get("id");
   const [row, setRow] = useState<ListingDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
 
-  useEffect(() => {
-    if (!id) {
-      setErr("Missing id query parameter.");
-      return;
-    }
+  const [modelFamily, setModelFamily] = useState("");
+  const [modelFamilySrc, setModelFamilySrc] = useState("M");
+  const [reference, setReference] = useState("");
+  const [referenceSrc, setReferenceSrc] = useState("M");
+  const [caliber, setCaliber] = useState("");
+  const [caliberSrc, setCaliberSrc] = useState("M");
+  const [repairSupp, setRepairSupp] = useState("");
+  const [repairSuppSrc, setRepairSuppSrc] = useState("M");
+  const [donor, setDonor] = useState("");
+  const [donorSrc, setDonorSrc] = useState("M");
+  const [salePrice, setSalePrice] = useState("");
+  const [saleAt, setSaleAt] = useState("");
+  const [saleSrc, setSaleSrc] = useState("M");
+  const [notes, setNotes] = useState("");
+
+  const load = useCallback(() => {
+    if (!id) return;
+    setErr(null);
     fetchJson<ListingDetail>(`/api/listings/${id}`)
-      .then(setRow)
+      .then((d) => {
+        setRow(d);
+        setModelFamily(d.model_family?.value ?? "");
+        setModelFamilySrc(d.model_family?.source || "M");
+        setReference(d.reference?.value ?? "");
+        setReferenceSrc(d.reference?.source || "M");
+        setCaliber(d.caliber?.value ?? "");
+        setCaliberSrc(d.caliber?.source || "M");
+        setRepairSupp(
+          d.repair_supplement?.amount != null ? String(d.repair_supplement.amount) : "",
+        );
+        setRepairSuppSrc(d.repair_supplement?.source || "M");
+        setDonor(d.donor_cost?.amount != null ? String(d.donor_cost.amount) : "");
+        setDonorSrc(d.donor_cost?.source || "M");
+        setSalePrice(
+          d.recorded_sale?.price != null ? String(d.recorded_sale.price) : "",
+        );
+        setSaleAt(
+          d.recorded_sale?.recorded_at
+            ? d.recorded_sale.recorded_at.slice(0, 16)
+            : "",
+        );
+        setSaleSrc(d.recorded_sale?.source || "M");
+        setNotes(d.notes ?? "");
+        setSavedOk(false);
+      })
       .catch((e: Error) => setErr(e.message));
   }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = () => {
+    if (!id) return;
+    setSaveErr(null);
+    setSaving(true);
+    setSavedOk(false);
+    const num = (s: string) => {
+      const t = s.trim();
+      if (!t) return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : null;
+    };
+    const body: Record<string, unknown> = {
+      model_family: modelFamily.trim() || null,
+      model_family_source: modelFamilySrc,
+      reference_text: reference.trim() || null,
+      reference_source: referenceSrc,
+      caliber_text: caliber.trim() || null,
+      caliber_source: caliberSrc,
+      repair_supplement: num(repairSupp),
+      repair_supplement_source: repairSuppSrc,
+      donor_cost: num(donor),
+      donor_source: donorSrc,
+      recorded_sale_price: num(salePrice),
+      recorded_sale_source: saleSrc,
+      notes: notes.trim() || null,
+    };
+    if (saleAt.trim()) {
+      const iso = new Date(saleAt).toISOString();
+      body.recorded_sale_at = iso;
+    } else {
+      body.recorded_sale_at = null;
+    }
+
+    fetch(apiUrl(`/api/listings/${id}`), {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<ListingDetail>;
+      })
+      .then((d) => {
+        setRow(d);
+        setSavedOk(true);
+        setModelFamily(d.model_family?.value ?? "");
+        setModelFamilySrc(d.model_family?.source || "M");
+        setReference(d.reference?.value ?? "");
+        setReferenceSrc(d.reference?.source || "M");
+        setCaliber(d.caliber?.value ?? "");
+        setCaliberSrc(d.caliber?.source || "M");
+        setRepairSupp(
+          d.repair_supplement?.amount != null ? String(d.repair_supplement.amount) : "",
+        );
+        setRepairSuppSrc(d.repair_supplement?.source || "M");
+        setDonor(d.donor_cost?.amount != null ? String(d.donor_cost.amount) : "");
+        setDonorSrc(d.donor_cost?.source || "M");
+        setSalePrice(
+          d.recorded_sale?.price != null ? String(d.recorded_sale.price) : "",
+        );
+        setSaleAt(
+          d.recorded_sale?.recorded_at
+            ? d.recorded_sale.recorded_at.slice(0, 16)
+            : "",
+        );
+        setSaleSrc(d.recorded_sale?.source || "M");
+        setNotes(d.notes ?? "");
+      })
+      .catch((e: Error) => setSaveErr(e.message))
+      .finally(() => setSaving(false));
+  };
 
   if (!id) {
     return <p className="text-destructive">Missing listing id.</p>;
@@ -62,6 +216,7 @@ function DetailBody() {
   }
 
   const latest = row.opportunity_scores?.[0];
+  const g = row.field_guidance || {};
 
   return (
     <div className="space-y-6">
@@ -76,6 +231,15 @@ function DetailBody() {
           <p className="mt-1 text-sm text-muted-foreground">
             eBay {row.ebay_item_id} · {dateShort(row.last_seen_at)}
           </p>
+          <p className="mt-1 text-sm">
+            <span className="text-muted-foreground">Parsed brand</span>{" "}
+            {row.brand?.value || "—"}{" "}
+            {row.brand?.source ? (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {row.brand.source}
+              </Badge>
+            ) : null}
+          </p>
         </div>
         {row.web_url && (
           <Button asChild>
@@ -85,6 +249,246 @@ function DetailBody() {
           </Button>
         )}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Internal comps</CardTitle>
+          <CardDescription>{g.comps}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 text-sm">
+          <div className="rounded-md border border-border p-3">
+            <p className="font-medium">Recorded sales</p>
+            <p className="text-xs text-muted-foreground">{row.comp_sales.label}</p>
+            <p className="mt-2 tabular-nums">
+              n={row.comp_sales.count}
+              {row.comp_sales.count > 0 ? (
+                <>
+                  {" "}
+                  · p25 {money(row.comp_sales.p25, row.currency)} · p75{" "}
+                  {money(row.comp_sales.p75, row.currency)}
+                </>
+              ) : null}
+            </p>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <p className="font-medium">Active asking (your DB)</p>
+            <p className="text-xs text-muted-foreground">{row.comp_asking.label}</p>
+            <p className="mt-2 tabular-nums">
+              n={row.comp_asking.count}
+              {row.comp_asking.count > 0 ? (
+                <>
+                  {" "}
+                  · p25 {money(row.comp_asking.p25, row.currency)} · p75{" "}
+                  {money(row.comp_asking.p75, row.currency)}
+                </>
+              ) : null}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Your valuation inputs</CardTitle>
+          <CardDescription>
+            Edit and save. Source letters are stored per field. See legend below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <label className="text-sm font-medium" htmlFor="mf">
+                Model family
+              </label>
+              <Input
+                id="mf"
+                value={modelFamily}
+                onChange={(e) => setModelFamily(e.target.value)}
+                className="mt-1"
+              />
+              <Hint text={g.model_family} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground" htmlFor="mf-s">
+                Src
+              </label>
+              <SourceSelect
+                id="mf-s"
+                value={modelFamilySrc}
+                onChange={setModelFamilySrc}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <label className="text-sm font-medium" htmlFor="ref">
+                Reference
+              </label>
+              <Input
+                id="ref"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                className="mt-1"
+              />
+              <Hint text={g.reference} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground" htmlFor="ref-s">
+                Src
+              </label>
+              <SourceSelect
+                id="ref-s"
+                value={referenceSrc}
+                onChange={setReferenceSrc}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <label className="text-sm font-medium" htmlFor="cal">
+                Caliber / movement
+              </label>
+              <Input
+                id="cal"
+                value={caliber}
+                onChange={(e) => setCaliber(e.target.value)}
+                className="mt-1"
+              />
+              <Hint text={g.caliber} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground" htmlFor="cal-s">
+                Src
+              </label>
+              <SourceSelect
+                id="cal-s"
+                value={caliberSrc}
+                onChange={setCaliberSrc}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <label className="text-sm font-medium" htmlFor="rs">
+                Repair add-on (manual / historical)
+              </label>
+              <Input
+                id="rs"
+                type="number"
+                step="0.01"
+                value={repairSupp}
+                onChange={(e) => setRepairSupp(e.target.value)}
+                className="mt-1"
+              />
+              <Hint text={g.repair_supplement} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground" htmlFor="rs-s">
+                Src
+              </label>
+              <SourceSelect
+                id="rs-s"
+                value={repairSuppSrc}
+                onChange={setRepairSuppSrc}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <label className="text-sm font-medium" htmlFor="dn">
+                Donor / parts cost
+              </label>
+              <Input
+                id="dn"
+                type="number"
+                step="0.01"
+                value={donor}
+                onChange={(e) => setDonor(e.target.value)}
+                className="mt-1"
+              />
+              <Hint text={g.donor_cost} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground" htmlFor="dn-s">
+                Src
+              </label>
+              <SourceSelect id="dn-s" value={donorSrc} onChange={setDonorSrc} />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+            <div>
+              <label className="text-sm font-medium" htmlFor="sp">
+                Recorded sale price
+              </label>
+              <Input
+                id="sp"
+                type="number"
+                step="0.01"
+                value={salePrice}
+                onChange={(e) => setSalePrice(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium" htmlFor="sa">
+                Sale time
+              </label>
+              <Input
+                id="sa"
+                type="datetime-local"
+                value={saleAt}
+                onChange={(e) => setSaleAt(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-muted-foreground" htmlFor="ss">
+                Src
+              </label>
+              <SourceSelect id="ss" value={saleSrc} onChange={setSaleSrc} />
+            </div>
+          </div>
+          <Hint text={g.recorded_sale} />
+
+          <div>
+            <label className="text-sm font-medium" htmlFor="notes">
+              Notes
+            </label>
+            <textarea
+              id="notes"
+              rows={4}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1 flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+            <Hint text={g.notes} />
+          </div>
+
+          {saveErr ? <p className="text-sm text-red-400">{saveErr}</p> : null}
+          {savedOk ? (
+            <p className="text-sm text-green-600 dark:text-green-400">Saved.</p>
+          ) : null}
+          <Button type="button" disabled={saving} onClick={save}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+
+          <div className="border-t border-border pt-4">
+            <p className="text-sm font-medium">Source letters</p>
+            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {Object.entries(row.source_legend || {}).map(([k, v]) => (
+                <li key={k}>
+                  <strong>{k}</strong> — {v}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -105,8 +509,7 @@ function DetailBody() {
           <CardHeader>
             <CardTitle>Opportunity score</CardTitle>
             <CardDescription>
-              Rule-based; tune economics in backend{" "}
-              <code className="text-xs">services/scoring/constants.py</code>
+              Rule-based core + your repair add-on and donor cost.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
@@ -121,7 +524,7 @@ function DetailBody() {
                   v={money(latest.estimated_resale, row.currency)}
                 />
                 <Row
-                  k="Est. repair"
+                  k="Est. repair (total)"
                   v={money(latest.estimated_repair_cost, row.currency)}
                 />
                 <Row

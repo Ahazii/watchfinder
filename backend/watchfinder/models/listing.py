@@ -57,6 +57,65 @@ class Listing(Base):
     parsed_attributes = relationship("ParsedAttribute", back_populates="listing")
     repair_signals = relationship("RepairSignal", back_populates="listing")
     opportunity_scores = relationship("OpportunityScore", back_populates="listing")
+    listing_edit = relationship(
+        "ListingEdit",
+        back_populates="listing",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class ListingEdit(Base):
+    """User overrides and manual valuation fields (sources: M/I/S/R/O/H/P — see README)."""
+
+    __tablename__ = "listing_edits"
+
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), primary_key=True
+    )
+    model_family: Mapped[str | None] = mapped_column(Text)
+    model_family_source: Mapped[str | None] = mapped_column(String(1))
+    reference_text: Mapped[str | None] = mapped_column(Text)
+    reference_source: Mapped[str | None] = mapped_column(String(1))
+    caliber_text: Mapped[str | None] = mapped_column(Text)
+    caliber_source: Mapped[str | None] = mapped_column(String(1))
+    repair_supplement: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    repair_supplement_source: Mapped[str | None] = mapped_column(String(1))
+    donor_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    donor_source: Mapped[str | None] = mapped_column(String(1))
+    recorded_sale_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    recorded_sale_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recorded_sale_source: Mapped[str | None] = mapped_column(String(1))
+    notes: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    listing = relationship("Listing", back_populates="listing_edit")
+
+
+class WatchSaleRecord(Base):
+    """Internal comp DB: prices we recorded (manual or future ingest-observed)."""
+
+    __tablename__ = "watch_sale_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    listing_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="SET NULL"), index=True
+    )
+    ebay_item_id: Mapped[str] = mapped_column(String(32))
+    brand_key: Mapped[str] = mapped_column(String(128), index=True)
+    model_family_key: Mapped[str | None] = mapped_column(String(256))
+    reference_key: Mapped[str | None] = mapped_column(String(64))
+    caliber_key: Mapped[str | None] = mapped_column(String(128))
+    sale_price: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str | None] = mapped_column(String(8))
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    source: Mapped[str] = mapped_column(String(1))
 
 
 class ListingSnapshot(Base):

@@ -9,7 +9,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | Document | Purpose |
 |----------|---------|
 | [`README.md`](README.md) (this file) | Quick start, API surface, Docker, Unraid summary, env vars |
-| [`PROGRESS.md`](PROGRESS.md) | What is built (phases 1–4), repo map, backlog |
+| [`PROGRESS.md`](PROGRESS.md) | What is built (phases 1–5), repo map, backlog, planned work |
 | [`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`](Kickoff%20Documents/SIMPLIFIED_NOVICE_SETUP.md) | Step-by-step Unraid install (folders, network, Postgres, app) |
 | [`Kickoff Documents/README_START_HERE.txt`](Kickoff%20Documents/README_START_HERE.txt) | Kickoff folder index |
 | [`Kickoff Documents/CURSOR_PROMPT.txt`](Kickoff%20Documents/CURSOR_PROMPT.txt) | Original full build spec (reference / Cursor) |
@@ -20,7 +20,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 - `frontend/` — Next.js 14 (App Router), TypeScript, Tailwind, shadcn-style UI
 - `backend/watchfinder/` — FastAPI app, models, eBay clients, ingestion, parsing, scoring
-- `alembic/` — database migrations
+- `alembic/` — database migrations (**001** initial schema, **002** `listing_edits` + `watch_sale_records`)
 - `docker/start.sh` — wait for Postgres → `alembic upgrade head` → `uvicorn`
 - `Dockerfile` — multi-stage image (Node build + Python runtime, non-root user, healthcheck)
 - `docker-compose.yml` — local **postgres:16** + app build
@@ -36,7 +36,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | `/listings/` | Listings + filters |
 | `/candidates/` | Repair candidates (positive rule-based profit) |
 | `/settings/` | Ingest search lines, interval, **Ingest now** (same origin as API) |
-| `/listings/detail/?id=<uuid>` | Listing detail (static export uses query string, not `/listings/<uuid>` in the browser) |
+| `/listings/detail/?id=<uuid>` | Listing detail, **editable valuation**, internal comps, **Save** → `PATCH /api/listings/{id}` |
 | `/api/...` | JSON API (same origin as UI in Docker) |
 | `/docs` | Swagger UI |
 | `/health` | Liveness JSON (`{"status":"ok"}`) — used by Docker **HEALTHCHECK** |
@@ -47,11 +47,21 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 |--------|------|---------|
 | GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings |
 | GET | `/api/listings` | Paginated listings + query filters |
-| GET | `/api/listings/{uuid}` | Detail (API uses path param; UI detail page uses `?id=` + this endpoint) |
+| GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
+| PATCH | `/api/listings/{uuid}` | Save **ListingEdit** (model family, ref, caliber, repair add-on, donor cost, recorded sale, notes + per-field source letters) |
 | GET | `/api/candidates` | Same filters as listings; only rows with `potential_profit > 0` |
 | GET | `/api/settings` | Ingest interval, saved Browse query lines, env fallback hint |
 | PATCH | `/api/settings` | Update interval (5–1440) and/or replace all ingest query lines |
 | POST | `/api/ingest/run` | Queue a full ingest cycle in the background (check logs) |
+
+## Valuation & internal comps (hobby use)
+
+- **No eBay sold-history API:** comps use only data in **your** Postgres: **`watch_sale_records`** (built when you enter a **recorded sale** on a listing) and **active** listings with the same **parsed brand** for asking-price bands (p25–p75).
+- **Listing detail (`/listings/detail/?id=`)** — editable fields with **source** dropdown per field: **M** manual, **I** inferred (AI — hook later), **S** searched, **R** rules/parsed text, **O** observed ingest (reserved for future “listing ended” detection), **H** historical, **P** parsed (same idea as R). Guidance strings are returned as **`field_guidance`** on the detail JSON.
+- **Repair:** rule-based core **plus** optional **repair add-on** and **donor cost** (both included in total repair for profit math). Fees/shipping ignored.
+- **Tuning asking-sample size:** optional **`app_settings`** row **`max_comp_candidates`** (integer string, default **200** in code if unset).
+
+After upgrading, run **`alembic upgrade head`** (adds **`listing_edits`**, **`watch_sale_records`**).
 
 ## Ingest searches (UI + API)
 

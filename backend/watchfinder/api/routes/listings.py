@@ -8,16 +8,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from watchfinder.api.deps import get_db
+from watchfinder.api.listing_detail import build_listing_detail
 from watchfinder.api.listing_helpers import listing_to_summary, scores_for_listings
 from watchfinder.api.query import base_listing_select, count_listings
-from watchfinder.models import Listing
+from watchfinder.models import Listing, ListingEdit
 from watchfinder.schemas.listings import (
     ListingDetail,
+    ListingEditsPatch,
     ListingListResponse,
     OpportunityScoreOut,
     ParsedAttributeOut,
     RepairSignalOut,
 )
+from watchfinder.services.pipeline import analyze_listing
+from watchfinder.services.valuation.sales_sync import sync_watch_sale_record
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -60,52 +64,59 @@ def list_listings(
     return ListingListResponse(items=items, total=total, skip=skip, limit=limit)
 
 
+def _listing_detail_options():
+    return (
+        selectinload(Listing.parsed_attributes),
+        selectinload(Listing.repair_signals),
+        selectinload(Listing.opportunity_scores),
+        selectinload(Listing.listing_edit),
+    )
+
+
 @router.get("/{listing_id}", response_model=ListingDetail)
 def get_listing(listing_id: UUID, db: Session = Depends(get_db)) -> ListingDetail:
     stmt = (
         select(Listing)
-        .options(
-            selectinload(Listing.parsed_attributes),
-            selectinload(Listing.repair_signals),
-            selectinload(Listing.opportunity_scores),
-        )
+        .options(*_listing_detail_options())
+        .where(Listing.id == listing_id)
+    )
+    listing = db.execute(stmt).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return build_listing_detail(db, listing)
+
+
+@router.patch("/{listing_id}", response_model=ListingDetail)
+def patch_listing(
+    listing_id: UUID, body: ListingEditsPatch, db: Session = Depends(get_db)
+) -> ListingDetail:
+    stmt = (
+        select(Listing)
+        .options(*_listing_detail_options())
         .where(Listing.id == listing_id)
     )
     listing = db.execute(stmt).scalar_one_or_none()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
 
-    scores = sorted(
-        listing.opportunity_scores,
-        key=lambda s: s.computed_at.timestamp()
-        if s.computed_at
-        else 0.0,
-        reverse=True,
-    )
-    latest = scores[0] if scores else None
+    edit = listing.listing_edit
+    if edit is None:
+        edit = ListingEdit(listing_id=listing.id)
+        db.add(edit)
+        listing.listing_edit = edit
 
-    return ListingDetail(
-        id=listing.id,
-        ebay_item_id=listing.ebay_item_id,
-        title=listing.title,
-        subtitle=listing.subtitle,
-        current_price=listing.current_price,
-        currency=listing.currency,
-        web_url=listing.web_url,
-        condition_description=listing.condition_description,
-        last_seen_at=listing.last_seen_at,
-        first_seen_at=listing.first_seen_at,
-        is_active=listing.is_active,
-        image_urls=listing.image_urls,
-        shipping_price=listing.shipping_price,
-        seller_username=listing.seller_username,
-        category_path=listing.category_path,
-        score=OpportunityScoreOut.model_validate(latest) if latest else None,
-        parsed_attributes=[
-            ParsedAttributeOut.model_validate(x) for x in listing.parsed_attributes
-        ],
-        repair_signals=[
-            RepairSignalOut.model_validate(x) for x in listing.repair_signals
-        ],
-        opportunity_scores=[OpportunityScoreOut.model_validate(s) for s in scores],
-    )
+    patch = body.model_dump(exclude_unset=True)
+    for key, val in patch.items():
+        if hasattr(edit, key):
+            setattr(edit, key, val)
+
+    db.flush()
+    parsed = {a.key: (a.value_text or "") for a in listing.parsed_attributes}
+    sync_watch_sale_record(db, listing, parsed, edit)
+    analyze_listing(db, listing)
+    db.commit()
+
+    listing = db.execute(
+        select(Listing).options(*_listing_detail_options()).where(Listing.id == listing_id)
+    ).scalar_one()
+    return build_listing_detail(db, listing)

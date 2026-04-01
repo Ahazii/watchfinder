@@ -36,6 +36,9 @@ def compute_opportunity_score(
     listing: Listing,
     signals: list[SignalHit],
     parsed: dict[str, str],
+    *,
+    repair_supplement: Decimal | None = None,
+    donor_cost: Decimal | None = None,
 ) -> ScoreResult | None:
     """
     If no repair signals, returns None (caller clears stale scores).
@@ -61,12 +64,20 @@ def compute_opportunity_score(
         explanations.append(f"Running state hint: {parsed['running_state']}")
 
     total_weight = sum(s.weight for s in signals)
-    estimated_repair = C.BASE_REPAIR + (
+    rule_repair = C.BASE_REPAIR + (
         Decimal(str(total_weight)) * C.REPAIR_PER_WEIGHT_UNIT
     )
+    sup = repair_supplement if repair_supplement is not None else Decimal("0")
+    donor = donor_cost if donor_cost is not None else Decimal("0")
+    estimated_repair = rule_repair + sup + donor
     explanations.append(
-        f"Estimated repair (rule-based): {estimated_repair} (base {C.BASE_REPAIR} + weight×{C.REPAIR_PER_WEIGHT_UNIT})"
+        f"Repair (rule core): {rule_repair} (base {C.BASE_REPAIR} + weight×{C.REPAIR_PER_WEIGHT_UNIT})"
     )
+    if sup > 0:
+        explanations.append(f"Repair add-on (manual/historical): +{sup}")
+    if donor > 0:
+        explanations.append(f"Donor / parts acquisition allowance: +{donor}")
+    explanations.append(f"Estimated repair (total): {estimated_repair}")
 
     cat = _dominant_category(signals)
     if cat in ("parts_only", "parts_repair"):
@@ -95,7 +106,7 @@ def compute_opportunity_score(
         advised_max_buy = estimated_resale - estimated_repair - C.DESIRED_MARGIN
         potential_profit = estimated_resale - estimated_repair - list_price
         explanations.append(
-            f"Advised max buy (before fees): resale {estimated_resale} − repair {estimated_repair} − margin {C.DESIRED_MARGIN} = {advised_max_buy}"
+            f"Advised max buy (before fees): resale {estimated_resale} − total repair {estimated_repair} − margin {C.DESIRED_MARGIN} = {advised_max_buy}"
         )
         explanations.append(
             f"Potential profit if bought at list ({list_price}): {potential_profit}"

@@ -7,6 +7,33 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ValuedStringOut(BaseModel):
+    """Value plus provenance letter (M/I/S/R/O/H/P) or empty if none."""
+
+    value: str | None = None
+    source: str = ""
+
+
+class MoneyWithSourceOut(BaseModel):
+    amount: Decimal | None = None
+    source: str = ""
+
+
+class RecordedSaleOut(BaseModel):
+    price: Decimal | None = None
+    recorded_at: datetime | None = None
+    source: str = ""
+
+
+class CompBandOut(BaseModel):
+    count: int = 0
+    p25: Decimal | None = None
+    p75: Decimal | None = None
+    low: Decimal | None = None
+    high: Decimal | None = None
+    label: str = ""
+
+
 class ParsedAttributeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -46,6 +73,7 @@ class ListingSummary(BaseModel):
     web_url: str | None
     condition_description: str | None
     last_seen_at: datetime | None
+    is_active: bool = True
     score: OpportunityScoreOut | None = None
 
 
@@ -56,10 +84,41 @@ class ListingDetail(ListingSummary):
     seller_username: str | None = None
     category_path: str | None = None
     first_seen_at: datetime | None = None
-    is_active: bool = True
     parsed_attributes: list[ParsedAttributeOut] = Field(default_factory=list)
     repair_signals: list[RepairSignalOut] = Field(default_factory=list)
     opportunity_scores: list[OpportunityScoreOut] = Field(default_factory=list)
+    # Valuation / edits (detail page)
+    brand: ValuedStringOut = Field(default_factory=ValuedStringOut)
+    model_family: ValuedStringOut = Field(default_factory=ValuedStringOut)
+    reference: ValuedStringOut = Field(default_factory=ValuedStringOut)
+    caliber: ValuedStringOut = Field(default_factory=ValuedStringOut)
+    repair_supplement: MoneyWithSourceOut = Field(default_factory=MoneyWithSourceOut)
+    donor_cost: MoneyWithSourceOut = Field(default_factory=MoneyWithSourceOut)
+    recorded_sale: RecordedSaleOut = Field(default_factory=RecordedSaleOut)
+    notes: str | None = None
+    comp_sales: CompBandOut = Field(default_factory=CompBandOut)
+    comp_asking: CompBandOut = Field(default_factory=CompBandOut)
+    source_legend: dict[str, str] = Field(default_factory=dict)
+    field_guidance: dict[str, str] = Field(default_factory=dict)
+
+
+class ListingEditsPatch(BaseModel):
+    """PATCH body: only include fields you want to change. Use null to clear optional numbers."""
+
+    model_family: str | None = None
+    model_family_source: str | None = Field(None, max_length=1)
+    reference_text: str | None = None
+    reference_source: str | None = Field(None, max_length=1)
+    caliber_text: str | None = None
+    caliber_source: str | None = Field(None, max_length=1)
+    repair_supplement: Decimal | None = None
+    repair_supplement_source: str | None = Field(None, max_length=1)
+    donor_cost: Decimal | None = None
+    donor_source: str | None = Field(None, max_length=1)
+    recorded_sale_price: Decimal | None = None
+    recorded_sale_at: datetime | None = None
+    recorded_sale_source: str | None = Field(None, max_length=1)
+    notes: str | None = None
 
 
 class ListingListResponse(BaseModel):

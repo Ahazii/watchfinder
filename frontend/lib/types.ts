@@ -18,6 +18,7 @@ export type ListingSummary = {
   web_url: string | null;
   condition_description: string | null;
   last_seen_at: string | null;
+  is_active?: boolean;
   score?: OpportunityScore | null;
 };
 
@@ -26,6 +27,25 @@ export type RepairSignal = {
   signal_type: string;
   matched_text: string | null;
   source_field: string | null;
+};
+
+export type ValuedString = { value: string | null; source: string };
+export type MoneyWithSource = {
+  amount: string | number | null;
+  source: string;
+};
+export type RecordedSale = {
+  price: string | number | null;
+  recorded_at: string | null;
+  source: string;
+};
+export type CompBand = {
+  count: number;
+  p25: string | number | null;
+  p75: string | number | null;
+  low: string | number | null;
+  high: string | number | null;
+  label: string;
 };
 
 export type ListingDetail = ListingSummary & {
@@ -39,6 +59,18 @@ export type ListingDetail = ListingSummary & {
   parsed_attributes: ParsedAttribute[];
   repair_signals: RepairSignal[];
   opportunity_scores: OpportunityScore[];
+  brand: ValuedString;
+  model_family: ValuedString;
+  reference: ValuedString;
+  caliber: ValuedString;
+  repair_supplement: MoneyWithSource;
+  donor_cost: MoneyWithSource;
+  recorded_sale: RecordedSale;
+  notes: string | null;
+  comp_sales: CompBand;
+  comp_asking: CompBand;
+  source_legend: Record<string, string>;
+  field_guidance: Record<string, string>;
 };
 
 export type ListingListResponse = {
