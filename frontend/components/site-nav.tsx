@@ -8,6 +8,7 @@ const links = [
   { href: "/", label: "Dashboard" },
   { href: "/listings/", label: "Listings" },
   { href: "/candidates/", label: "Candidates" },
+  { href: "/settings/", label: "Settings" },
 ];
 
 export function SiteNav() {

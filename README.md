@@ -35,6 +35,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | `/` | Web UI (dashboard) |
 | `/listings/` | Listings + filters |
 | `/candidates/` | Repair candidates (positive rule-based profit) |
+| `/settings/` | Ingest search lines, interval, **Ingest now** (same origin as API) |
 | `/listings/detail/?id=<uuid>` | Listing detail (static export uses query string, not `/listings/<uuid>` in the browser) |
 | `/api/...` | JSON API (same origin as UI in Docker) |
 | `/docs` | Swagger UI |
@@ -48,6 +49,15 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | GET | `/api/listings` | Paginated listings + query filters |
 | GET | `/api/listings/{uuid}` | Detail (API uses path param; UI detail page uses `?id=` + this endpoint) |
 | GET | `/api/candidates` | Same filters as listings; only rows with `potential_profit > 0` |
+| GET | `/api/settings` | Ingest interval, saved Browse query lines, env fallback hint |
+| PATCH | `/api/settings` | Update interval (5–1440) and/or replace all ingest query lines |
+| POST | `/api/ingest/run` | Queue a full ingest cycle in the background (check logs) |
+
+## Ingest searches (UI + API)
+
+- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` sent to eBay). Combine words on a line for a single search; use several lines for different angles (brands, “spares / not working”, military, etc.). Disabled lines are skipped. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
+- **Interval:** Stored in **`app_settings`** when changed from the UI; otherwise **`INGEST_INTERVAL_MINUTES`** from env. Changing interval in **Settings** reschedules the job without restarting the container.
+- **Ingest now:** Calls **`POST /api/ingest/run`** (background task). There is **no authentication** on these endpoints — intended for trusted LAN / self-hosted use only.
 
 ## Local development
 
@@ -165,7 +175,17 @@ Optional for **local Next dev only:** `NEXT_PUBLIC_API_BASE` (see Local developm
 
 ## eBay
 
-Register an application in the [eBay Developers Program](https://developer.ebay.com/) with access suitable for **Buy Browse** APIs. OAuth scopes for client credentials are in **`backend/watchfinder/services/ebay/auth.py`** — adjust if you get **`invalid_scope`** errors.
+### Developer account and approval
+
+1. Sign in at the [eBay Developers Program](https://developer.ebay.com/) with your normal eBay account (or a dedicated one if you prefer).
+2. eBay may require **account verification or application approval** before you can create production keysets or use certain **Buy** APIs. **Approval is not instant** — you can run WatchFinder (UI, Postgres, health) while you wait, but **scheduled ingest will not pull live listings** until you have valid **Client ID** and **Client Secret** and **Browse API** access.
+3. When authorized, create an **application** and copy **Client ID** and **Client Secret** into **`EBAY_CLIENT_ID`** and **`EBAY_CLIENT_SECRET`**. Ensure the app is allowed to use **Buy Browse** (and that **`EBAY_ENVIRONMENT`** matches where the keys were issued: **`production`** vs **`sandbox`**).
+4. OAuth scopes for client credentials are implemented in **`backend/watchfinder/services/ebay/auth.py`** — adjust only if eBay returns **`invalid_scope`** (see current eBay OAuth docs for Browse).
+
+### While you wait
+
+- Use placeholder values in env vars only if you accept **ingest errors** in logs every **`INGEST_INTERVAL_MINUTES`**; the web UI and API still load.
+- After eBay activates your access, update the container env vars and **restart** WatchFinder (or redeploy). Check logs on the next ingest run for Browse/token errors.
 
 ## Operations notes
 

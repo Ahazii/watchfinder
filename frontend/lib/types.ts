@@ -55,3 +55,25 @@ export type DashboardStats = {
   listings_with_repair_signals: number;
   recent_listings: ListingSummary[];
 };
+
+export type IngestQueryDto = {
+  id: string;
+  label: string;
+  query: string;
+  enabled: boolean;
+};
+
+export type AppSettings = {
+  ingest_interval_minutes: number;
+  ebay_search_limit: number;
+  ingest_queries: IngestQueryDto[];
+  env_fallback_query: string;
+};
+
+/** Client-only row key + editable fields */
+export type IngestQueryLine = {
+  clientKey: string;
+  label: string;
+  query: string;
+  enabled: boolean;
+};

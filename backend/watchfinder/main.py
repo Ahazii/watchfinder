@@ -12,23 +12,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from watchfinder.api.routes import candidates, dashboard, listings
+from watchfinder import runtime
+from watchfinder.api.routes import candidates, dashboard, ingest_admin, listings
+from watchfinder.api.routes import settings as settings_routes
 from watchfinder.config import get_settings
-from watchfinder.db import SessionLocal
-from watchfinder.services.ingestion.job import run_browse_ingest
+from watchfinder.ingest_worker import scheduled_ingest_job
+from watchfinder.services.ingest_schedule import sync_ingest_schedule
 
 logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
-
-
-def _ingest_job() -> None:
-    db = SessionLocal()
-    try:
-        run_browse_ingest(db)
-    except Exception:
-        logger.exception("Scheduled ingest failed")
-    finally:
-        db.close()
 
 
 @asynccontextmanager
@@ -38,18 +30,10 @@ async def lifespan(app: FastAPI):
         level=getattr(logging, settings.log_level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    scheduler.add_job(
-        _ingest_job,
-        "interval",
-        minutes=settings.ingest_interval_minutes,
-        id="browse_ingest",
-        replace_existing=True,
-    )
+    runtime.set_ingest_scheduler(scheduler)
+    minutes = sync_ingest_schedule(scheduler, scheduled_ingest_job, settings)
     scheduler.start()
-    logger.info(
-        "Scheduler started: Browse ingest every %s minutes",
-        settings.ingest_interval_minutes,
-    )
+    logger.info("Scheduler started: Browse ingest every %s minutes", minutes)
     yield
     scheduler.shutdown()
 
@@ -67,6 +51,8 @@ app.add_middleware(
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(listings.router, prefix="/api")
 app.include_router(candidates.router, prefix="/api")
+app.include_router(settings_routes.router, prefix="/api")
+app.include_router(ingest_admin.router, prefix="/api")
 
 
 @app.get("/health")

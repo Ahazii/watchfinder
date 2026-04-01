@@ -14,6 +14,7 @@ Two **Docker** containers on Unraid (not a VM): **PostgreSQL** (`postgres:16`) a
 - [ ] **Terminal** access (**Main → Terminal** or SSH as `root`) for one network command and optional `mkdir`.
 - [ ] Your Unraid **LAN IP** (for opening the web UI), e.g. from **Main** or **Settings → Network Settings**.
 - [ ] A GitHub repo whose **Actions** workflow publishes **`ghcr.io/<your-username>/watchfinder`** (see **`.github/workflows/docker-publish.yml`**). If the package is **private**, create a GitHub **PAT** with **`read:packages`** and add **`ghcr.io`** credentials on Unraid before pulling.
+- [ ] **eBay Developers Program** — [developer.ebay.com](https://developer.ebay.com): register with your eBay account and wait for any required **authorization / verification** eBay applies to new developer access. **Production Browse API** credentials may be unavailable until that completes. You can still install Postgres and WatchFinder and use the **web UI**; **ingest** needs real **`EBAY_CLIENT_ID`** / **`EBAY_CLIENT_SECRET`** and Browse access (see root **`README.md` → eBay**).
 
 ---
 
@@ -121,8 +122,8 @@ A full list of path and variable fields (copy-paste friendly) is in **`deploy/un
 | Key | Example / note |
 |-----|----------------|
 | `DATABASE_URL` | `postgresql+psycopg://watchfinder:YOUR_PASSWORD@watchfinder-postgres:5432/watchfinder` |
-| `EBAY_CLIENT_ID` | from eBay developer portal |
-| `EBAY_CLIENT_SECRET` | from eBay developer portal |
+| `EBAY_CLIENT_ID` | from eBay developer portal (after your dev account is authorized) |
+| `EBAY_CLIENT_SECRET` | from eBay developer portal (same) |
 | `EBAY_ENVIRONMENT` | `production` (or `sandbox` while testing) |
 | `TZ` | e.g. `Europe/London` |
 
@@ -143,6 +144,7 @@ A full list of path and variable fields (copy-paste friendly) is in **`deploy/un
 **Browser**
 
 - **Web UI:** `http://YOUR_UNRAID_IP:HOST_PORT/` (e.g. `:8080`)
+- **Settings (ingest queries, interval, “Ingest now”):** `http://YOUR_UNRAID_IP:HOST_PORT/settings/`
 - **API docs:** `http://YOUR_UNRAID_IP:HOST_PORT/docs`
 - **Health:** `http://YOUR_UNRAID_IP:HOST_PORT/health` (used by the image healthcheck)
 
@@ -170,6 +172,7 @@ A full list of path and variable fields (copy-paste friendly) is in **`deploy/un
 | Port in use | Change **host** port mapping; open the UI with that port; set **`APP_PORT`** to match the **container** port if you change it. |
 | Postgres fails | **Docker** logs for `watchfinder-postgres`. |
 | Cannot pull image | Private package: PAT + Unraid registry login for **`ghcr.io`**. |
+| Ingest fails / token errors | eBay dev account still pending approval, wrong **production vs sandbox** keys, missing **Browse** API access, or bad **`EBAY_MARKETPLACE_ID`**. Check **WatchFinder** Docker logs after a scheduled run; update env and restart when eBay has issued credentials. |
 
 ---
 
