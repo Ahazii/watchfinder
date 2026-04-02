@@ -32,10 +32,10 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 | URL | What it is |
 |-----|------------|
-| `/` | Web UI (dashboard) |
-| `/listings/` | Listings + filters |
-| `/candidates/` | Repair candidates (positive rule-based profit) |
-| `/settings/` | Ingest search lines, interval, **Ingest now** (same origin as API) |
+| `/` | Dashboard (stats, **eBay Browse / OAuth call counters**, recent listings with thumbs) |
+| `/listings/` | Listings + filters (**Title contains**, brand, price, etc.), sortable columns, thumbnails |
+| `/candidates/` | Repair candidates (same filters as listings where applicable) |
+| `/settings/` | Browse search lines, **interval** + **items per search line** (1–200), watch-catalog mode, **Ingest now** |
 | `/watch-models/` | **Watch database** — catalog CRUD (canonical models, manual + observed price bounds) |
 | `/watch-models/detail/?id=<uuid>` | Edit one model (all fields); omit `id` to create |
 | `/watch-review/` | **Match queue** — pending catalogue links (review mode) |
@@ -80,8 +80,9 @@ After upgrading, run **`alembic upgrade head`** (through **`watch_model_link_rev
 
 ## Ingest searches (UI + API)
 
-- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200, stored in **`app_settings`** after save; until then **`EBAY_SEARCH_LIMIT`** env applies) and **interval minutes**. Rough max items touched per cycle ≈ *limit × enabled lines* (each line = one API call). If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
-- **Interval:** Stored in **`app_settings`** when changed from the UI; otherwise **`INGEST_INTERVAL_MINUTES`** from env. Changing interval in **Settings** reschedules the job without restarting the container.
+- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200, stored in **`app_settings.ingest_search_limit`** after **Save**; until then **`EBAY_SEARCH_LIMIT`** env applies) and **interval minutes**. Rough max items touched per cycle ≈ *limit × enabled lines* (each line = one Browse API call). Only the **first page** of eBay results is fetched per line (`offset=0`); there is no multi-page crawl yet. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
+- **Interval:** Stored in **`app_settings.ingest_interval_minutes`** when changed from the UI; otherwise **`INGEST_INTERVAL_MINUTES`** from env. Changing interval in **Settings** reschedules the job without restarting the container.
+- **OAuth (one token per cycle):** A single **`EbayAuthClient`** + **`EbayBrowseClient`** is reused for **all** query lines in one scheduled or **Ingest now** run, so you should see **one** Identity `oauth2/token` POST per cycle when the cached token is still valid (not one token request per line). Dashboard counters **`ebay_oauth_token_calls`** / **`ebay_browse_search_calls`** persist in **`app_settings.ebay_api_usage_json`**.
 - **Ingest now:** Calls **`POST /api/ingest/run`** (background task). There is **no authentication** on these endpoints — intended for trusted LAN / self-hosted use only.
 
 ## Local development
@@ -194,7 +195,7 @@ Full list and comments: **[`.env.example`](.env.example)**. On Unraid, set the s
 | `TZ` | Container timezone |
 | `APP_PORT` | Uvicorn listen port (match published port; healthcheck uses this) |
 | `LOG_LEVEL` | Python logging level |
-| `INGEST_INTERVAL_MINUTES` | Minutes between ingest jobs (5–1440) |
+| `INGEST_INTERVAL_MINUTES` | Default minutes between ingest jobs (5–1440); UI can persist override in **`app_settings.ingest_interval_minutes`** |
 
 Optional for **local Next dev only:** `NEXT_PUBLIC_API_BASE` (see Local development above).
 
@@ -215,5 +216,5 @@ Optional for **local Next dev only:** `NEXT_PUBLIC_API_BASE` (see Local developm
 ## Operations notes
 
 - **Migrations** run automatically on container start (`docker/start.sh` → `alembic upgrade head`).
-- **Ingest** runs on an interval inside the app (**APScheduler**); tune **`INGEST_INTERVAL_MINUTES`** and search fields via env.
+- **Ingest** runs on an interval inside the app (**APScheduler**). Tune **interval** and **items per search line** in **`/settings/`** (persisted in **`app_settings`**), or use **`INGEST_INTERVAL_MINUTES`** / **`EBAY_SEARCH_LIMIT`** as defaults before the first save. Search **lines** are edited in the same UI (stored in **`saved_searches`**).
 - **Tuning rules:** repair phrases **`backend/watchfinder/services/parsing/keywords.py`**; scoring economics **`backend/watchfinder/services/scoring/constants.py`**.

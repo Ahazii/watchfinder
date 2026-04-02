@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **31 March 2026**
+Last updated: **3 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -27,6 +27,7 @@ This document records what is implemented in the repository versus the phased pl
 | **5** | Settings UI (multi-line ingest, interval, ingest-now); listing **valuation** edits, internal comps, **`listing_edits`** / **`watch_sale_records`**, migration **002** | **Done** |
 | **5b** | **`watch_models`** catalog, **`listings.watch_model_id`**, auto-link + manual override, observed/manual price bounds, **`/watch-models`** UI, migration **003**, Settings copy for Browse `q` behavior | **Done** |
 | **5c** | **`watch_model_link_reviews`** queue, **`watch_catalog_review_mode`** (`auto` / `review`), candidate scoring, **`/watch-review`** UI, **`/api/watch-link-reviews`**, migration **004** | **Done** |
+| **5d** | Dashboard **eBay API counters** + doc links; **`image_urls`** on **`ListingSummary`** + thumbs (listings, candidates, watch DB, dashboard); **`title_q`** filter; **`app_settings.ingest_search_limit`** + Settings UI; **reuse one Browse client per ingest cycle** (OAuth not per line); **`services/ebay/api_usage.py`** (usage JSON + flush-safe saves) | **Done** |
 
 ---
 
@@ -38,7 +39,7 @@ This document records what is implemented in the repository versus the phased pl
 - **Models** (`watchfinder/models/listing.py`): `listings`, `listing_snapshots`, `parsed_attributes`, `repair_signals`, `opportunity_scores`, `saved_searches`, `app_settings`, **`listing_edits`**, **`watch_sale_records`**, **`watch_models`** (listing **`watch_model_id`** FK **SET NULL**).
 - **Alembic**: `001_initial_schema.py`, **`002_listing_edits_watch_sales.py`**, **`003_watch_models.py`** (`watch_models`, `listings.watch_model_id`, partial unique index on brand + reference when reference is set).
 - **eBay**: client-credentials OAuth (`services/ebay/auth.py`), **Browse** item summary search (`browse.py`), **Taxonomy** client stub (`taxonomy.py`).
-- **Ingestion**: map item summaries → listing rows + snapshots (`services/ingestion/mapper.py`, `job.py`); multi-query cycle from **`saved_searches`** (`browse_ingest` JSON) or env fallback.
+- **Ingestion**: map item summaries → listing rows + snapshots (`services/ingestion/mapper.py`, `job.py`); multi-query cycle from **`saved_searches`** (`browse_ingest` JSON) or env fallback; **`run_all_browse_ingest`** shares one **`EbayBrowseClient`** (token reused across lines); per-search **`limit`** from **`get_ingest_search_limit`** (**`app_settings.ingest_search_limit`** or env).
 - **Docker**: `docker/start.sh` (wait for Postgres, **`alembic upgrade head`**, `uvicorn`).
 - **CI**: `.github/workflows/docker-publish.yml` → **GHCR** `ghcr.io/<repo_owner>/watchfinder`.
 - **Kickoff docs**: `Kickoff Documents/` (novice Unraid runbook + Cursor prompt).
@@ -52,8 +53,8 @@ This document records what is implemented in the repository versus the phased pl
 - **Scoring** (`services/scoring/`): rule-based resale/repair/margin math, **confidence**, **risk**, **explanations**; tunable numbers in `constants.py`. **Repair total** = rule core + optional **repair add-on** + **donor cost** from **`listing_edits`** (see Phase 5).
 - **Pipeline** (`services/pipeline/analyze.py`): after each listing upsert (or PATCH), clears and repopulates parsed attributes, signals, and **at most one** current opportunity score row per listing (when repair signals exist). Then **`ensure_watch_catalog_for_listing`** (respects **`watch_catalog_review_mode`**) and **`refresh_watch_model_observed_bounds`** when linked (`services/watch_models/`).
 - **REST API** (prefix `/api`):
-  - `GET /api/dashboard`
-  - `GET /api/listings` (+ query filters, **`sort_by` / `sort_dir`**)
+  - `GET /api/dashboard` — includes **`ebay_browse_search_calls`** / **`ebay_oauth_token_calls`** and recent rows with **`image_urls`**
+  - `GET /api/listings` (+ query filters including **`title_q`**, **`sort_by` / `sort_dir`**)
   - `GET /api/listings/{uuid}` — detail + comps + **`field_guidance`** / **`source_legend`**
   - **`PATCH /api/listings/{uuid}`** — persist **`listing_edits`**, optional **`watch_model_id`**, sync **`watch_sale_records`**, re-analyze (refresh prior model bounds if link changed)
   - **`GET` / `POST` / `GET/{uuid}` / `PATCH` / `DELETE` `/api/watch-models`** — watch catalog CRUD + search; **`POST /backfill-from-listings`**
@@ -61,7 +62,7 @@ This document records what is implemented in the repository versus the phased pl
   - **`/api/watch-link-reviews`**: `GET` list, `GET /{uuid}` detail, `POST /{uuid}/resolve` — match queue (review mode)
   - `GET /api/candidates` (profit > 0, same sort params as listings)
   - **`GET` / `PATCH /api/settings`** (includes **`watch_catalog_review_mode`**), **`POST /api/ingest/run`**
-- **Query layer** (`api/query.py`, `listing_helpers.py`) avoids duplicate rows from joins by using `EXISTS` subqueries.
+- **Query layer** (`api/query.py`, `listing_helpers.py`) avoids duplicate rows from joins by using `EXISTS` subqueries; optional **`title_q`** filters **`Listing.title`** (ILIKE).
 - **Listing detail assembly** (`api/listing_detail.py`).
 
 OpenAPI: **`/docs`** (FastAPI) when the app is running.
@@ -73,11 +74,11 @@ OpenAPI: **`/docs`** (FastAPI) when the app is running.
 - **`frontend/`** — Next.js 14 **App Router**, **TypeScript**, **Tailwind**, **shadcn-style** primitives, **DM Sans**, dark theme.
 - **Static export** → `frontend/out/`; **FastAPI** mounts at **`/`** when present (after `/api`, `/health`, `/docs`).
 - **Pages**:
-  - **`/`** — Dashboard.
-  - **`/listings/`** — Filterable table, pagination, sortable columns, **Add to watch database** per row.
+  - **`/`** — Dashboard (eBay usage counters + policy links, recent listing thumbs).
+  - **`/listings/`** — Filterable table (**Title contains**, brand, etc.), pagination, sortable columns, thumbnails, **Add to watch database** per row.
   - **`/listings/detail/?id=`** — eBay link, **internal comps**, **editable valuation form** (save → PATCH), score, explanations, signals, parsed attrs, source legend.
-  - **`/candidates/`** — Profit-positive subset.
-  - **`/settings/`** — Ingest lines, interval, **Ingest now**; **watch catalog matching** (`auto` / `review`); expanded Browse **`q`** help.
+  - **`/candidates/`** — Profit-positive subset (**title_q** + shared filters with listings).
+  - **`/settings/`** — Ingest lines, **interval** + **items per search line**, **Ingest now**; **watch catalog matching** (`auto` / `review`); Browse **`q`** + throughput help.
   - **`/watch-models/`**, **`/watch-models/detail/?id=`** — Watch database + **backfill from listings**.
   - **`/watch-review/`**, **`/watch-review/detail/?id=`** — Match queue (resolve link / create / dismiss).
   - **Listings / Candidates** — column headers sort server-side (`sort_by` / `sort_dir` on **`GET /api/listings`** and **`GET /api/candidates`**).
@@ -98,7 +99,7 @@ OpenAPI: **`/docs`** (FastAPI) when the app is running.
 
 ## Phase 5 — Settings & valuation (complete)
 
-- **Persisted ingest**: **`saved_searches`** rows with `filter_json.kind === "browse_ingest"`; interval in **`app_settings.ingest_interval_minutes`**; **`services/ingest_settings.py`**, **`ingest_schedule.py`**, **`ingest_worker.py`**, **`runtime.py`** for scheduler reschedule.
+- **Persisted ingest**: **`saved_searches`** rows with `filter_json.kind === "browse_ingest"`; interval in **`app_settings.ingest_interval_minutes`**; **page size** in **`app_settings.ingest_search_limit`** (override for **`EBAY_SEARCH_LIMIT`**); **`services/ingest_settings.py`**, **`ingest_schedule.py`**, **`ingest_worker.py`**, **`runtime.py`** for scheduler reschedule.
 - **Valuation** (`services/valuation/`): **effective** brand/model/ref/caliber (manual overrides vs parsed **R**); **`compute_comp_bands`** — sale records + active same-brand asking; **`sales_sync`** writes **`watch_sale_records`** when a **recorded sale** is saved; optional **`app_settings.max_comp_candidates`** (default **200** in code).
 - **Provenance letters** (UI + API): **M / I / S / R / O / H / P** — see **`README.md` → Valuation**. **O** reserved for future ingest-observed auction end (not implemented yet).
 - **Frontend**: Settings page fixes (**`newClientKey`** for HTTP LAN); listing detail form + guidance from **`field_guidance`**.
@@ -138,9 +139,9 @@ OpenAPI: **`/docs`** (FastAPI) when the app is running.
 | `backend/watchfinder/main.py` | Entry, scheduler, routers, static mount |
 | `backend/watchfinder/api/` | Routes, **`listing_detail.py`**, deps, query |
 | `backend/watchfinder/schemas/` | Pydantic models |
-| `backend/watchfinder/services/ebay/` | OAuth, Browse, Taxonomy |
+| `backend/watchfinder/services/ebay/` | OAuth, Browse, Taxonomy, **`api_usage.py`** (persisted call counters) |
 | `backend/watchfinder/services/ingestion/` | eBay → DB |
-| `backend/watchfinder/services/ingest_settings.py` | Saved ingest queries + interval |
+| `backend/watchfinder/services/ingest_settings.py` | Saved ingest queries + interval + **`ingest_search_limit`** |
 | `backend/watchfinder/services/ingest_schedule.py` | APScheduler interval sync |
 | `backend/watchfinder/services/valuation/` | Effective fields, comps, sale sync, field help |
 | `backend/watchfinder/services/parsing/` | Corpus + attributes + keywords |
