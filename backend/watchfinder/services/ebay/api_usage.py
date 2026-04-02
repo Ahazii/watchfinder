@@ -46,6 +46,9 @@ def _save(db: Session, counts: dict[str, int]) -> None:
         db.add(AppSetting(key=_KEY, value_text=payload))
     else:
         row.value_text = payload
+    # Same ingest request often increments oauth then browse; without flush the
+    # second call's db.get() misses the pending INSERT and tries another add → PK clash.
+    db.flush()
 
 
 def increment_browse_search(db: Session, n: int = 1) -> None:
