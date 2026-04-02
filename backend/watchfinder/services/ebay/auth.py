@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 import httpx
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
     from watchfinder.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -21,8 +23,9 @@ _SCOPE_SANDBOX = "https://api.sandbox.ebay.com/oauth/api_scope"
 
 
 class EbayAuthClient:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, db: "Session | None" = None) -> None:
         self._settings = settings
+        self._db = db
         self._token: str | None = None
         self._expires_at: float = 0.0
 
@@ -59,4 +62,8 @@ class EbayAuthClient:
         self._token = body["access_token"]
         self._expires_at = now + int(body.get("expires_in", 7200))
         logger.info("Refreshed eBay application token")
+        if self._db is not None:
+            from watchfinder.services.ebay.api_usage import increment_oauth_token
+
+            increment_oauth_token(self._db)
         return self._token

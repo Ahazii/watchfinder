@@ -21,6 +21,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ListingThumb } from "@/components/listing-thumb";
+
+const EBAY_RATE_LIMITS_URL =
+  "https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html";
+const EBAY_BROWSE_OVERVIEW_URL =
+  "https://developer.ebay.com/api-docs/buy/browse/overview.html";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardStats | null>(null);
@@ -55,6 +61,14 @@ export default function DashboardPage() {
     { label: "Active", value: data.active_listings },
     { label: "Candidates (profit > 0)", value: data.candidate_count },
     { label: "With repair signals", value: data.listings_with_repair_signals },
+    {
+      label: "eBay Browse searches (ingest)",
+      value: data.ebay_browse_search_calls ?? 0,
+    },
+    {
+      label: "eBay OAuth token refreshes",
+      value: data.ebay_oauth_token_calls ?? 0,
+    },
   ];
 
   return (
@@ -66,7 +80,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {statCards.map((s) => (
           <Card key={s.label}>
             <CardHeader className="pb-2">
@@ -76,6 +90,31 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      <p className="text-sm text-muted-foreground">
+        Outbound eBay usage is counted per successful ingest call (one{" "}
+        <code className="rounded bg-muted px-1">item_summary/search</code> per
+        query per cycle, plus an OAuth token request when the cached token
+        expires). Official limits and fair-use rules:{" "}
+        <a
+          href={EBAY_RATE_LIMITS_URL}
+          className="text-primary underline-offset-4 hover:underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          REST API rate limiting
+        </a>
+        {" · "}
+        <a
+          href={EBAY_BROWSE_OVERVIEW_URL}
+          className="text-primary underline-offset-4 hover:underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Buy Browse API overview
+        </a>
+        .
+      </p>
 
       <Card>
         <CardHeader>
@@ -98,6 +137,7 @@ function RecentTable({ rows }: { rows: ListingSummary[] }) {
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead className="w-14" />
           <TableHead>Title</TableHead>
           <TableHead>Price</TableHead>
           <TableHead>Profit est.</TableHead>
@@ -107,6 +147,9 @@ function RecentTable({ rows }: { rows: ListingSummary[] }) {
       <TableBody>
         {rows.map((r) => (
           <TableRow key={r.id}>
+            <TableCell className="align-top">
+              <ListingThumb urls={r.image_urls} alt="" sizeClass="h-9 w-9" />
+            </TableCell>
             <TableCell className="max-w-[240px]">
               <Link
                 href={`/listings/detail/?id=${r.id}`}

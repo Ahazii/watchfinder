@@ -9,6 +9,7 @@ import type {
   WatchModelListResponse,
 } from "@/lib/types";
 import { money } from "@/lib/format";
+import { ListingThumb } from "@/components/listing-thumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -140,6 +141,7 @@ export default function WatchModelsPage() {
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-b border-border bg-muted/40">
             <tr>
+              <th className="px-3 py-2 font-medium w-14">Photo</th>
               <th className="px-3 py-2 font-medium">Model</th>
               <th className="px-3 py-2 font-medium">Observed</th>
               <th className="px-3 py-2 font-medium">Manual</th>
@@ -149,13 +151,16 @@ export default function WatchModelsPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
                   No models yet. Add one or widen your search.
                 </td>
               </tr>
             ) : (
               rows.map((m) => (
                 <tr key={m.id} className="border-b border-border/60">
+                  <td className="px-3 py-2 align-top">
+                    <ListingThumb urls={m.image_urls} alt="" />
+                  </td>
                   <td className="px-3 py-2">
                     <p className="font-medium">{label(m)}</p>
                     {m.model_name ? (

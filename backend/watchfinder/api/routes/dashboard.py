@@ -8,6 +8,7 @@ from watchfinder.api.deps import get_db
 from watchfinder.api.listing_helpers import listing_to_summary, scores_for_listings
 from watchfinder.models import Listing, OpportunityScore, RepairSignal
 from watchfinder.schemas.listings import DashboardStats
+from watchfinder.services.ebay.api_usage import get_ebay_api_usage
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -45,10 +46,13 @@ def dashboard(db: Session = Depends(get_db)) -> DashboardStats:
     score_map = scores_for_listings(db, [r.id for r in recent])
     recent_summaries = [listing_to_summary(r, score_map.get(r.id)) for r in recent]
 
+    usage = get_ebay_api_usage(db)
     return DashboardStats(
         total_listings=total_listings,
         active_listings=active_listings,
         candidate_count=candidate_count,
         listings_with_repair_signals=listings_with_repair_signals,
         recent_listings=recent_summaries,
+        ebay_browse_search_calls=int(usage.get("browse_search", 0)),
+        ebay_oauth_token_calls=int(usage.get("oauth_token", 0)),
     )

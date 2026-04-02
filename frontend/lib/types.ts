@@ -19,6 +19,7 @@ export type ListingSummary = {
   condition_description: string | null;
   last_seen_at: string | null;
   is_active?: boolean;
+  image_urls?: string[] | null;
   score?: OpportunityScore | null;
 };
 
@@ -171,6 +172,8 @@ export type DashboardStats = {
   candidate_count: number;
   listings_with_repair_signals: number;
   recent_listings: ListingSummary[];
+  ebay_browse_search_calls?: number;
+  ebay_oauth_token_calls?: number;
 };
 
 export type IngestQueryDto = {

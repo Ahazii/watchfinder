@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from watchfinder.config import Settings, get_settings
 from watchfinder.models import Listing, ListingSnapshot
 from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
+from watchfinder.services.ebay.api_usage import increment_browse_search
 from watchfinder.services.ingestion.mapper import item_summary_to_listing_fields
 from watchfinder.services.ingest_settings import resolve_ingest_query_strings
 from watchfinder.services.pipeline import analyze_listing
@@ -34,7 +35,7 @@ def run_browse_ingest(
         logger.warning("Ingest skipped: empty search query")
         return 0
 
-    auth = EbayAuthClient(settings)
+    auth = EbayAuthClient(settings, db)
     browse = EbayBrowseClient(settings, auth)
 
     data = browse.search(
@@ -42,6 +43,7 @@ def run_browse_ingest(
         limit=settings.ebay_search_limit,
         offset=0,
     )
+    increment_browse_search(db)
     summaries = data.get("itemSummaries") or []
     now = datetime.now(UTC)
     count = 0

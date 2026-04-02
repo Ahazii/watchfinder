@@ -49,8 +49,8 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings |
-| GET | `/api/listings` | Paginated listings + query filters; **`sort_by`** (`last_seen`, `title`, `price`, `confidence`, `profit`) and **`sort_dir`** (`asc` / `desc`) |
+| GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings (each with **`image_urls`**), plus **`ebay_browse_search_calls`** / **`ebay_oauth_token_calls`** (persisted ingest counters; see [eBay REST rate limiting](https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html)) |
+| GET | `/api/listings` | Paginated listings + query filters; list rows include **`image_urls`** (first URL = eBay gallery thumb in UI); **`sort_by`** (`last_seen`, `title`, `price`, `confidence`, `profit`) and **`sort_dir`** (`asc` / `desc`) |
 | GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |

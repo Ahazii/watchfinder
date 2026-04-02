@@ -31,5 +31,6 @@ def listing_to_summary(
         condition_description=listing.condition_description,
         last_seen_at=listing.last_seen_at,
         is_active=listing.is_active,
+        image_urls=listing.image_urls,
         score=OpportunityScoreOut.model_validate(score) if score else None,
     )

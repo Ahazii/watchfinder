@@ -27,6 +27,7 @@ import {
   SortableTableHead,
   type SortDir,
 } from "@/components/sortable-table-head";
+import { ListingThumb } from "@/components/listing-thumb";
 
 export default function ListingsPage() {
   const [filters, setFilters] = useState({
@@ -304,6 +305,7 @@ function ListingsTable({
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead className="w-14 text-muted-foreground">Photo</TableHead>
           <SortableTableHead
             label="Title"
             column="title"
@@ -347,6 +349,9 @@ function ListingsTable({
       <TableBody>
         {rows.map((r) => (
           <TableRow key={r.id}>
+            <TableCell className="align-top">
+              <ListingThumb urls={r.image_urls} alt="" />
+            </TableCell>
             <TableCell className="max-w-xs">
               <Link
                 href={`/listings/detail/?id=${r.id}`}

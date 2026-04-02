@@ -77,6 +77,7 @@ class ListingSummary(BaseModel):
     condition_description: str | None
     last_seen_at: datetime | None
     is_active: bool = True
+    image_urls: list | None = None
     score: OpportunityScoreOut | None = None
 
 
@@ -141,3 +142,5 @@ class DashboardStats(BaseModel):
     candidate_count: int
     listings_with_repair_signals: int
     recent_listings: list[ListingSummary]
+    ebay_browse_search_calls: int = 0
+    ebay_oauth_token_calls: int = 0
