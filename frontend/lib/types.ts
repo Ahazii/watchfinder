@@ -48,6 +48,35 @@ export type CompBand = {
   label: string;
 };
 
+export type WatchModelBrief = {
+  id: string;
+  brand: string;
+  model_family?: string | null;
+  model_name?: string | null;
+  reference?: string | null;
+  observed_price_low?: string | number | null;
+  observed_price_high?: string | number | null;
+  manual_price_low?: string | number | null;
+  manual_price_high?: string | number | null;
+};
+
+export type WatchModel = WatchModelBrief & {
+  caliber?: string | null;
+  image_urls?: string[] | null;
+  production_start?: string | null;
+  production_end?: string | null;
+  description?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type WatchModelListResponse = {
+  items: WatchModel[];
+  total: number;
+  skip: number;
+  limit: number;
+};
+
 export type ListingDetail = ListingSummary & {
   subtitle?: string | null;
   image_urls?: string[] | null;
@@ -71,6 +100,8 @@ export type ListingDetail = ListingSummary & {
   comp_asking: CompBand;
   source_legend: Record<string, string>;
   field_guidance: Record<string, string>;
+  watch_model_id?: string | null;
+  watch_model?: WatchModelBrief | null;
 };
 
 export type ListingListResponse = {

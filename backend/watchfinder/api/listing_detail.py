@@ -15,6 +15,7 @@ from watchfinder.schemas.listings import (
     RepairSignalOut,
     ValuedStringOut,
 )
+from watchfinder.schemas.watch_models import WatchModelBriefOut
 from watchfinder.api.listing_helpers import listing_to_summary
 from watchfinder.services.valuation import SOURCE_LEGEND, compute_comp_bands
 from watchfinder.services.valuation.effective import (
@@ -65,6 +66,9 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
     latest_orm = scores[0] if scores else None
     summary = listing_to_summary(listing, latest_orm)
 
+    wm = listing.watch_model
+    watch_brief = WatchModelBriefOut.model_validate(wm) if wm else None
+
     return ListingDetail(
         **summary.model_dump(),
         subtitle=listing.subtitle,
@@ -100,4 +104,6 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
         comp_asking=_band_out(asking),
         source_legend=SOURCE_LEGEND,
         field_guidance=FIELD_GUIDANCE,
+        watch_model_id=listing.watch_model_id,
+        watch_model=watch_brief,
     )

@@ -22,6 +22,7 @@ from watchfinder.schemas.listings import (
 )
 from watchfinder.services.pipeline import analyze_listing
 from watchfinder.services.valuation.sales_sync import sync_watch_sale_record
+from watchfinder.services.watch_models import refresh_watch_model_observed_bounds
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -70,6 +71,7 @@ def _listing_detail_options():
         selectinload(Listing.repair_signals),
         selectinload(Listing.opportunity_scores),
         selectinload(Listing.listing_edit),
+        selectinload(Listing.watch_model),
     )
 
 
@@ -105,7 +107,11 @@ def patch_listing(
         db.add(edit)
         listing.listing_edit = edit
 
+    old_watch_model_id = listing.watch_model_id
     patch = body.model_dump(exclude_unset=True)
+    if "watch_model_id" in patch:
+        listing.watch_model_id = patch.pop("watch_model_id")
+
     for key, val in patch.items():
         if hasattr(edit, key):
             setattr(edit, key, val)
@@ -114,6 +120,8 @@ def patch_listing(
     parsed = {a.key: (a.value_text or "") for a in listing.parsed_attributes}
     sync_watch_sale_record(db, listing, parsed, edit)
     analyze_listing(db, listing)
+    if old_watch_model_id and old_watch_model_id != listing.watch_model_id:
+        refresh_watch_model_observed_bounds(db, old_watch_model_id)
     db.commit()
 
     listing = db.execute(

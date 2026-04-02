@@ -4,7 +4,7 @@ Two **Docker** containers on Unraid (not a VM): **PostgreSQL** (`postgres:16`) a
 
 **Order:** create folders → create Docker network **`watchfinder-net`** → add Postgres → (after GHCR has an image) add WatchFinder.
 
-**Related docs:** project root **`README.md`** (overview, CI/CD, env vars), **`deploy/unraid/watchfinder.xml`** (full template with all variables), **`PROGRESS.md`** (feature status).
+**Related docs:** project root **`README.md`** (overview, CI/CD, env vars, watch catalog API), **`deploy/unraid/watchfinder.xml`** (full template with all variables), **`PROGRESS.md`** (feature status, migrations through **003** `watch_models`).
 
 ---
 

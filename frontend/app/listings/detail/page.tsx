@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson } from "@/lib/api";
-import type { ListingDetail } from "@/lib/types";
+import type { ListingDetail, WatchModel, WatchModelListResponse } from "@/lib/types";
 import { money, dateShort } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,6 +83,14 @@ function DetailBody() {
   const [saleAt, setSaleAt] = useState("");
   const [saleSrc, setSaleSrc] = useState("M");
   const [notes, setNotes] = useState("");
+  const [watchModelId, setWatchModelId] = useState("");
+  const [catalog, setCatalog] = useState<WatchModel[]>([]);
+
+  useEffect(() => {
+    fetchJson<WatchModelListResponse>("/api/watch-models?limit=500")
+      .then((r) => setCatalog(r.items))
+      .catch(() => setCatalog([]));
+  }, []);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -112,6 +120,7 @@ function DetailBody() {
         );
         setSaleSrc(d.recorded_sale?.source || "M");
         setNotes(d.notes ?? "");
+        setWatchModelId(d.watch_model_id ?? "");
         setSavedOk(false);
       })
       .catch((e: Error) => setErr(e.message));
@@ -133,6 +142,7 @@ function DetailBody() {
       return Number.isFinite(n) ? n : null;
     };
     const body: Record<string, unknown> = {
+      watch_model_id: watchModelId.trim() ? watchModelId.trim() : null,
       model_family: modelFamily.trim() || null,
       model_family_source: modelFamilySrc,
       reference_text: reference.trim() || null,
@@ -191,6 +201,7 @@ function DetailBody() {
         );
         setSaleSrc(d.recorded_sale?.source || "M");
         setNotes(d.notes ?? "");
+        setWatchModelId(d.watch_model_id ?? "");
       })
       .catch((e: Error) => setSaveErr(e.message))
       .finally(() => setSaving(false));
@@ -249,6 +260,57 @@ function DetailBody() {
           </Button>
         )}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Watch catalog link</CardTitle>
+          <CardDescription>
+            Listings auto-link when brand + reference (or brand + family) match a row in the watch
+            database. Override here if the match is wrong; clear to allow auto-link again on save.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {row.watch_model ? (
+            <p>
+              Linked:{" "}
+              <Link
+                className="text-primary underline"
+                href={`/watch-models/detail/?id=${row.watch_model.id}`}
+              >
+                {[row.watch_model.brand, row.watch_model.reference, row.watch_model.model_family]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Link>
+              <span className="ml-2 text-muted-foreground tabular-nums">
+                obs {money(row.watch_model.observed_price_low, row.currency)} –{" "}
+                {money(row.watch_model.observed_price_high, row.currency)}
+              </span>
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              Not linked yet. Save after ingest, or pick a model below.
+            </p>
+          )}
+          <div>
+            <label className="font-medium" htmlFor="wm-sel">
+              Linked model
+            </label>
+            <select
+              id="wm-sel"
+              className="mt-1 flex h-9 w-full max-w-xl rounded-md border border-border bg-background px-2 text-sm"
+              value={watchModelId}
+              onChange={(e) => setWatchModelId(e.target.value)}
+            >
+              <option value="">— None (clear / auto-link on save) —</option>
+              {catalog.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {[m.brand, m.reference, m.model_family].filter(Boolean).join(" · ") || m.id}
+                </option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from watchfinder.schemas.watch_models import WatchModelBriefOut
+
 
 class ValuedStringOut(BaseModel):
     """Value plus provenance letter (M/I/S/R/O/H/P) or empty if none."""
@@ -100,11 +102,14 @@ class ListingDetail(ListingSummary):
     comp_asking: CompBandOut = Field(default_factory=CompBandOut)
     source_legend: dict[str, str] = Field(default_factory=dict)
     field_guidance: dict[str, str] = Field(default_factory=dict)
+    watch_model_id: UUID | None = None
+    watch_model: WatchModelBriefOut | None = None
 
 
 class ListingEditsPatch(BaseModel):
     """PATCH body: only include fields you want to change. Use null to clear optional numbers."""
 
+    watch_model_id: UUID | None = None
     model_family: str | None = None
     model_family_source: str | None = Field(None, max_length=1)
     reference_text: str | None = None

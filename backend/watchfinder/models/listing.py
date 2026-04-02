@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Numeric,
@@ -18,6 +19,37 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from watchfinder.db import Base
+
+
+class WatchModel(Base):
+    """Canonical watch type (many listings can link here). Price bounds: observed auto + manual."""
+
+    __tablename__ = "watch_models"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    brand: Mapped[str] = mapped_column(String(255), index=True)
+    model_family: Mapped[str | None] = mapped_column(Text)
+    model_name: Mapped[str | None] = mapped_column(Text)
+    reference: Mapped[str | None] = mapped_column(String(128), index=True)
+    caliber: Mapped[str | None] = mapped_column(Text)
+    image_urls: Mapped[list | None] = mapped_column(JSONB)
+    production_start: Mapped[date | None] = mapped_column(Date)
+    production_end: Mapped[date | None] = mapped_column(Date)
+    description: Mapped[str | None] = mapped_column(Text)
+    manual_price_low: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    manual_price_high: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    observed_price_low: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    observed_price_high: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    listings = relationship("Listing", back_populates="watch_model")
 
 
 class Listing(Base):
@@ -52,6 +84,12 @@ class Listing(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    watch_model_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("watch_models.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
 
     snapshots = relationship("ListingSnapshot", back_populates="listing")
     parsed_attributes = relationship("ParsedAttribute", back_populates="listing")
@@ -63,6 +101,7 @@ class Listing(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    watch_model = relationship("WatchModel", back_populates="listings")
 
 
 class ListingEdit(Base):

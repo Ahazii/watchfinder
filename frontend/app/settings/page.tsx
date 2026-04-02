@@ -195,10 +195,38 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>Browse search lines</CardTitle>
           <CardDescription>
-            Add one eBay keyword search per row. Empty rows are ignored when saving.
+            Each row is sent to eBay Browse API as a single <code className="rounded bg-muted px-1">q</code>{" "}
+            string: the whole line is <strong>one query</strong>, not split into separate searches. eBay
+            tokenizes and matches keywords across title and item specifics; it is not full Boolean (no{" "}
+            <code className="rounded bg-muted px-1">AND</code>/<code className="rounded bg-muted px-1">OR</code>{" "}
+            syntax). Usually a short phrase on one line works better than one giant blob or many
+            single-word lines.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Examples</p>
+            <ul className="mt-2 list-inside list-disc space-y-1">
+              <li>
+                <span className="text-foreground">Good:</span>{" "}
+                <code className="rounded bg-background px-1">omega seamaster 300 vintage</code> — tight
+                intent on one line.
+              </li>
+              <li>
+                <span className="text-foreground">Good:</span> several lines for different intents — e.g.{" "}
+                <code className="rounded bg-background px-1">pocket watch not working</code> and{" "}
+                <code className="rounded bg-background px-1">military wristwatch spares</code>.
+              </li>
+              <li>
+                <span className="text-foreground">Weak:</span> one line with twenty unrelated words; the
+                match becomes noisy.
+              </li>
+              <li>
+                <span className="text-foreground">Weak:</span> expecting the UI to run each word as its own
+                search — it does not; only whole-line queries run.
+              </li>
+            </ul>
+          </div>
           {lines.map((line, idx) => (
             <div
               key={line.clientKey}

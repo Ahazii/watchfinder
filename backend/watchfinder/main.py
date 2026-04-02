@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from watchfinder import runtime
-from watchfinder.api.routes import candidates, dashboard, ingest_admin, listings
+from watchfinder.api.routes import candidates, dashboard, ingest_admin, listings, watch_models
 from watchfinder.api.routes import settings as settings_routes
 from watchfinder.config import get_settings
 from watchfinder.ingest_worker import scheduled_ingest_job
@@ -50,6 +50,7 @@ app.add_middleware(
 
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(listings.router, prefix="/api")
+app.include_router(watch_models.router, prefix="/api")
 app.include_router(candidates.router, prefix="/api")
 app.include_router(settings_routes.router, prefix="/api")
 app.include_router(ingest_admin.router, prefix="/api")
