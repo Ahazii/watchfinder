@@ -8,6 +8,7 @@ from watchfinder.models.listing import (
     RepairSignal,
     SavedSearch,
     WatchModel,
+    WatchModelLinkReview,
     WatchSaleRecord,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "OpportunityScore",
     "SavedSearch",
     "WatchModel",
+    "WatchModelLinkReview",
     "WatchSaleRecord",
 ]

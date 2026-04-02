@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from watchfinder.schemas.watch_link_reviews import WatchLinkReviewBriefOut
 from watchfinder.schemas.watch_models import WatchModelBriefOut
 
 
@@ -104,6 +105,7 @@ class ListingDetail(ListingSummary):
     field_guidance: dict[str, str] = Field(default_factory=dict)
     watch_model_id: UUID | None = None
     watch_model: WatchModelBriefOut | None = None
+    watch_link_review_pending: WatchLinkReviewBriefOut | None = Field(default=None)
 
 
 class ListingEditsPatch(BaseModel):

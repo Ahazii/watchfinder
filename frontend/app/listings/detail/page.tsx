@@ -4,7 +4,11 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson } from "@/lib/api";
-import type { ListingDetail, WatchModel, WatchModelListResponse } from "@/lib/types";
+import type {
+  ListingDetail,
+  WatchModel,
+  WatchModelListResponse,
+} from "@/lib/types";
 import { money, dateShort } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,6 +89,9 @@ function DetailBody() {
   const [notes, setNotes] = useState("");
   const [watchModelId, setWatchModelId] = useState("");
   const [catalog, setCatalog] = useState<WatchModel[]>([]);
+  const [promoteBusy, setPromoteBusy] = useState(false);
+  const [promoteErr, setPromoteErr] = useState<string | null>(null);
+  const [promoteOk, setPromoteOk] = useState(false);
 
   useEffect(() => {
     fetchJson<WatchModelListResponse>("/api/watch-models?limit=500")
@@ -92,10 +99,10 @@ function DetailBody() {
       .catch(() => setCatalog([]));
   }, []);
 
-  const load = useCallback(() => {
-    if (!id) return;
+  const load = useCallback((): Promise<void> => {
+    if (!id) return Promise.resolve();
     setErr(null);
-    fetchJson<ListingDetail>(`/api/listings/${id}`)
+    return fetchJson<ListingDetail>(`/api/listings/${id}`)
       .then((d) => {
         setRow(d);
         setModelFamily(d.model_family?.value ?? "");
@@ -123,7 +130,9 @@ function DetailBody() {
         setWatchModelId(d.watch_model_id ?? "");
         setSavedOk(false);
       })
-      .catch((e: Error) => setErr(e.message));
+      .catch((e: Error) => {
+        setErr(e.message);
+      });
   }, [id]);
 
   useEffect(() => {
@@ -261,12 +270,38 @@ function DetailBody() {
         )}
       </div>
 
+      {row.watch_link_review_pending ? (
+        <Card className="border-amber-900/40 bg-amber-950/20">
+          <CardHeader>
+            <CardTitle className="text-amber-200">Catalogue review pending</CardTitle>
+            <CardDescription className="text-amber-200/80">
+              This listing is in the match queue (review mode). Open the queue to pick a catalog row
+              or create one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="secondary" size="sm">
+              <Link
+                href={`/watch-review/detail/?id=${row.watch_link_review_pending.id}`}
+              >
+                Open in match queue
+              </Link>
+            </Button>
+            <span className="ml-3 text-xs text-muted-foreground">
+              {row.watch_link_review_pending.candidate_count} candidate(s) · tier{" "}
+              {row.watch_link_review_pending.tier ?? "—"}
+            </span>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Watch catalog link</CardTitle>
           <CardDescription>
-            Listings auto-link when brand + reference (or brand + family) match a row in the watch
-            database. Override here if the match is wrong; clear to allow auto-link again on save.
+            New and updated listings try to match the catalog first, then <strong>create</strong> a
+            catalog row when brand + reference (or brand + family) are known. Use the button below
+            to run that on demand, or pick a row manually.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -309,6 +344,47 @@ function DetailBody() {
               ))}
             </select>
           </div>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!id || promoteBusy}
+              onClick={async () => {
+                if (!id) return;
+                setPromoteErr(null);
+                setPromoteOk(false);
+                setPromoteBusy(true);
+                try {
+                  const res = await fetch(apiUrl(`/api/listings/${id}/promote-watch-catalog`), {
+                    method: "POST",
+                    headers: { Accept: "application/json" },
+                  });
+                  if (!res.ok) throw new Error(await res.text());
+                  await res.json();
+                  setPromoteOk(true);
+                  await load();
+                  const cat = await fetchJson<WatchModelListResponse>(
+                    "/api/watch-models?limit=500",
+                  );
+                  setCatalog(cat.items);
+                } catch (e) {
+                  setPromoteErr((e as Error).message);
+                } finally {
+                  setPromoteBusy(false);
+                }
+              }}
+            >
+              {promoteBusy ? "Working…" : "Save to watch database"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Match an existing row or create one from this listing&apos;s brand / reference / family.
+            </span>
+          </div>
+          {promoteErr ? <p className="text-xs text-red-400">{promoteErr}</p> : null}
+          {promoteOk ? (
+            <p className="text-xs text-green-600 dark:text-green-400">Catalog updated.</p>
+          ) : null}
         </CardContent>
       </Card>
 

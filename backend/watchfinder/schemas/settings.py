@@ -24,11 +24,17 @@ class SettingsOut(BaseModel):
     ingest_queries: list[IngestQueryOut]
     env_fallback_query: str
     """Used when no saved lines exist or all are disabled."""
+    watch_catalog_review_mode: str = "auto"
+    """`auto` = fuzzy match + auto-create catalog rows. `review` = exact match only; queue the rest."""
 
 
 class SettingsPatch(BaseModel):
     ingest_interval_minutes: int | None = Field(None, ge=5, le=1440)
     ingest_queries: list[IngestQueryIn] | None = None
+    watch_catalog_review_mode: str | None = Field(
+        None,
+        description="auto or review",
+    )
 
 
 class IngestRunResponse(BaseModel):

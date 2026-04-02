@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session, selectinload
 from watchfinder.api.deps import get_db
 from watchfinder.api.listing_detail import build_listing_detail
 from watchfinder.api.listing_helpers import listing_to_summary, scores_for_listings
+from watchfinder.api.listing_sort import apply_listing_sort, normalize_sort
 from watchfinder.api.query import base_listing_select, count_listings
-from watchfinder.models import Listing, ListingEdit
+from watchfinder.models import Listing, ListingEdit, WatchModel
 from watchfinder.schemas.listings import (
     ListingDetail,
     ListingEditsPatch,
@@ -20,9 +21,14 @@ from watchfinder.schemas.listings import (
     ParsedAttributeOut,
     RepairSignalOut,
 )
+from watchfinder.schemas.watch_models import PromoteWatchCatalogResponse, WatchModelOut
 from watchfinder.services.pipeline import analyze_listing
 from watchfinder.services.valuation.sales_sync import sync_watch_sale_record
-from watchfinder.services.watch_models import refresh_watch_model_observed_bounds
+from watchfinder.services.watch_models import (
+    CatalogLinkOutcome,
+    ensure_watch_catalog_for_listing,
+    refresh_watch_model_observed_bounds,
+)
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -41,6 +47,11 @@ def list_listings(
     caliber_known: bool | None = None,
     confidence_min: Decimal | None = None,
     profit_min: Decimal | None = None,
+    sort_by: str | None = Query(
+        None,
+        description="Sort column: last_seen, title, price, confidence, profit",
+    ),
+    sort_dir: str | None = Query(None, description="asc or desc"),
 ) -> ListingListResponse:
     base = base_listing_select(
         active_only=True,
@@ -56,9 +67,8 @@ def list_listings(
         candidates_only=False,
     )
     total = count_listings(db, base)
-    stmt = (
-        base.order_by(Listing.last_seen_at.desc()).offset(skip).limit(limit)
-    )
+    sk, desc = normalize_sort(sort_by, sort_dir)
+    stmt = apply_listing_sort(base, sort_by=sk, descending=desc).offset(skip).limit(limit)
     rows = db.execute(stmt).scalars().all()
     score_map = scores_for_listings(db, [r.id for r in rows])
     items = [listing_to_summary(r, score_map.get(r.id)) for r in rows]
@@ -72,6 +82,49 @@ def _listing_detail_options():
         selectinload(Listing.opportunity_scores),
         selectinload(Listing.listing_edit),
         selectinload(Listing.watch_model),
+    )
+
+
+@router.post(
+    "/{listing_id}/promote-watch-catalog",
+    response_model=PromoteWatchCatalogResponse,
+    summary="Create or link a watch_models row from this listing",
+)
+def promote_listing_to_watch_catalog(
+    listing_id: UUID, db: Session = Depends(get_db)
+) -> PromoteWatchCatalogResponse:
+    stmt = (
+        select(Listing)
+        .options(selectinload(Listing.parsed_attributes))
+        .where(Listing.id == listing_id)
+    )
+    listing = db.execute(stmt).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    parsed = {a.key: (a.value_text or "") for a in listing.parsed_attributes}
+    edit = db.get(ListingEdit, listing.id)
+    out = ensure_watch_catalog_for_listing(
+        db, listing, parsed, edit, bypass_review=True
+    )
+
+    if out == CatalogLinkOutcome.SKIPPED_NO_IDENTITY:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Cannot add to watch database: need a parsed brand plus a reference "
+                "or model family (edit this listing and save, or fix the title/parsing)."
+            ),
+        )
+
+    if listing.watch_model_id:
+        refresh_watch_model_observed_bounds(db, listing.watch_model_id)
+    db.commit()
+
+    wm = db.get(WatchModel, listing.watch_model_id)
+    return PromoteWatchCatalogResponse(
+        outcome=out.value,
+        watch_model=WatchModelOut.model_validate(wm) if wm else None,
     )
 
 

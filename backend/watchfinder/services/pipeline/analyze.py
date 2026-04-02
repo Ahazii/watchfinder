@@ -16,8 +16,8 @@ from watchfinder.services.parsing import build_listing_corpus, parse_watch_attri
 from watchfinder.services.repair import extract_repair_signals
 from watchfinder.services.scoring import compute_opportunity_score
 from watchfinder.services.watch_models import (
+    ensure_watch_catalog_for_listing,
     refresh_watch_model_observed_bounds,
-    try_auto_link_listing,
 )
 
 
@@ -72,6 +72,6 @@ def analyze_listing(db: Session, listing: Listing) -> None:
             )
         )
 
-    try_auto_link_listing(db, listing, parsed, edit)
+    ensure_watch_catalog_for_listing(db, listing, parsed, edit)
     if listing.watch_model_id:
         refresh_watch_model_observed_bounds(db, listing.watch_model_id)

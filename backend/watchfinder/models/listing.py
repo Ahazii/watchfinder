@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -102,6 +103,41 @@ class Listing(Base):
         cascade="all, delete-orphan",
     )
     watch_model = relationship("WatchModel", back_populates="listings")
+    watch_link_reviews = relationship(
+        "WatchModelLinkReview",
+        back_populates="listing",
+        cascade="all, delete-orphan",
+    )
+
+
+class WatchModelLinkReview(Base):
+    """Queue row when watch_catalog_review_mode=review and catalog link needs human decision."""
+
+    __tablename__ = "watch_model_link_reviews"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    listing_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    tier: Mapped[str | None] = mapped_column(String(16))
+    reason_codes: Mapped[list | None] = mapped_column(JSONB)
+    candidate_watch_model_ids: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    candidate_scores: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    listing = relationship("Listing", back_populates="watch_link_reviews")
 
 
 class ListingEdit(Base):

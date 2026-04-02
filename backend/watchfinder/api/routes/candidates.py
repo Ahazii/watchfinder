@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from watchfinder.api.deps import get_db
 from watchfinder.api.listing_helpers import listing_to_summary, scores_for_listings
+from watchfinder.api.listing_sort import apply_listing_sort, normalize_sort
 from watchfinder.api.query import base_listing_select, count_listings
-from watchfinder.models import Listing
 from watchfinder.schemas.listings import ListingListResponse
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -28,6 +28,11 @@ def list_candidates(
     caliber_known: bool | None = None,
     confidence_min: Decimal | None = None,
     profit_min: Decimal | None = None,
+    sort_by: str | None = Query(
+        None,
+        description="Sort column: last_seen, title, price, confidence, profit",
+    ),
+    sort_dir: str | None = Query(None, description="asc or desc"),
 ) -> ListingListResponse:
     """Repair/resale candidates: opportunity score with potential_profit > 0."""
     base = base_listing_select(
@@ -44,7 +49,8 @@ def list_candidates(
         candidates_only=True,
     )
     total = count_listings(db, base)
-    stmt = base.order_by(Listing.last_seen_at.desc()).offset(skip).limit(limit)
+    sk, desc = normalize_sort(sort_by, sort_dir)
+    stmt = apply_listing_sort(base, sort_by=sk, descending=desc).offset(skip).limit(limit)
     rows = db.execute(stmt).scalars().all()
     score_map = scores_for_listings(db, [r.id for r in rows])
     items = [listing_to_summary(r, score_map.get(r.id)) for r in rows]

@@ -20,7 +20,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 - `frontend/` — Next.js 14 (App Router), TypeScript, Tailwind, shadcn-style UI
 - `backend/watchfinder/` — FastAPI app, models, eBay clients, ingestion, parsing, scoring
-- `alembic/` — database migrations (**001** initial schema, **002** `listing_edits` + `watch_sale_records`, **003** `watch_models` + `listings.watch_model_id`)
+- `alembic/` — database migrations through **004** (`watch_model_link_reviews` queue for manual catalog matching when review mode is on)
 - `docker/start.sh` — wait for Postgres → `alembic upgrade head` → `uvicorn`
 - `Dockerfile` — multi-stage image (Node build + Python runtime, non-root user, healthcheck)
 - `docker-compose.yml` — local **postgres:16** + app build
@@ -38,6 +38,8 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | `/settings/` | Ingest search lines, interval, **Ingest now** (same origin as API) |
 | `/watch-models/` | **Watch database** — catalog CRUD (canonical models, manual + observed price bounds) |
 | `/watch-models/detail/?id=<uuid>` | Edit one model (all fields); omit `id` to create |
+| `/watch-review/` | **Match queue** — pending catalogue links (review mode) |
+| `/watch-review/detail/?id=<review-uuid>` | Resolve one queue item (match / create / dismiss) |
 | `/listings/detail/?id=<uuid>` | Listing detail, **editable valuation**, **watch catalog link** (override / clear), internal comps, **Save** → `PATCH /api/listings/{id}` |
 | `/api/...` | JSON API (same origin as UI in Docker) |
 | `/docs` | Swagger UI |
@@ -48,15 +50,20 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings |
-| GET | `/api/listings` | Paginated listings + query filters |
+| GET | `/api/listings` | Paginated listings + query filters; **`sort_by`** (`last_seen`, `title`, `price`, `confidence`, `profit`) and **`sort_dir`** (`asc` / `desc`) |
 | GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
-| PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs auto-link when unset) |
+| PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
+| POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
 | GET | `/api/watch-models` | Paginated catalog (`q` search, `skip`/`limit`) |
 | POST | `/api/watch-models` | Create model |
+| POST | `/api/watch-models/backfill-from-listings` | Scan active listings; link or create catalog rows (same rules as ingest analyze) |
+| GET | `/api/watch-link-reviews` | Pending match-queue rows (`skip`/`limit`) |
+| GET | `/api/watch-link-reviews/{uuid}` | One queue item + scored candidate models |
+| POST | `/api/watch-link-reviews/{uuid}/resolve` | Body `{ "action": "match"|"create"|"dismiss", "watch_model_id"?: uuid }` |
 | GET | `/api/watch-models/{uuid}` | One model |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
 | DELETE | `/api/watch-models/{uuid}` | Delete (listings unlinked via FK **SET NULL**) |
-| GET | `/api/candidates` | Same filters as listings; only rows with `potential_profit > 0` |
+| GET | `/api/candidates` | Same filters and **sort** params as listings; only rows with `potential_profit > 0` |
 | GET | `/api/settings` | Ingest interval, saved Browse query lines, env fallback hint |
 | PATCH | `/api/settings` | Update interval (5–1440) and/or replace all ingest query lines |
 | POST | `/api/ingest/run` | Queue a full ingest cycle in the background (check logs) |
@@ -64,12 +71,12 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 ## Valuation & internal comps (hobby use)
 
 - **No eBay sold-history API:** comps use only data in **your** Postgres: **`watch_sale_records`** (built when you enter a **recorded sale** on a listing) and **active** listings with the same **parsed brand** for asking-price bands (p25–p75).
-- **Watch catalog (`watch_models`):** one row per canonical watch type (brand + reference when present, else brand + model family). **Many listings** can share one **`watch_model_id`**. **Observed** low/high prices are derived from linked listings (and compatible sale records); **manual** low/high are editable on the model — both are stored for future calculations. **Auto-link** runs on analyze when **`watch_model_id`** is null (brand + ref, then brand + family, then loose title match); override or clear on the listing detail page.
+- **Watch catalog (`watch_models`):** one row per canonical watch type (brand + reference when present, else brand + model family). **Many listings** can share one **`watch_model_id`**. **Observed** low/high prices are derived from linked listings (and compatible sale records); **manual** low/high are editable on the model — both are stored for future calculations. **Settings → Watch catalog matching:** **`auto`** = full pipeline on each **analyze** (exact + fuzzy title + auto-create). **`review`** = exact brand+ref / brand+family only; other cases go to **`watch_model_link_reviews`** and the **Match queue** UI (scored candidates; **Match** / **Create new** / **Dismiss**). **Backfill** follows the same mode; **promote** always bypasses the queue. Override **`watch_model_id`** on the listing detail page when the link is wrong.
 - **Listing detail (`/listings/detail/?id=`)** — editable fields with **source** dropdown per field: **M** manual, **I** inferred (AI — hook later), **S** searched, **R** rules/parsed text, **O** observed ingest (reserved for future “listing ended” detection), **H** historical, **P** parsed (same idea as R). Guidance strings are returned as **`field_guidance`** on the detail JSON.
 - **Repair:** rule-based core **plus** optional **repair add-on** and **donor cost** (both included in total repair for profit math). Fees/shipping ignored.
 - **Tuning asking-sample size:** optional **`app_settings`** row **`max_comp_candidates`** (integer string, default **200** in code if unset).
 
-After upgrading, run **`alembic upgrade head`** (adds **`listing_edits`**, **`watch_sale_records`**, **`watch_models`**, **`listings.watch_model_id`**).
+After upgrading, run **`alembic upgrade head`** (through **`watch_model_link_reviews`** / migration **004**).
 
 ## Ingest searches (UI + API)
 

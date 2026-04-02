@@ -10,14 +10,26 @@ from sqlalchemy.orm import Session
 from watchfinder.api.deps import get_db
 from watchfinder.models import WatchModel
 from watchfinder.schemas.watch_models import (
+    BackfillWatchCatalogResponse,
     WatchModelCreate,
     WatchModelListResponse,
     WatchModelOut,
     WatchModelPatch,
 )
-from watchfinder.services.watch_models import refresh_watch_model_observed_bounds
+from watchfinder.services.watch_models import backfill_watch_catalog, refresh_watch_model_observed_bounds
 
 router = APIRouter(prefix="/watch-models", tags=["watch-models"])
+
+
+@router.post(
+    "/backfill-from-listings",
+    response_model=BackfillWatchCatalogResponse,
+    summary="Link or create watch_models from all active listings",
+)
+def backfill_from_listings(db: Session = Depends(get_db)) -> BackfillWatchCatalogResponse:
+    stats = backfill_watch_catalog(db)
+    db.commit()
+    return BackfillWatchCatalogResponse(**stats)
 
 
 def _apply_search(stmt, q: str | None):

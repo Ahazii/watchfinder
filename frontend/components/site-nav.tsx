@@ -9,6 +9,7 @@ const links = [
   { href: "/listings/", label: "Listings" },
   { href: "/candidates/", label: "Candidates" },
   { href: "/watch-models/", label: "Watch database" },
+  { href: "/watch-review/", label: "Match queue" },
   { href: "/settings/", label: "Settings" },
 ];
 

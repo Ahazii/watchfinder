@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchJson } from "@/lib/api";
-import type { WatchModel, WatchModelListResponse } from "@/lib/types";
+import { apiUrl, fetchJson } from "@/lib/api";
+import type {
+  BackfillWatchCatalogResponse,
+  WatchModel,
+  WatchModelListResponse,
+} from "@/lib/types";
 import { money } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +28,8 @@ export default function WatchModelsPage() {
   const [rows, setRows] = useState<WatchModel[]>([]);
   const [total, setTotal] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
@@ -58,6 +64,27 @@ export default function WatchModelsPage() {
     return parts.join(" · ") || m.id;
   };
 
+  const runBackfill = () => {
+    setBackfillBusy(true);
+    setBackfillMsg(null);
+    fetch(apiUrl("/api/watch-models/backfill-from-listings"), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<BackfillWatchCatalogResponse>;
+      })
+      .then((r) => {
+        setBackfillMsg(
+          `Scanned ${r.scanned}: ${r.created_new} new catalog rows, ${r.linked_existing} linked to existing rows, ${r.already_linked} already linked, ${r.queued_for_review ?? 0} queued for review, ${r.skipped_no_identity} skipped (missing brand and reference/family).`,
+        );
+        load();
+      })
+      .catch((e: Error) => setBackfillMsg(e.message))
+      .finally(() => setBackfillBusy(false));
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -72,6 +99,25 @@ export default function WatchModelsPage() {
           <Link href="/watch-models/detail/">Add model</Link>
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Backfill from listings</CardTitle>
+          <CardDescription>
+            Scan every <strong>active</strong> listing: match the catalog when possible, otherwise
+            create a row when brand + reference (or brand + model family) are known. Safe to run more
+            than once. Same logic runs automatically when listings are ingested or re-analyzed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Button type="button" disabled={backfillBusy} onClick={runBackfill}>
+            {backfillBusy ? "Running…" : "Run backfill now"}
+          </Button>
+          {backfillMsg ? (
+            <p className="text-sm text-muted-foreground">{backfillMsg}</p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -19,6 +19,10 @@ from watchfinder.services.ingest_settings import (
     replace_ingest_queries,
     set_ingest_interval_minutes,
 )
+from watchfinder.services.watch_catalog_settings import (
+    get_watch_catalog_review_mode,
+    set_watch_catalog_review_mode,
+)
 from watchfinder import runtime
 
 logger = logging.getLogger(__name__)
@@ -37,6 +41,7 @@ def _settings_out(db: Session) -> SettingsOut:
             for r in rows
         ],
         env_fallback_query=cfg.ebay_search_query,
+        watch_catalog_review_mode=get_watch_catalog_review_mode(db),
     )
 
 
@@ -54,6 +59,13 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> Settin
             db,
             [(q.label, q.query, q.enabled) for q in body.ingest_queries],
         )
+    if body.watch_catalog_review_mode is not None:
+        try:
+            set_watch_catalog_review_mode(db, body.watch_catalog_review_mode)
+        except ValueError as e:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=400, detail=str(e)) from e
     sch = runtime.ingest_scheduler
     if sch:
         try:

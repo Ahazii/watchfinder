@@ -18,11 +18,14 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  SortableTableHead,
+  type SortDir,
+} from "@/components/sortable-table-head";
 
 export default function CandidatesPage() {
   const [filters, setFilters] = useState({
@@ -33,6 +36,8 @@ export default function CandidatesPage() {
   });
   const [skip, setSkip] = useState(0);
   const [queryNonce, setQueryNonce] = useState(0);
+  const [sortBy, setSortBy] = useState("last_seen");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const limit = 30;
   const [data, setData] = useState<ListingListResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -51,12 +56,14 @@ export default function CandidatesPage() {
     if (f.price_max) q.set("price_max", f.price_max);
     if (f.repair_keyword) q.set("repair_keyword", f.repair_keyword);
     if (f.confidence_min) q.set("confidence_min", f.confidence_min);
+    q.set("sort_by", sortBy);
+    q.set("sort_dir", sortDir);
 
     fetchJson<ListingListResponse>(`/api/candidates?${q.toString()}`)
       .then(setData)
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
-  }, [skip, limit]);
+  }, [skip, limit, sortBy, sortDir]);
 
   useEffect(() => {
     void load();
@@ -136,7 +143,20 @@ export default function CandidatesPage() {
           <p className="text-sm text-muted-foreground">
             {data.total} candidate(s) · skip {data.skip}
           </p>
-          <CandidatesTable rows={data.items} />
+          <CandidatesTable
+            rows={data.items}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={(column) => {
+              if (sortBy === column) {
+                setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+              } else {
+                setSortBy(column);
+                setSortDir(column === "title" ? "asc" : "desc");
+              }
+              setSkip(0);
+            }}
+          />
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -159,7 +179,17 @@ export default function CandidatesPage() {
   );
 }
 
-function CandidatesTable({ rows }: { rows: ListingSummary[] }) {
+function CandidatesTable({
+  rows,
+  sortBy,
+  sortDir,
+  onSort,
+}: {
+  rows: ListingSummary[];
+  sortBy: string;
+  sortDir: SortDir;
+  onSort: (column: string) => void;
+}) {
   if (!rows.length) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -171,11 +201,41 @@ function CandidatesTable({ rows }: { rows: ListingSummary[] }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Title</TableHead>
-          <TableHead>Price</TableHead>
-          <TableHead>Profit</TableHead>
-          <TableHead>Confidence</TableHead>
-          <TableHead>Seen</TableHead>
+          <SortableTableHead
+            label="Title"
+            column="title"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Price"
+            column="price"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Profit"
+            column="profit"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Confidence"
+            column="confidence"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Seen"
+            column="last_seen"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
         </TableRow>
       </TableHeader>
       <TableBody>

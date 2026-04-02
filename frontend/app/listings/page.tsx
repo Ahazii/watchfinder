@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { fetchJson } from "@/lib/api";
+import { apiUrl, fetchJson } from "@/lib/api";
 import type { ListingListResponse, ListingSummary } from "@/lib/types";
 import { money, dateShort } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  SortableTableHead,
+  type SortDir,
+} from "@/components/sortable-table-head";
 
 export default function ListingsPage() {
   const [filters, setFilters] = useState({
@@ -38,10 +42,14 @@ export default function ListingsPage() {
   });
   const [skip, setSkip] = useState(0);
   const [queryNonce, setQueryNonce] = useState(0);
+  const [sortBy, setSortBy] = useState("last_seen");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const limit = 30;
   const [data, setData] = useState<ListingListResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [promoteBusyId, setPromoteBusyId] = useState<string | null>(null);
+  const [promoteMsg, setPromoteMsg] = useState<string | null>(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -62,16 +70,34 @@ export default function ListingsPage() {
     if (f.caliber_known === "no") q.set("caliber_known", "false");
     if (f.confidence_min) q.set("confidence_min", f.confidence_min);
     if (f.profit_min) q.set("profit_min", f.profit_min);
+    q.set("sort_by", sortBy);
+    q.set("sort_dir", sortDir);
 
     fetchJson<ListingListResponse>(`/api/listings?${q.toString()}`)
       .then(setData)
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
-  }, [skip, limit]);
+  }, [skip, limit, sortBy, sortDir]);
 
   useEffect(() => {
     void load();
   }, [skip, queryNonce, load]);
+
+  const promoteToCatalog = (listingId: string) => {
+    setPromoteBusyId(listingId);
+    setPromoteMsg(null);
+    fetch(apiUrl(`/api/listings/${listingId}/promote-watch-catalog`), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        setPromoteMsg("Catalog updated for one listing.");
+        setQueryNonce((n) => n + 1);
+      })
+      .catch((e: Error) => setPromoteMsg(e.message))
+      .finally(() => setPromoteBusyId(null));
+  };
 
   return (
     <div className="space-y-6">
@@ -198,7 +224,25 @@ export default function ListingsPage() {
             Showing {data.items.length} of {data.total} (skip {data.skip}, limit{" "}
             {data.limit})
           </p>
-          <ListingsTable rows={data.items} />
+          {promoteMsg ? (
+            <p className="text-sm text-muted-foreground">{promoteMsg}</p>
+          ) : null}
+          <ListingsTable
+            rows={data.items}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            promoteBusyId={promoteBusyId}
+            onPromoteToCatalog={promoteToCatalog}
+            onSort={(column) => {
+              if (sortBy === column) {
+                setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+              } else {
+                setSortBy(column);
+                setSortDir(column === "title" ? "asc" : "desc");
+              }
+              setSkip(0);
+            }}
+          />
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -238,7 +282,21 @@ function Field({
   );
 }
 
-function ListingsTable({ rows }: { rows: ListingSummary[] }) {
+function ListingsTable({
+  rows,
+  sortBy,
+  sortDir,
+  onSort,
+  promoteBusyId,
+  onPromoteToCatalog,
+}: {
+  rows: ListingSummary[];
+  sortBy: string;
+  sortDir: SortDir;
+  onSort: (column: string) => void;
+  promoteBusyId: string | null;
+  onPromoteToCatalog: (listingId: string) => void;
+}) {
   if (!rows.length) {
     return <p className="text-sm text-muted-foreground">No rows.</p>;
   }
@@ -246,11 +304,44 @@ function ListingsTable({ rows }: { rows: ListingSummary[] }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Title</TableHead>
-          <TableHead>Price</TableHead>
-          <TableHead>Confidence</TableHead>
-          <TableHead>Profit est.</TableHead>
-          <TableHead>Seen</TableHead>
+          <SortableTableHead
+            label="Title"
+            column="title"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Price"
+            column="price"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Confidence"
+            column="confidence"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Profit est."
+            column="profit"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <SortableTableHead
+            label="Seen"
+            column="last_seen"
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <TableHead className="w-[1%] whitespace-nowrap text-right text-muted-foreground">
+            Watch DB
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -283,6 +374,18 @@ function ListingsTable({ rows }: { rows: ListingSummary[] }) {
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">
               {dateShort(r.last_seen_at)}
+            </TableCell>
+            <TableCell className="text-right">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={promoteBusyId === r.id}
+                title="Save to watch database — create or link a catalog row from this listing"
+                onClick={() => onPromoteToCatalog(r.id)}
+              >
+                {promoteBusyId === r.id ? "…" : "Add"}
+              </Button>
             </TableCell>
           </TableRow>
         ))}

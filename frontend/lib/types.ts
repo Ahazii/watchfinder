@@ -77,6 +77,59 @@ export type WatchModelListResponse = {
   limit: number;
 };
 
+export type PromoteWatchCatalogResponse = {
+  outcome: string;
+  watch_model: WatchModel | null;
+};
+
+export type BackfillWatchCatalogResponse = {
+  scanned: number;
+  already_linked: number;
+  linked_existing: number;
+  created_new: number;
+  skipped_no_identity: number;
+  queued_for_review?: number;
+};
+
+export type WatchLinkReviewBrief = {
+  id: string;
+  tier?: string | null;
+  confidence?: string | number | null;
+  candidate_count: number;
+  reason_codes?: string[] | null;
+};
+
+export type WatchLinkReviewListItem = {
+  id: string;
+  listing_id: string;
+  ebay_item_id: string;
+  listing_title?: string | null;
+  tier?: string | null;
+  confidence?: string | number | null;
+  candidate_count: number;
+  reason_codes?: string[] | null;
+  created_at?: string | null;
+};
+
+export type WatchLinkReviewListResponse = {
+  items: WatchLinkReviewListItem[];
+  total: number;
+};
+
+export type WatchLinkReviewDetail = {
+  id: string;
+  listing_id: string;
+  ebay_item_id: string;
+  listing_title?: string | null;
+  listing_web_url?: string | null;
+  tier?: string | null;
+  confidence?: string | number | null;
+  reason_codes?: string[] | null;
+  candidate_watch_models: WatchModel[];
+  candidate_scores: Record<string, number>;
+  created_at?: string | null;
+};
+
 export type ListingDetail = ListingSummary & {
   subtitle?: string | null;
   image_urls?: string[] | null;
@@ -102,6 +155,7 @@ export type ListingDetail = ListingSummary & {
   field_guidance: Record<string, string>;
   watch_model_id?: string | null;
   watch_model?: WatchModelBrief | null;
+  watch_link_review_pending?: WatchLinkReviewBrief | null;
 };
 
 export type ListingListResponse = {
@@ -131,6 +185,7 @@ export type AppSettings = {
   ebay_search_limit: number;
   ingest_queries: IngestQueryDto[];
   env_fallback_query: string;
+  watch_catalog_review_mode?: string;
 };
 
 /** Client-only row key + editable fields */

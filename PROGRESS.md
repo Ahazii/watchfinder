@@ -26,6 +26,7 @@ This document records what is implemented in the repository versus the phased pl
 | **4** | Dockerfile, `.env.example`, GitHub Actions, Unraid XML, README, compose | **Done** |
 | **5** | Settings UI (multi-line ingest, interval, ingest-now); listing **valuation** edits, internal comps, **`listing_edits`** / **`watch_sale_records`**, migration **002** | **Done** |
 | **5b** | **`watch_models`** catalog, **`listings.watch_model_id`**, auto-link + manual override, observed/manual price bounds, **`/watch-models`** UI, migration **003**, Settings copy for Browse `q` behavior | **Done** |
+| **5c** | **`watch_model_link_reviews`** queue, **`watch_catalog_review_mode`** (`auto` / `review`), candidate scoring, **`/watch-review`** UI, **`/api/watch-link-reviews`**, migration **004** | **Done** |
 
 ---
 
@@ -49,15 +50,17 @@ This document records what is implemented in the repository versus the phased pl
 - **Parsing** (`services/parsing/`): corpus assembly; rules-first **brand / reference / movement / caliber / running_state**; tunable **repair phrase** list in `keywords.py`.
 - **Repair signals** (`services/repair/extract.py`): non-overlapping phrase matches → stored `repair_signals` rows.
 - **Scoring** (`services/scoring/`): rule-based resale/repair/margin math, **confidence**, **risk**, **explanations**; tunable numbers in `constants.py`. **Repair total** = rule core + optional **repair add-on** + **donor cost** from **`listing_edits`** (see Phase 5).
-- **Pipeline** (`services/pipeline/analyze.py`): after each listing upsert (or PATCH), clears and repopulates parsed attributes, signals, and **at most one** current opportunity score row per listing (when repair signals exist). Then **`try_auto_link_listing`** (if `watch_model_id` is null) and **`refresh_watch_model_observed_bounds`** for the linked model (`services/watch_models/match.py`).
+- **Pipeline** (`services/pipeline/analyze.py`): after each listing upsert (or PATCH), clears and repopulates parsed attributes, signals, and **at most one** current opportunity score row per listing (when repair signals exist). Then **`ensure_watch_catalog_for_listing`** (respects **`watch_catalog_review_mode`**) and **`refresh_watch_model_observed_bounds`** when linked (`services/watch_models/`).
 - **REST API** (prefix `/api`):
   - `GET /api/dashboard`
-  - `GET /api/listings` (+ query filters)
+  - `GET /api/listings` (+ query filters, **`sort_by` / `sort_dir`**)
   - `GET /api/listings/{uuid}` — detail + comps + **`field_guidance`** / **`source_legend`**
   - **`PATCH /api/listings/{uuid}`** — persist **`listing_edits`**, optional **`watch_model_id`**, sync **`watch_sale_records`**, re-analyze (refresh prior model bounds if link changed)
-  - **`GET` / `POST` / `GET/{uuid}` / `PATCH` / `DELETE` `/api/watch-models`** — watch catalog CRUD + search
-  - `GET /api/candidates` (profit > 0)
-  - **`GET` / `PATCH /api/settings`**, **`POST /api/ingest/run`**
+  - **`GET` / `POST` / `GET/{uuid}` / `PATCH` / `DELETE` `/api/watch-models`** — watch catalog CRUD + search; **`POST /backfill-from-listings`**
+  - **`POST /api/listings/{uuid}/promote-watch-catalog`** — force catalog link/create (bypasses review queue)
+  - **`/api/watch-link-reviews`**: `GET` list, `GET /{uuid}` detail, `POST /{uuid}/resolve` — match queue (review mode)
+  - `GET /api/candidates` (profit > 0, same sort params as listings)
+  - **`GET` / `PATCH /api/settings`** (includes **`watch_catalog_review_mode`**), **`POST /api/ingest/run`**
 - **Query layer** (`api/query.py`, `listing_helpers.py`) avoids duplicate rows from joins by using `EXISTS` subqueries.
 - **Listing detail assembly** (`api/listing_detail.py`).
 
@@ -71,11 +74,13 @@ OpenAPI: **`/docs`** (FastAPI) when the app is running.
 - **Static export** → `frontend/out/`; **FastAPI** mounts at **`/`** when present (after `/api`, `/health`, `/docs`).
 - **Pages**:
   - **`/`** — Dashboard.
-  - **`/listings/`** — Filterable table, pagination.
+  - **`/listings/`** — Filterable table, pagination, sortable columns, **Add to watch database** per row.
   - **`/listings/detail/?id=`** — eBay link, **internal comps**, **editable valuation form** (save → PATCH), score, explanations, signals, parsed attrs, source legend.
   - **`/candidates/`** — Profit-positive subset.
-  - **`/settings/`** — Ingest lines, interval, **Ingest now**; expanded help on Browse **`q`** (whole line = one query).
-  - **`/watch-models/`**, **`/watch-models/detail/?id=`** — Watch database (all model fields editable; observed bounds read-only on form).
+  - **`/settings/`** — Ingest lines, interval, **Ingest now**; **watch catalog matching** (`auto` / `review`); expanded Browse **`q`** help.
+  - **`/watch-models/`**, **`/watch-models/detail/?id=`** — Watch database + **backfill from listings**.
+  - **`/watch-review/`**, **`/watch-review/detail/?id=`** — Match queue (resolve link / create / dismiss).
+  - **Listings / Candidates** — column headers sort server-side (`sort_by` / `sort_dir` on **`GET /api/listings`** and **`GET /api/candidates`**).
 - **CORS** `allow_origins=["*"]`.
 - **Local UI dev**: `NEXT_PUBLIC_API_BASE=http://127.0.0.1:8080` + API on **8080**.
 
@@ -103,7 +108,7 @@ OpenAPI: **`/docs`** (FastAPI) when the app is running.
 ## Phase 5b — Watch database (complete)
 
 - **Schema**: **`watch_models`** (brand, model family/name, reference, caliber, image URLs, production dates, description, **manual** and **observed** price low/high). Partial unique index: normalized **brand + reference** when reference is non-empty.
-- **Matching**: Auto-link only when **`listings.watch_model_id`** is **null** — (1) brand + effective reference, (2) brand + model family against catalog rows **without** reference, (3) same brand and **`model_name`** substring in listing title (min length). **Manual** link / **clear** on listing detail; clear allows auto-link again on next save/analyze.
+- **Matching + create + queue**: **`auto`** mode: same as before — exact + fuzzy + create. **`review`** mode ( **`app_settings.watch_catalog_review_mode`** ): **exact** match only on analyze; if still unlinked with **brand + (ref or family)**, upsert **`watch_model_link_reviews`** with **ranked candidate** model ids + scores + tier (`high` / `medium` / `low`). **`POST /api/watch-link-reviews/{id}/resolve`** → match / create / dismiss. **`promote-watch-catalog`** always **bypasses** the queue. Listing detail shows **Catalogue review pending** when a row exists.
 - **Observed bounds**: Min/max **`current_price`** from listings linked to the model; compatible **`watch_sale_records`** (brand key + reference or family filters). Refreshed on model create/patch and after listing analyze; previous model refreshed when a listing’s link changes.
 - **API**: **`/api/watch-models`** list ( **`q`**, pagination), CRUD; **`ListingDetail`** includes **`watch_model_id`** + brief **`watch_model`**.
 - **UI**: Nav **Watch database**; listing detail **Watch catalog link** card + dropdown (up to 500 models).
@@ -142,8 +147,10 @@ OpenAPI: **`/docs`** (FastAPI) when the app is running.
 | `backend/watchfinder/services/repair/` | Signal extraction |
 | `backend/watchfinder/services/scoring/` | Opportunity scoring |
 | `backend/watchfinder/services/pipeline/` | `analyze_listing` |
-| `backend/watchfinder/services/watch_models/` | Auto-link + observed bounds refresh |
-| `alembic/versions/` | **001** schema, **002** listing_edits + watch_sale_records, **003** watch_models |
+| `backend/watchfinder/services/watch_models/` | Match, catalog create/backfill, candidates, link-review queue |
+| `backend/watchfinder/services/watch_catalog_settings.py` | **`watch_catalog_review_mode`** (`auto` / `review`) |
+| `backend/watchfinder/api/listing_sort.py` | Server-side listing sort for list/candidates APIs |
+| `alembic/versions/` | **001**–**004** (includes **`watch_model_link_reviews`**) |
 | `Dockerfile` / `docker/start.sh` / `docker-compose.yml` | Container workflow |
 | `deploy/unraid/` | Unraid template(s) |
 | `.github/workflows/docker-publish.yml` | GHCR |
@@ -158,4 +165,4 @@ OpenAPI: **`/docs`** (FastAPI) when the app is running.
 3. Optional **saved filter** CRUD on `saved_searches` for UI list views.
 4. Use **`watch_models`** (manual + observed bounds) in scoring or reporting when you define the formula.
 
-For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pulling a build that includes migrations through **003**, ensure the container runs **`alembic upgrade head`** (already in **`docker/start.sh`**).
+For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pulling a build that includes migrations through **004**, ensure the container runs **`alembic upgrade head`** (already in **`docker/start.sh`**).

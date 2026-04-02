@@ -59,6 +59,7 @@ export default function SettingsPage() {
   const [data, setData] = useState<AppSettings | null>(null);
   const [lines, setLines] = useState<IngestQueryLine[]>([]);
   const [intervalMin, setIntervalMin] = useState(30);
+  const [catalogReviewMode, setCatalogReviewMode] = useState<"auto" | "review">("auto");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
@@ -69,6 +70,9 @@ export default function SettingsPage() {
       .then((d) => {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
+        setCatalogReviewMode(
+          d.watch_catalog_review_mode === "review" ? "review" : "auto",
+        );
         setLines(linesFromSettings(d));
       })
       .catch((e: Error) => setErr(e.message));
@@ -98,6 +102,7 @@ export default function SettingsPage() {
       body: JSON.stringify({
         ingest_interval_minutes: intervalMin,
         ingest_queries: payloadQueries,
+        watch_catalog_review_mode: catalogReviewMode,
       }),
     })
       .then(async (res) => {
@@ -107,6 +112,9 @@ export default function SettingsPage() {
       .then((d) => {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
+        setCatalogReviewMode(
+          d.watch_catalog_review_mode === "review" ? "review" : "auto",
+        );
         setLines(linesFromSettings(d));
       })
       .catch((e: Error) => setErr(e.message))
@@ -165,6 +173,33 @@ export default function SettingsPage() {
             better than dozens of tiny searches. Tune <strong>EBAY_SEARCH_LIMIT</strong> in Docker (
             {data.ebay_search_limit} per query per run) to cap API volume.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Watch catalog matching</CardTitle>
+          <CardDescription>
+            When <strong>Review queue</strong> is on, only exact brand+reference or brand+family
+            matches link automatically. Everything else (fuzzy title, or creating a new catalog row)
+            goes to the <strong>Match queue</strong> for you to confirm.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="wcrm">
+            Mode
+          </label>
+          <select
+            id="wcrm"
+            className="flex h-9 max-w-md rounded-md border border-border bg-background px-2 text-sm"
+            value={catalogReviewMode}
+            onChange={(e) =>
+              setCatalogReviewMode(e.target.value === "review" ? "review" : "auto")
+            }
+          >
+            <option value="auto">Automatic — fuzzy match + create catalog rows without queue</option>
+            <option value="review">Review queue — exact matches only; queue the rest</option>
+          </select>
         </CardContent>
       </Card>
 

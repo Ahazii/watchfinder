@@ -73,12 +73,13 @@ def _find_fuzzy_title(db: Session, brand_display: str, title: str | None) -> Wat
     return None
 
 
-def try_auto_link_listing(
+def try_exact_catalog_link(
     db: Session,
     listing: Listing,
     parsed: dict[str, str],
     edit: ListingEdit | None,
 ) -> None:
+    """Match by brand+reference or brand+family only (no title fuzzy)."""
     if listing.watch_model_id is not None:
         return
     brand = (parsed.get("brand") or "").strip() or None
@@ -92,10 +93,35 @@ def try_auto_link_listing(
         wm = _find_by_brand_ref(db, brand, ref)
     if wm is None and mf:
         wm = _find_by_brand_family(db, brand, mf)
-    if wm is None:
-        wm = _find_fuzzy_title(db, brand, listing.title)
     if wm:
         listing.watch_model_id = wm.id
+
+
+def try_fuzzy_catalog_link(
+    db: Session,
+    listing: Listing,
+    parsed: dict[str, str],
+    edit: ListingEdit | None,
+) -> None:
+    """Title substring vs catalog model_name (same brand)."""
+    if listing.watch_model_id is not None:
+        return
+    brand = (parsed.get("brand") or "").strip() or None
+    if not brand:
+        return
+    wm = _find_fuzzy_title(db, brand, listing.title)
+    if wm:
+        listing.watch_model_id = wm.id
+
+
+def try_auto_link_listing(
+    db: Session,
+    listing: Listing,
+    parsed: dict[str, str],
+    edit: ListingEdit | None,
+) -> None:
+    try_exact_catalog_link(db, listing, parsed, edit)
+    try_fuzzy_catalog_link(db, listing, parsed, edit)
 
 
 def refresh_watch_model_observed_bounds(db: Session, model_id: UUID) -> None:

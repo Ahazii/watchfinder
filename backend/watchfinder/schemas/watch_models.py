@@ -64,3 +64,21 @@ class WatchModelListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class PromoteWatchCatalogResponse(BaseModel):
+    """Result of POST /api/listings/{id}/promote-watch-catalog."""
+
+    outcome: str
+    watch_model: WatchModelOut | None = None
+
+
+class BackfillWatchCatalogResponse(BaseModel):
+    """Result of POST /api/watch-models/backfill-from-listings."""
+
+    scanned: int
+    already_linked: int
+    linked_existing: int
+    created_new: int
+    skipped_no_identity: int
+    queued_for_review: int = 0

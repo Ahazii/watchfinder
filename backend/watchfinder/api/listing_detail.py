@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from watchfinder.models import Listing
+from watchfinder.models import Listing, WatchModelLinkReview
 from watchfinder.schemas.listings import (
     CompBandOut,
     ListingDetail,
@@ -15,6 +16,7 @@ from watchfinder.schemas.listings import (
     RepairSignalOut,
     ValuedStringOut,
 )
+from watchfinder.schemas.watch_link_reviews import WatchLinkReviewBriefOut
 from watchfinder.schemas.watch_models import WatchModelBriefOut
 from watchfinder.api.listing_helpers import listing_to_summary
 from watchfinder.services.valuation import SOURCE_LEGEND, compute_comp_bands
@@ -69,6 +71,22 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
     wm = listing.watch_model
     watch_brief = WatchModelBriefOut.model_validate(wm) if wm else None
 
+    pr = db.execute(
+        select(WatchModelLinkReview).where(
+            WatchModelLinkReview.listing_id == listing.id,
+            WatchModelLinkReview.status == "pending",
+        )
+    ).scalar_one_or_none()
+    pending_brief: WatchLinkReviewBriefOut | None = None
+    if pr:
+        pending_brief = WatchLinkReviewBriefOut(
+            id=pr.id,
+            tier=pr.tier,
+            confidence=pr.confidence,
+            candidate_count=len(pr.candidate_watch_model_ids or []),
+            reason_codes=list(pr.reason_codes) if pr.reason_codes else None,
+        )
+
     return ListingDetail(
         **summary.model_dump(),
         subtitle=listing.subtitle,
@@ -106,4 +124,5 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
         field_guidance=FIELD_GUIDANCE,
         watch_model_id=listing.watch_model_id,
         watch_model=watch_brief,
+        watch_link_review_pending=pending_brief,
     )
