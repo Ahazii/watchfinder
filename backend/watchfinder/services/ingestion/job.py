@@ -27,10 +27,14 @@ def run_browse_ingest(
     settings: Settings | None = None,
     *,
     search_query: str | None = None,
+    browse: EbayBrowseClient | None = None,
 ) -> int:
     """
     Run one Browse search page and upsert listings.
     Returns number of item summaries processed.
+
+    Pass a shared ``browse`` client from ``run_all_browse_ingest`` so OAuth token
+    is reused across query lines (one token refresh per cycle, not per line).
     """
     settings = settings or get_settings()
     q = (search_query if search_query is not None else settings.ebay_search_query).strip()
@@ -38,8 +42,9 @@ def run_browse_ingest(
         logger.warning("Ingest skipped: empty search query")
         return 0
 
-    auth = EbayAuthClient(settings, db)
-    browse = EbayBrowseClient(settings, auth)
+    if browse is None:
+        auth = EbayAuthClient(settings, db)
+        browse = EbayBrowseClient(settings, auth)
 
     data = browse.search(
         q,
@@ -110,9 +115,13 @@ def run_all_browse_ingest(db: Session, settings: Settings | None = None) -> int:
     if not queries:
         logger.warning("Ingest skipped: no queries configured")
         return 0
+    auth = EbayAuthClient(settings, db)
+    browse = EbayBrowseClient(settings, auth)
     total = 0
     for query in queries:
-        total += run_browse_ingest(db, settings, search_query=query)
+        total += run_browse_ingest(
+            db, settings, search_query=query, browse=browse
+        )
     logger.info(
         "Ingest cycle complete: %s summaries across %s query/queries",
         total,
