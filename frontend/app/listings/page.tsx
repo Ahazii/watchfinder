@@ -31,6 +31,7 @@ import { ListingThumb } from "@/components/listing-thumb";
 
 export default function ListingsPage() {
   const [filters, setFilters] = useState({
+    title_q: "",
     brand: "",
     price_min: "",
     price_max: "",
@@ -61,6 +62,7 @@ export default function ListingsPage() {
     const q = new URLSearchParams();
     q.set("skip", String(skip));
     q.set("limit", String(limit));
+    if (f.title_q) q.set("title_q", f.title_q);
     if (f.brand) q.set("brand", f.brand);
     if (f.price_min) q.set("price_min", f.price_min);
     if (f.price_max) q.set("price_max", f.price_max);
@@ -119,6 +121,11 @@ export default function ListingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Field
+              label="Title contains"
+              value={filters.title_q}
+              onChange={(v) => setFilters((f) => ({ ...f, title_q: v }))}
+            />
             <Field
               label="Brand"
               value={filters.brand}
@@ -191,6 +198,7 @@ export default function ListingsPage() {
               variant="secondary"
               onClick={() => {
                 setFilters({
+                  title_q: "",
                   brand: "",
                   price_min: "",
                   price_max: "",

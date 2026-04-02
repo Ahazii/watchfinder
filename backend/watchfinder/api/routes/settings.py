@@ -15,9 +15,11 @@ from watchfinder.schemas.settings import (
 from watchfinder.services.ingest_schedule import sync_ingest_schedule
 from watchfinder.services.ingest_settings import (
     get_ingest_interval_minutes,
+    get_ingest_search_limit,
     list_ingest_queries,
     replace_ingest_queries,
     set_ingest_interval_minutes,
+    set_ingest_search_limit,
 )
 from watchfinder.services.watch_catalog_settings import (
     get_watch_catalog_review_mode,
@@ -35,7 +37,7 @@ def _settings_out(db: Session) -> SettingsOut:
     rows = list_ingest_queries(db)
     return SettingsOut(
         ingest_interval_minutes=get_ingest_interval_minutes(db, cfg),
-        ebay_search_limit=cfg.ebay_search_limit,
+        ebay_search_limit=get_ingest_search_limit(db, cfg),
         ingest_queries=[
             IngestQueryOut(id=r.id, label=r.label, query=r.query, enabled=r.enabled)
             for r in rows
@@ -54,6 +56,8 @@ def get_settings_api(db: Session = Depends(get_db)) -> SettingsOut:
 def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> SettingsOut:
     if body.ingest_interval_minutes is not None:
         set_ingest_interval_minutes(db, body.ingest_interval_minutes)
+    if body.ebay_search_limit is not None:
+        set_ingest_search_limit(db, body.ebay_search_limit)
     if body.ingest_queries is not None:
         replace_ingest_queries(
             db,

@@ -31,6 +31,7 @@ import { ListingThumb } from "@/components/listing-thumb";
 
 export default function CandidatesPage() {
   const [filters, setFilters] = useState({
+    title_q: "",
     brand: "",
     price_max: "",
     repair_keyword: "",
@@ -54,6 +55,7 @@ export default function CandidatesPage() {
     const q = new URLSearchParams();
     q.set("skip", String(skip));
     q.set("limit", String(limit));
+    if (f.title_q) q.set("title_q", f.title_q);
     if (f.brand) q.set("brand", f.brand);
     if (f.price_max) q.set("price_max", f.price_max);
     if (f.repair_keyword) q.set("repair_keyword", f.repair_keyword);
@@ -86,6 +88,13 @@ export default function CandidatesPage() {
           <CardDescription>Optional refinements, then Apply.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Title contains</label>
+            <Input
+              value={filters.title_q}
+              onChange={(e) => setFilters((f) => ({ ...f, title_q: e.target.value }))}
+            />
+          </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Brand</label>
             <Input

@@ -13,6 +13,7 @@ from watchfinder.models import Listing, OpportunityScore, ParsedAttribute, Repai
 def base_listing_select(
     *,
     active_only: bool = True,
+    title_q: str | None = None,
     brand: str | None = None,
     price_min: Decimal | None = None,
     price_max: Decimal | None = None,
@@ -28,6 +29,10 @@ def base_listing_select(
 
     if active_only:
         stmt = stmt.where(Listing.is_active.is_(True))
+
+    if title_q:
+        t = f"%{title_q.strip()}%"
+        stmt = stmt.where(Listing.title.ilike(t))
 
     if brand:
         b = f"%{brand.strip()}%"

@@ -30,6 +30,12 @@ class SettingsOut(BaseModel):
 
 class SettingsPatch(BaseModel):
     ingest_interval_minutes: int | None = Field(None, ge=5, le=1440)
+    ebay_search_limit: int | None = Field(
+        None,
+        ge=1,
+        le=200,
+        description="Browse item_summary/search page size per query line (eBay max 200)",
+    )
     ingest_queries: list[IngestQueryIn] | None = None
     watch_catalog_review_mode: str | None = Field(
         None,

@@ -59,6 +59,7 @@ export default function SettingsPage() {
   const [data, setData] = useState<AppSettings | null>(null);
   const [lines, setLines] = useState<IngestQueryLine[]>([]);
   const [intervalMin, setIntervalMin] = useState(30);
+  const [searchLimit, setSearchLimit] = useState(50);
   const [catalogReviewMode, setCatalogReviewMode] = useState<"auto" | "review">("auto");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -70,6 +71,7 @@ export default function SettingsPage() {
       .then((d) => {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
+        setSearchLimit(d.ebay_search_limit);
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
@@ -101,6 +103,7 @@ export default function SettingsPage() {
       },
       body: JSON.stringify({
         ingest_interval_minutes: intervalMin,
+        ebay_search_limit: searchLimit,
         ingest_queries: payloadQueries,
         watch_catalog_review_mode: catalogReviewMode,
       }),
@@ -112,6 +115,7 @@ export default function SettingsPage() {
       .then((d) => {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
+        setSearchLimit(d.ebay_search_limit);
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
@@ -170,8 +174,22 @@ export default function SettingsPage() {
             <strong>Repair-sourcing ideas:</strong> mix condition intent (
             <em>spares, not working, for parts, repair</em>) with watch type (
             <em>pocket watch, military, WW2</em>) or brand — one combination per line often works
-            better than dozens of tiny searches. Tune <strong>EBAY_SEARCH_LIMIT</strong> in Docker (
-            {data.ebay_search_limit} per query per run) to cap API volume.
+            better than dozens of tiny searches.
+          </p>
+          <p>
+            <strong>Throughput:</strong> each enabled line runs one Browse API search per cycle.
+            You get at most <em>items per search × number of lines</em> new/updated summaries per
+            cycle (capped by eBay at 200 per search). Multiply by cycles per day (60 / interval
+            minutes) for a rough daily ceiling — stay within{" "}
+            <a
+              className="text-primary underline-offset-4 hover:underline"
+              href="https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html"
+              target="_blank"
+              rel="noreferrer"
+            >
+              eBay rate limits
+            </a>
+            .
           </p>
         </CardContent>
       </Card>
@@ -205,13 +223,17 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Ingest interval</CardTitle>
-          <CardDescription>Minutes between automatic ingest cycles (5–1440).</CardDescription>
+          <CardTitle>Ingest timing &amp; page size</CardTitle>
+          <CardDescription>
+            Interval controls how often the scheduler runs; page size is how many hits eBay returns
+            per search line (1–200). Env <code className="rounded bg-muted px-1">EBAY_SEARCH_LIMIT</code>{" "}
+            applies until you save here once — then this UI value is stored in the database.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-4">
+        <CardContent className="flex flex-wrap items-end gap-6">
           <div className="space-y-1">
             <label htmlFor="interval" className="text-sm font-medium">
-              Minutes
+              Interval (minutes)
             </label>
             <Input
               id="interval"
@@ -221,6 +243,20 @@ export default function SettingsPage() {
               className="w-32"
               value={intervalMin}
               onChange={(e) => setIntervalMin(Number(e.target.value))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="searchLimit" className="text-sm font-medium">
+              Items per search line
+            </label>
+            <Input
+              id="searchLimit"
+              type="number"
+              min={1}
+              max={200}
+              className="w-32"
+              value={searchLimit}
+              onChange={(e) => setSearchLimit(Number(e.target.value))}
             />
           </div>
         </CardContent>

@@ -38,6 +38,10 @@ def list_listings(
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    title_q: str | None = Query(
+        None,
+        description="Case-insensitive substring match on listing title only",
+    ),
     brand: str | None = None,
     price_min: Decimal | None = None,
     price_max: Decimal | None = None,
@@ -55,6 +59,7 @@ def list_listings(
 ) -> ListingListResponse:
     base = base_listing_select(
         active_only=True,
+        title_q=title_q,
         brand=brand,
         price_min=price_min,
         price_max=price_max,

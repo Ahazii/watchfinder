@@ -88,6 +88,28 @@ def resolve_ingest_query_strings(db: Session, settings: Settings) -> list[str]:
     return out
 
 
+def get_ingest_search_limit(db: Session, settings: Settings) -> int:
+    """Max item summaries per Browse search call; persisted override or env default."""
+    row = db.get(AppSetting, "ingest_search_limit")
+    if row and row.value_text:
+        try:
+            v = int(row.value_text.strip())
+            return max(1, min(200, v))
+        except ValueError:
+            pass
+    return max(1, min(200, int(settings.ebay_search_limit)))
+
+
+def set_ingest_search_limit(db: Session, n: int) -> None:
+    v = max(1, min(200, int(n)))
+    row = db.get(AppSetting, "ingest_search_limit")
+    if row:
+        row.value_text = str(v)
+    else:
+        db.add(AppSetting(key="ingest_search_limit", value_text=str(v)))
+    db.commit()
+
+
 def get_ingest_interval_minutes(db: Session, settings: Settings) -> int:
     row = db.get(AppSetting, "ingest_interval_minutes")
     if row and row.value_text:

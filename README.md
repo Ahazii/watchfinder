@@ -50,7 +50,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings (each with **`image_urls`**), plus **`ebay_browse_search_calls`** / **`ebay_oauth_token_calls`** (persisted ingest counters; see [eBay REST rate limiting](https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html)) |
-| GET | `/api/listings` | Paginated listings + query filters; list rows include **`image_urls`** (first URL = eBay gallery thumb in UI); **`sort_by`** (`last_seen`, `title`, `price`, `confidence`, `profit`) and **`sort_dir`** (`asc` / `desc`) |
+| GET | `/api/listings` | Paginated listings + query filters (including **`title_q`** substring on title); list rows include **`image_urls`**; **`sort_by`** / **`sort_dir`** as documented in OpenAPI |
 | GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
@@ -63,9 +63,9 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | GET | `/api/watch-models/{uuid}` | One model |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
 | DELETE | `/api/watch-models/{uuid}` | Delete (listings unlinked via FK **SET NULL**) |
-| GET | `/api/candidates` | Same filters and **sort** params as listings; only rows with `potential_profit > 0` |
-| GET | `/api/settings` | Ingest interval, saved Browse query lines, env fallback hint |
-| PATCH | `/api/settings` | Update interval (5–1440) and/or replace all ingest query lines |
+| GET | `/api/candidates` | Same filters (**`title_q`**, etc.) and **sort** params as listings; only rows with `potential_profit > 0` |
+| GET | `/api/settings` | Ingest interval, **`ebay_search_limit`** (items per Browse search per line; DB override or env default), saved Browse query lines, env fallback hint |
+| PATCH | `/api/settings` | Update interval (5–1440), optional **`ebay_search_limit`** (1–200), ingest query lines, **`watch_catalog_review_mode`** |
 | POST | `/api/ingest/run` | Queue a full ingest cycle in the background (check logs) |
 
 ## Valuation & internal comps (hobby use)
@@ -80,7 +80,7 @@ After upgrading, run **`alembic upgrade head`** (through **`watch_model_link_rev
 
 ## Ingest searches (UI + API)
 
-- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` sent to eBay — the **whole line** is a single query, not one search per word). The Settings page explains good vs weak examples. Use several lines for different angles (brands, “spares / not working”, military, etc.). Disabled lines are skipped. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
+- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200, stored in **`app_settings`** after save; until then **`EBAY_SEARCH_LIMIT`** env applies) and **interval minutes**. Rough max items touched per cycle ≈ *limit × enabled lines* (each line = one API call). If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
 - **Interval:** Stored in **`app_settings`** when changed from the UI; otherwise **`INGEST_INTERVAL_MINUTES`** from env. Changing interval in **Settings** reschedules the job without restarting the container.
 - **Ingest now:** Calls **`POST /api/ingest/run`** (background task). There is **no authentication** on these endpoints — intended for trusted LAN / self-hosted use only.
 
@@ -189,7 +189,7 @@ Full list and comments: **[`.env.example`](.env.example)**. On Unraid, set the s
 | `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET` | eBay application credentials |
 | `EBAY_ENVIRONMENT` | `production` or `sandbox` |
 | `EBAY_MARKETPLACE_ID` | e.g. `EBAY_GB`, `EBAY_US` |
-| `EBAY_SEARCH_QUERY` / `EBAY_SEARCH_LIMIT` | Scheduled Browse search (limit 1–200) |
+| `EBAY_SEARCH_QUERY` / `EBAY_SEARCH_LIMIT` | Default Browse `q` and per-search page size (1–200); UI can persist override for limit in **`app_settings.ingest_search_limit`** |
 | `EBAY_CATEGORY_TREE_ID` | Optional taxonomy tree id |
 | `TZ` | Container timezone |
 | `APP_PORT` | Uvicorn listen port (match published port; healthcheck uses this) |
