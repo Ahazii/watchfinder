@@ -23,10 +23,22 @@ from watchfinder.services.ingest_settings import (
     set_ingest_max_pages,
     set_ingest_search_limit,
 )
+from watchfinder.services.stale_listing_refresh import (
+    get_stale_listing_refresh_enabled,
+    get_stale_listing_refresh_interval_minutes,
+    get_stale_listing_refresh_max_per_run,
+    get_stale_listing_refresh_min_age_hours,
+    set_stale_listing_refresh_enabled,
+    set_stale_listing_refresh_interval_minutes,
+    set_stale_listing_refresh_max_per_run,
+    set_stale_listing_refresh_min_age_hours,
+    sync_stale_listing_refresh_schedule,
+)
 from watchfinder.services.watch_catalog_settings import (
     get_watch_catalog_review_mode,
     set_watch_catalog_review_mode,
 )
+from watchfinder.stale_refresh_worker import scheduled_stale_listing_refresh_job
 from watchfinder import runtime
 
 logger = logging.getLogger(__name__)
@@ -47,6 +59,14 @@ def _settings_out(db: Session) -> SettingsOut:
         ],
         env_fallback_query=cfg.ebay_search_query,
         watch_catalog_review_mode=get_watch_catalog_review_mode(db),
+        stale_listing_refresh_enabled=get_stale_listing_refresh_enabled(db, cfg),
+        stale_listing_refresh_interval_minutes=get_stale_listing_refresh_interval_minutes(
+            db, cfg
+        ),
+        stale_listing_refresh_max_per_run=get_stale_listing_refresh_max_per_run(db, cfg),
+        stale_listing_refresh_min_age_hours=get_stale_listing_refresh_min_age_hours(
+            db, cfg
+        ),
     )
 
 
@@ -75,6 +95,18 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> Settin
             from fastapi import HTTPException
 
             raise HTTPException(status_code=400, detail=str(e)) from e
+    if body.stale_listing_refresh_enabled is not None:
+        set_stale_listing_refresh_enabled(db, body.stale_listing_refresh_enabled)
+    if body.stale_listing_refresh_interval_minutes is not None:
+        set_stale_listing_refresh_interval_minutes(
+            db, body.stale_listing_refresh_interval_minutes
+        )
+    if body.stale_listing_refresh_max_per_run is not None:
+        set_stale_listing_refresh_max_per_run(db, body.stale_listing_refresh_max_per_run)
+    if body.stale_listing_refresh_min_age_hours is not None:
+        set_stale_listing_refresh_min_age_hours(
+            db, body.stale_listing_refresh_min_age_hours
+        )
     sch = runtime.ingest_scheduler
     if sch:
         try:
@@ -83,4 +115,10 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> Settin
             sync_ingest_schedule(sch, scheduled_ingest_job)
         except Exception:
             logger.exception("Could not reschedule ingest after settings change")
+        try:
+            sync_stale_listing_refresh_schedule(
+                sch, scheduled_stale_listing_refresh_job
+            )
+        except Exception:
+            logger.exception("Could not reschedule stale refresh after settings change")
     return _settings_out(db)

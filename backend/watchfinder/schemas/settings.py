@@ -28,6 +28,10 @@ class SettingsOut(BaseModel):
     """Used when no saved lines exist or all are disabled."""
     watch_catalog_review_mode: str = "auto"
     """`auto` = fuzzy match + auto-create catalog rows. `review` = exact match only; queue the rest."""
+    stale_listing_refresh_enabled: bool = False
+    stale_listing_refresh_interval_minutes: int = 360
+    stale_listing_refresh_max_per_run: int = 20
+    stale_listing_refresh_min_age_hours: int = 12
 
 
 class SettingsPatch(BaseModel):
@@ -49,6 +53,10 @@ class SettingsPatch(BaseModel):
         None,
         description="auto or review",
     )
+    stale_listing_refresh_enabled: bool | None = None
+    stale_listing_refresh_interval_minutes: int | None = Field(None, ge=15, le=1440)
+    stale_listing_refresh_max_per_run: int | None = Field(None, ge=1, le=100)
+    stale_listing_refresh_min_age_hours: int | None = Field(None, ge=1, le=720)
 
 
 class IngestRunResponse(BaseModel):

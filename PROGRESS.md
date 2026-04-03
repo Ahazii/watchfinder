@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **3 April 2026**
+Last updated: **31 March 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -28,22 +28,24 @@ This document records what is implemented in the repository versus the phased pl
 | **5b** | **`watch_models`** catalog, **`listings.watch_model_id`**, auto-link + manual override, observed/manual price bounds, **`/watch-models`** UI, migration **003** | **Done** |
 | **5c** | **`watch_model_link_reviews`** queue, **`watch_catalog_review_mode`**, **`/watch-review`**, migration **004** | **Done** |
 | **5d** | Dashboard eBay counters, thumbnails, **`title_q`**, persisted search limit, shared Browse client per cycle, **`api_usage`** | **Done** |
-| **6** | Multi-page ingest (**`ingest_max_pages`**), Browse **getItem** refresh + **`is_active=false`** on 404, wider **`ebay_item_id`**, migration **005**, pytest scaffold | **Started** |
+| **6** | Multi-page ingest (**`ingest_max_pages`**), Browse **getItem** refresh + **`is_active=false`** on 404, wider **`ebay_item_id`**, migration **005**, pytest scaffold, **scheduled stale batch getItem** | **Done** |
 
 ---
 
-## Phase 6 (in progress)
+## Phase 6 (complete)
 
 - **Multi-page search ingest** (`job.py`): for each query line, up to **`ingest_max_pages`** calls to **`item_summary/search`** with `offset = page × limit`. Settings + **`app_settings.ingest_max_pages`**; env **`INGEST_MAX_PAGES`** default.
 - **Live item** (`browse.py` **`get_item`**, `live_refresh.py`): **`POST /api/listings/{id}/refresh-from-ebay`**; increments **`browse_get_item`** usage counter; listing detail UI **Refresh from eBay**; **`404`** → **`is_active=false`**.
+- **Stale batch refresh**: APScheduler job **`stale_listing_refresh`** (`services/stale_listing_refresh.py`, **`stale_refresh_worker.py`**) — active listings with **`last_seen_at`** older than configurable **min age** (or null), up to **max per run**, **~0.35s** between **getItem** calls. Toggle + limits in **Settings** (persisted **`app_settings`**); env **`STALE_LISTING_REFRESH_*`** defaults. **`POST /api/ingest/stale-refresh-run`** for a manual batch.
+- **Listings / candidates API**: **`listing_active`** (**active** / **inactive** / **all**) and **`exclude_quartz`** query filters; UI status column and filters.
 - **Schema** migration **005**: **`listings.ebay_item_id`** and **`watch_sale_records.ebay_item_id`** → **128** chars (REST ids like `v1|…|0`).
-- **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
+- **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
 
 ---
 
 ## Phase 1 (complete)
 
-- **FastAPI** app in `backend/watchfinder/main.py` with lifespan, **`GET /health`**, and **APScheduler** running Browse ingest (interval from DB **`app_settings`** or env).
+- **FastAPI** app in `backend/watchfinder/main.py` with lifespan, **`GET /health`**, and **APScheduler** running Browse ingest plus optional stale-listing **getItem** sweep (interval from DB **`app_settings`** or env).
 - **Settings** via `pydantic-settings` (`watchfinder/config.py`): `DATABASE_URL`, eBay credentials, marketplace, search query/limit, **`ingest_max_pages`**, etc.
 - **PostgreSQL** via SQLAlchemy 2 + **psycopg** (`watchfinder/db.py`).
 - **Models** (`watchfinder/models/listing.py`): `listings`, `listing_snapshots`, `parsed_attributes`, `repair_signals`, `opportunity_scores`, `saved_searches`, `app_settings`, **`listing_edits`**, **`watch_sale_records`**, **`watch_models`** (listing **`watch_model_id`** FK **SET NULL**).
@@ -64,7 +66,7 @@ OpenAPI: **`/docs`**.
 
 ## Phase 3 (complete)
 
-- **Pages**: dashboard (extra counter card), listings, listing detail (**Refresh from eBay**, active/inactive badge), candidates, settings (**pages per search line**), watch-models, watch-review.
+- **Pages**: dashboard (extra counter card), listings, listing detail (**Refresh from eBay**, active/inactive badge), candidates, settings (**pages per search line**, **stale listing refresh**), watch-models, watch-review.
 
 ---
 
@@ -100,14 +102,14 @@ OpenAPI: **`/docs`**.
 
 | Item | Notes |
 |------|--------|
-| **Observed sale (O)** | **Partial:** getItem refresh + inactive flag; still no automatic batch sweep, **getItem** on schedule, or “last sold price” persistence as first-class **O** source. |
+| **Observed sale (O)** | **Partial:** per-listing + batch **getItem** + inactive flag; still no “last sold price” persistence as first-class **O** source or dedicated ended-item pricing. |
 | **AI / search hooks (I, S)** | UI sources exist; no OpenAI or external watch DB integration. |
 | **Reference-tight sale comps** | Listing comp bands could weight **`watch_model`** link more heavily. |
 | **Saved searches** (generic filters) | `saved_searches` used for ingest lines only. |
 | **Taxonomy**-driven ingest | Client stub only. |
-| **Tests** | **Started:** mapper unit test; expand to API, refresh, ingest job with mocks. |
+| **Tests** | **Started:** mapper + stale-refresh helpers; expand to API, refresh, ingest job with mocks. |
 | **npm audit** / Next upgrades | Per your policy. |
-| **List inactive listings** | Optional **`include_inactive`** on **`GET /api/listings`** not built. |
+| **Listings filters** | **`listing_active`** + **`exclude_quartz`** on **`GET /api/listings`** and **`GET /api/candidates`** (replaces older **`include_inactive`** idea). |
 
 ---
 
@@ -120,6 +122,8 @@ OpenAPI: **`/docs`**.
 | `backend/watchfinder/api/` | Routes, **`listing_detail.py`**, **`listing_sort.py`**, deps, query |
 | `backend/watchfinder/services/ebay/` | OAuth, Browse (**search** + **getItem**), **`api_usage.py`** |
 | `backend/watchfinder/services/ingestion/` | **`job.py`**, **`mapper.py`**, **`live_refresh.py`** |
+| `backend/watchfinder/services/stale_listing_refresh.py` | Stale **getItem** batch + scheduler sync |
+| `backend/watchfinder/stale_refresh_worker.py` | APScheduler job entry |
 | `backend/watchfinder/services/ingest_settings.py` | Ingest queries, interval, **`ingest_search_limit`**, **`ingest_max_pages`** |
 | `tests/` | **`pytest`** targets |
 | `alembic/versions/` | **001**–**005** |
@@ -129,9 +133,9 @@ OpenAPI: **`/docs`**.
 
 ## How to continue
 
-1. Batch **getItem** or “stale listing” sweep with rate limits; optional **`include_inactive`** list filter.
-2. Expand **pytest** (settings, refresh endpoint with mocked httpx).
-3. **Reference-tight** comp bands when **`watch_model_id`** is set.
-4. Use **`watch_models`** in scoring when formula is defined.
+1. Expand **pytest** (refresh endpoint with mocked httpx, stale batch with test DB).
+2. **Reference-tight** comp bands when **`watch_model_id`** is set.
+3. Use **`watch_models`** in scoring when formula is defined.
+4. First-class **O** (ended / last sold) if you want beyond **getItem** + inactive.
 
 For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **005**).

@@ -58,6 +58,32 @@ class Settings(BaseSettings):
         le=1440,
         description="APScheduler interval for Browse ingest",
     )
+    stale_listing_refresh_enabled: bool = Field(
+        False,
+        alias="STALE_LISTING_REFRESH_ENABLED",
+        description="When true (or set in app_settings), scheduler runs batch getItem for stale listings",
+    )
+    stale_listing_refresh_interval_minutes: int = Field(
+        360,
+        alias="STALE_LISTING_REFRESH_INTERVAL_MINUTES",
+        ge=15,
+        le=1440,
+        description="How often the stale-listing refresh job runs",
+    )
+    stale_listing_refresh_max_per_run: int = Field(
+        20,
+        alias="STALE_LISTING_REFRESH_MAX_PER_RUN",
+        ge=1,
+        le=100,
+        description="Max Browse getItem calls per stale-refresh run",
+    )
+    stale_listing_refresh_min_age_hours: int = Field(
+        12,
+        alias="STALE_LISTING_REFRESH_MIN_AGE_HOURS",
+        ge=1,
+        le=720,
+        description="Only refresh active listings older than this (by last_seen_at)",
+    )
 
 
 @lru_cache

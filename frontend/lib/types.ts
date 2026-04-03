@@ -191,6 +191,10 @@ export type AppSettings = {
   ingest_queries: IngestQueryDto[];
   env_fallback_query: string;
   watch_catalog_review_mode?: string;
+  stale_listing_refresh_enabled?: boolean;
+  stale_listing_refresh_interval_minutes?: number;
+  stale_listing_refresh_max_per_run?: number;
+  stale_listing_refresh_min_age_hours?: number;
 };
 
 /** Client-only row key + editable fields */

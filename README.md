@@ -68,6 +68,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | GET | `/api/settings` | Ingest interval, **`ebay_search_limit`**, **`ingest_max_pages`** (search offset pages per line, 1–20), saved Browse query lines, env fallback hint |
 | PATCH | `/api/settings` | Update interval (5–1440), optional **`ebay_search_limit`** (1–200), **`ingest_max_pages`** (1–20), ingest query lines, **`watch_catalog_review_mode`** |
 | POST | `/api/ingest/run` | Queue a full ingest cycle in the background (check logs) |
+| POST | `/api/ingest/stale-refresh-run` | Queue one batch of **getItem** refreshes for stale **active** listings (see Settings) |
 
 ## Valuation & internal comps (hobby use)
 

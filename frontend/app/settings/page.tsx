@@ -62,6 +62,10 @@ export default function SettingsPage() {
   const [searchLimit, setSearchLimit] = useState(50);
   const [maxPages, setMaxPages] = useState(1);
   const [catalogReviewMode, setCatalogReviewMode] = useState<"auto" | "review">("auto");
+  const [staleRefreshEnabled, setStaleRefreshEnabled] = useState(false);
+  const [staleRefreshInterval, setStaleRefreshInterval] = useState(360);
+  const [staleRefreshMax, setStaleRefreshMax] = useState(20);
+  const [staleRefreshMinAge, setStaleRefreshMinAge] = useState(12);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
@@ -77,6 +81,10 @@ export default function SettingsPage() {
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
+        setStaleRefreshEnabled(Boolean(d.stale_listing_refresh_enabled));
+        setStaleRefreshInterval(d.stale_listing_refresh_interval_minutes ?? 360);
+        setStaleRefreshMax(d.stale_listing_refresh_max_per_run ?? 20);
+        setStaleRefreshMinAge(d.stale_listing_refresh_min_age_hours ?? 12);
         setLines(linesFromSettings(d));
       })
       .catch((e: Error) => setErr(e.message));
@@ -109,6 +117,10 @@ export default function SettingsPage() {
         ingest_max_pages: maxPages,
         ingest_queries: payloadQueries,
         watch_catalog_review_mode: catalogReviewMode,
+        stale_listing_refresh_enabled: staleRefreshEnabled,
+        stale_listing_refresh_interval_minutes: staleRefreshInterval,
+        stale_listing_refresh_max_per_run: staleRefreshMax,
+        stale_listing_refresh_min_age_hours: staleRefreshMinAge,
       }),
     })
       .then(async (res) => {
@@ -123,6 +135,10 @@ export default function SettingsPage() {
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
+        setStaleRefreshEnabled(Boolean(d.stale_listing_refresh_enabled));
+        setStaleRefreshInterval(d.stale_listing_refresh_interval_minutes ?? 360);
+        setStaleRefreshMax(d.stale_listing_refresh_max_per_run ?? 20);
+        setStaleRefreshMinAge(d.stale_listing_refresh_min_age_hours ?? 12);
         setLines(linesFromSettings(d));
       })
       .catch((e: Error) => setErr(e.message))
@@ -132,6 +148,15 @@ export default function SettingsPage() {
   const ingestNow = () => {
     setIngestMsg(null);
     fetchJson<{ status: string; message: string }>("/api/ingest/run", {
+      method: "POST",
+    })
+      .then((r) => setIngestMsg(r.message))
+      .catch((e: Error) => setIngestMsg(e.message));
+  };
+
+  const staleRefreshNow = () => {
+    setIngestMsg(null);
+    fetchJson<{ status: string; message: string }>("/api/ingest/stale-refresh-run", {
       method: "POST",
     })
       .then((r) => setIngestMsg(r.message))
@@ -222,6 +247,77 @@ export default function SettingsPage() {
             <option value="auto">Automatic — fuzzy match + create catalog rows without queue</option>
             <option value="review">Review queue — exact matches only; queue the rest</option>
           </select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stale listing refresh (getItem)</CardTitle>
+          <CardDescription>
+            Periodically re-fetch <strong>active</strong> listings whose{" "}
+            <code className="rounded bg-muted px-1">last_seen_at</code> is older than the minimum age.
+            Each run calls Browse <strong>getItem</strong> up to the max count, with a short pause
+            between calls. Ended listings are marked inactive (same as detail page refresh).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={staleRefreshEnabled}
+              onChange={(e) => setStaleRefreshEnabled(e.target.checked)}
+            />
+            Enable scheduled stale refresh
+          </label>
+          <div className="flex flex-wrap items-end gap-6">
+            <div className="space-y-1">
+              <label htmlFor="staleInt" className="text-sm font-medium">
+                Interval (minutes)
+              </label>
+              <Input
+                id="staleInt"
+                type="number"
+                min={15}
+                max={1440}
+                className="w-32"
+                value={staleRefreshInterval}
+                onChange={(e) => setStaleRefreshInterval(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="staleMax" className="text-sm font-medium">
+                Max listings per run
+              </label>
+              <Input
+                id="staleMax"
+                type="number"
+                min={1}
+                max={100}
+                className="w-32"
+                value={staleRefreshMax}
+                onChange={(e) => setStaleRefreshMax(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="staleAge" className="text-sm font-medium">
+                Min age (hours)
+              </label>
+              <Input
+                id="staleAge"
+                type="number"
+                min={1}
+                max={720}
+                className="w-32"
+                value={staleRefreshMinAge}
+                onChange={(e) => setStaleRefreshMinAge(Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Env defaults: <code className="rounded bg-muted px-1">STALE_LISTING_REFRESH_*</code> until
+            you save. Manual run uses current limits regardless of the schedule checkbox.
+          </p>
         </CardContent>
       </Card>
 
@@ -389,6 +485,9 @@ export default function SettingsPage() {
         </Button>
         <Button type="button" variant="outline" onClick={ingestNow}>
           Ingest now
+        </Button>
+        <Button type="button" variant="outline" onClick={staleRefreshNow}>
+          Stale refresh now
         </Button>
       </div>
     </div>

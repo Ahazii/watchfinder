@@ -25,6 +25,8 @@ from watchfinder.api.routes import settings as settings_routes
 from watchfinder.config import get_settings
 from watchfinder.ingest_worker import scheduled_ingest_job
 from watchfinder.services.ingest_schedule import sync_ingest_schedule
+from watchfinder.services.stale_listing_refresh import sync_stale_listing_refresh_schedule
+from watchfinder.stale_refresh_worker import scheduled_stale_listing_refresh_job
 
 logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
@@ -39,8 +41,15 @@ async def lifespan(app: FastAPI):
     )
     runtime.set_ingest_scheduler(scheduler)
     minutes = sync_ingest_schedule(scheduler, scheduled_ingest_job, settings)
+    stale_every = sync_stale_listing_refresh_schedule(
+        scheduler, scheduled_stale_listing_refresh_job, settings
+    )
     scheduler.start()
     logger.info("Scheduler started: Browse ingest every %s minutes", minutes)
+    if stale_every:
+        logger.info("Stale listing refresh every %s minutes", stale_every)
+    else:
+        logger.info("Stale listing refresh: off (enable in Settings)")
     yield
     scheduler.shutdown()
 
