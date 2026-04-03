@@ -20,7 +20,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 - `frontend/` — Next.js 14 (App Router), TypeScript, Tailwind, shadcn-style UI
 - `backend/watchfinder/` — FastAPI app, models, eBay clients, ingestion, parsing, scoring
-- `alembic/` — database migrations through **004** (`watch_model_link_reviews` queue for manual catalog matching when review mode is on)
+- `alembic/` — database migrations through **005** (wider **`ebay_item_id`** for REST ids; prior: **004** match queue)
 - `docker/start.sh` — wait for Postgres → `alembic upgrade head` → `uvicorn`
 - `Dockerfile` — multi-stage image (Node build + Python runtime, non-root user, healthcheck)
 - `docker-compose.yml` — local **postgres:16** + app build
@@ -49,11 +49,12 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings (each with **`image_urls`**), plus **`ebay_browse_search_calls`** / **`ebay_oauth_token_calls`** (persisted ingest counters; see [eBay REST rate limiting](https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html)) |
+| GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings (each with **`image_urls`**), plus persisted eBay counters (**`ebay_browse_search_calls`**, **`ebay_oauth_token_calls`**, **`ebay_browse_get_item_calls`**); see [eBay REST rate limiting](https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html) |
 | GET | `/api/listings` | Paginated listings + query filters (including **`title_q`** substring on title); list rows include **`image_urls`**; **`sort_by`** / **`sort_dir`** as documented in OpenAPI |
 | GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
+| POST | `/api/listings/{uuid}/refresh-from-ebay` | Browse **getItem** for this row: refresh price/title/images; **`404`** → set **`is_active=false`** (listing drops off default lists) |
 | GET | `/api/watch-models` | Paginated catalog (`q` search, `skip`/`limit`) |
 | POST | `/api/watch-models` | Create model |
 | POST | `/api/watch-models/backfill-from-listings` | Scan active listings; link or create catalog rows (same rules as ingest analyze) |
@@ -64,8 +65,8 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
 | DELETE | `/api/watch-models/{uuid}` | Delete (listings unlinked via FK **SET NULL**) |
 | GET | `/api/candidates` | Same filters (**`title_q`**, etc.) and **sort** params as listings; only rows with `potential_profit > 0` |
-| GET | `/api/settings` | Ingest interval, **`ebay_search_limit`** (items per Browse search per line; DB override or env default), saved Browse query lines, env fallback hint |
-| PATCH | `/api/settings` | Update interval (5–1440), optional **`ebay_search_limit`** (1–200), ingest query lines, **`watch_catalog_review_mode`** |
+| GET | `/api/settings` | Ingest interval, **`ebay_search_limit`**, **`ingest_max_pages`** (search offset pages per line, 1–20), saved Browse query lines, env fallback hint |
+| PATCH | `/api/settings` | Update interval (5–1440), optional **`ebay_search_limit`** (1–200), **`ingest_max_pages`** (1–20), ingest query lines, **`watch_catalog_review_mode`** |
 | POST | `/api/ingest/run` | Queue a full ingest cycle in the background (check logs) |
 
 ## Valuation & internal comps (hobby use)
@@ -76,17 +77,17 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **Repair:** rule-based core **plus** optional **repair add-on** and **donor cost** (both included in total repair for profit math). Fees/shipping ignored.
 - **Tuning asking-sample size:** optional **`app_settings`** row **`max_comp_candidates`** (integer string, default **200** in code if unset).
 
-After upgrading, run **`alembic upgrade head`** (through **`watch_model_link_reviews`** / migration **004**).
+After upgrading, run **`alembic upgrade head`** (through **005** / **`ebay_item_id`** length).
 
-### Listing `is_active` (not a live eBay poll)
+### Listing `is_active` and live checks
 
-- **`listings.is_active`** is set **`true`** whenever that item appears in a Browse **ingest** result and gets updated.
-- The app does **not** call eBay to verify an item is still for sale between ingests. Nothing currently sets **`is_active`** to **`false`** when an auction ends or is removed — that would require periodic **getItem**, search absence logic, or another strategy (see **`PROGRESS.md`** → planned **observed sale (O)**).
-- **Listings** / **candidates** API list views filter to **`is_active = true`** only; **detail** (`GET /api/listings/{id}`) still returns the row so you can open history.
+- **`listings.is_active`** is set **`true`** when an item appears in Browse **ingest** results or when **`POST /api/listings/{id}/refresh-from-ebay`** returns a live **getItem** payload.
+- **`is_active`** is set **`false`** when **getItem** returns **404** (ended / removed from Buy Browse). Use **Refresh from eBay** on the listing detail page, or call the POST API above. Ingest search alone does **not** mark missing rows inactive (an item can leave your result set but still be live).
+- **Listings** / **candidates** list APIs use **`is_active = true`** only; **detail** still returns inactive rows so you can refresh or read history.
 
 ## Ingest searches (UI + API)
 
-- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200, stored in **`app_settings.ingest_search_limit`** after **Save**; until then **`EBAY_SEARCH_LIMIT`** env applies) and **interval minutes**. Rough max items touched per cycle ≈ *limit × enabled lines* (each line = one Browse API call). Only the **first page** of eBay results is fetched per line (`offset=0`); there is no multi-page crawl yet. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
+- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200 → **`app_settings.ingest_search_limit`**), **pages per line** (1–20 → **`app_settings.ingest_max_pages`**; each extra page is another **`item_summary/search`** with `offset += limit`), and **interval minutes**. Rough ceiling per cycle ≈ *limit × pages × enabled lines* Browse calls. Env defaults: **`EBAY_SEARCH_LIMIT`**, **`INGEST_MAX_PAGES`**, until saved. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
 - **Interval:** Stored in **`app_settings.ingest_interval_minutes`** when changed from the UI; otherwise **`INGEST_INTERVAL_MINUTES`** from env. Changing interval in **Settings** reschedules the job without restarting the container.
 - **OAuth (one token per cycle):** A single **`EbayAuthClient`** + **`EbayBrowseClient`** is reused for **all** query lines in one scheduled or **Ingest now** run, so you should see **one** Identity `oauth2/token` POST per cycle when the cached token is still valid (not one token request per line). Dashboard counters **`ebay_oauth_token_calls`** / **`ebay_browse_search_calls`** persist in **`app_settings.ebay_api_usage_json`**.
 - **Ingest now:** Calls **`POST /api/ingest/run`** (background task). There is **no authentication** on these endpoints — intended for trusted LAN / self-hosted use only.
@@ -148,6 +149,8 @@ uvicorn watchfinder.main:app --host 0.0.0.0 --port 8080
 
 Open **http://localhost:8080**. Do **not** set `NEXT_PUBLIC_API_BASE` so the browser calls same-origin `/api/...`.
 
+**Backend tests (optional):** `pip install -r requirements-dev.txt` then **`pytest`** from the repo root (`pytest.ini` sets `pythonpath = backend`).
+
 ## Docker Compose (local full stack)
 
 1. Copy **`.env.example`** → **`.env`** and set **`EBAY_CLIENT_ID`** and **`EBAY_CLIENT_SECRET`** (Compose substitutes variables from `.env`).
@@ -196,7 +199,8 @@ Full list and comments: **[`.env.example`](.env.example)**. On Unraid, set the s
 | `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET` | eBay application credentials |
 | `EBAY_ENVIRONMENT` | `production` or `sandbox` |
 | `EBAY_MARKETPLACE_ID` | e.g. `EBAY_GB`, `EBAY_US` |
-| `EBAY_SEARCH_QUERY` / `EBAY_SEARCH_LIMIT` | Default Browse `q` and per-search page size (1–200); UI can persist override for limit in **`app_settings.ingest_search_limit`** |
+| `EBAY_SEARCH_QUERY` / `EBAY_SEARCH_LIMIT` | Default Browse `q` and per-search page size (1–200); UI persists **`app_settings.ingest_search_limit`** |
+| `INGEST_MAX_PAGES` | Default number of search result pages per query line (1–20); UI persists **`app_settings.ingest_max_pages`** |
 | `EBAY_CATEGORY_TREE_ID` | Optional taxonomy tree id |
 | `TZ` | Container timezone |
 | `APP_PORT` | Uvicorn listen port (match published port; healthcheck uses this) |

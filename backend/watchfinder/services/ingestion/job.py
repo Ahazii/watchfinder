@@ -14,6 +14,7 @@ from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ebay.api_usage import increment_browse_search
 from watchfinder.services.ingestion.mapper import item_summary_to_listing_fields
 from watchfinder.services.ingest_settings import (
+    get_ingest_max_pages,
     get_ingest_search_limit,
     resolve_ingest_query_strings,
 )
@@ -30,7 +31,7 @@ def run_browse_ingest(
     browse: EbayBrowseClient | None = None,
 ) -> int:
     """
-    Run one Browse search page and upsert listings.
+    Run Browse search for one query line (up to ``ingest_max_pages`` offset pages).
     Returns number of item summaries processed.
 
     Pass a shared ``browse`` client from ``run_all_browse_ingest`` so OAuth token
@@ -46,62 +47,75 @@ def run_browse_ingest(
         auth = EbayAuthClient(settings, db)
         browse = EbayBrowseClient(settings, auth)
 
-    data = browse.search(
-        q,
-        limit=get_ingest_search_limit(db, settings),
-        offset=0,
-    )
-    increment_browse_search(db)
-    summaries = data.get("itemSummaries") or []
+    limit = get_ingest_search_limit(db, settings)
+    max_pages = get_ingest_max_pages(db, settings)
     now = datetime.now(UTC)
     count = 0
+    pages_done = 0
 
-    for raw in summaries:
-        if not isinstance(raw, dict):
-            continue
-        try:
-            fields = item_summary_to_listing_fields(raw)
-        except ValueError as e:
-            logger.warning("Skip summary: %s", e)
-            continue
+    for page_idx in range(max_pages):
+        data = browse.search(q, limit=limit, offset=page_idx * limit)
+        increment_browse_search(db)
+        summaries = data.get("itemSummaries") or []
+        if not summaries:
+            break
+        pages_done = page_idx + 1
 
-        ebay_id = fields["ebay_item_id"]
-        existing = db.execute(
-            select(Listing).where(Listing.ebay_item_id == ebay_id)
-        ).scalar_one_or_none()
+        for raw in summaries:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                fields = item_summary_to_listing_fields(raw)
+            except ValueError as e:
+                logger.warning("Skip summary: %s", e)
+                continue
 
-        if existing:
-            for k, v in fields.items():
-                if k in ("ebay_item_id", "first_seen_at"):
-                    continue
-                setattr(existing, k, v)
-            existing.last_seen_at = now
-            existing.is_active = True
-            db.add(
-                ListingSnapshot(
-                    listing_id=existing.id,
-                    snapshot_at=now,
-                    raw_item_json=fields["raw_item_json"],
+            ebay_id = fields["ebay_item_id"]
+            existing = db.execute(
+                select(Listing).where(Listing.ebay_item_id == ebay_id)
+            ).scalar_one_or_none()
+
+            if existing:
+                for k, v in fields.items():
+                    if k in ("ebay_item_id", "first_seen_at"):
+                        continue
+                    setattr(existing, k, v)
+                existing.last_seen_at = now
+                existing.is_active = True
+                db.add(
+                    ListingSnapshot(
+                        listing_id=existing.id,
+                        snapshot_at=now,
+                        raw_item_json=fields["raw_item_json"],
+                    )
                 )
-            )
-            target = existing
-        else:
-            listing = Listing(**fields, first_seen_at=now, last_seen_at=now)
-            db.add(listing)
-            db.flush()
-            db.add(
-                ListingSnapshot(
-                    listing_id=listing.id,
-                    snapshot_at=now,
-                    raw_item_json=fields["raw_item_json"],
+                target = existing
+            else:
+                listing = Listing(**fields, first_seen_at=now, last_seen_at=now)
+                db.add(listing)
+                db.flush()
+                db.add(
+                    ListingSnapshot(
+                        listing_id=listing.id,
+                        snapshot_at=now,
+                        raw_item_json=fields["raw_item_json"],
+                    )
                 )
-            )
-            target = listing
-        analyze_listing(db, target)
-        count += 1
+                target = listing
+            analyze_listing(db, target)
+            count += 1
+
+        if len(summaries) < limit:
+            break
 
     db.commit()
-    logger.info("Ingest complete for %r: %s item summaries processed", q, count)
+    logger.info(
+        "Ingest complete for %r: %s item summaries (%s page(s), limit=%s)",
+        q,
+        count,
+        pages_done,
+        limit,
+    )
     return count
 
 

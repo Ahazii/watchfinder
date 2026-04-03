@@ -60,6 +60,7 @@ export default function SettingsPage() {
   const [lines, setLines] = useState<IngestQueryLine[]>([]);
   const [intervalMin, setIntervalMin] = useState(30);
   const [searchLimit, setSearchLimit] = useState(50);
+  const [maxPages, setMaxPages] = useState(1);
   const [catalogReviewMode, setCatalogReviewMode] = useState<"auto" | "review">("auto");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -72,6 +73,7 @@ export default function SettingsPage() {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
         setSearchLimit(d.ebay_search_limit);
+        setMaxPages(d.ingest_max_pages ?? 1);
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
@@ -104,6 +106,7 @@ export default function SettingsPage() {
       body: JSON.stringify({
         ingest_interval_minutes: intervalMin,
         ebay_search_limit: searchLimit,
+        ingest_max_pages: maxPages,
         ingest_queries: payloadQueries,
         watch_catalog_review_mode: catalogReviewMode,
       }),
@@ -116,6 +119,7 @@ export default function SettingsPage() {
         setData(d);
         setIntervalMin(d.ingest_interval_minutes);
         setSearchLimit(d.ebay_search_limit);
+        setMaxPages(d.ingest_max_pages ?? 1);
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
@@ -225,9 +229,11 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>Ingest timing &amp; page size</CardTitle>
           <CardDescription>
-            Interval controls how often the scheduler runs; page size is how many hits eBay returns
-            per search line (1–200). Env <code className="rounded bg-muted px-1">EBAY_SEARCH_LIMIT</code>{" "}
-            applies until you save here once — then this UI value is stored in the database.
+            Interval controls how often the scheduler runs; <strong>items per search line</strong> is
+            the Browse page size (1–200). <strong>Pages per line</strong> is how many offsets to fetch
+            (1 = first page only; 3 = up to 3× that many hits per line, 3× the API calls). Env{" "}
+            <code className="rounded bg-muted px-1">EBAY_SEARCH_LIMIT</code> /{" "}
+            <code className="rounded bg-muted px-1">INGEST_MAX_PAGES</code> apply until you save here.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-6">
@@ -257,6 +263,20 @@ export default function SettingsPage() {
               className="w-32"
               value={searchLimit}
               onChange={(e) => setSearchLimit(Number(e.target.value))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="maxPages" className="text-sm font-medium">
+              Pages per search line
+            </label>
+            <Input
+              id="maxPages"
+              type="number"
+              min={1}
+              max={20}
+              className="w-32"
+              value={maxPages}
+              onChange={(e) => setMaxPages(Number(e.target.value))}
             />
           </div>
         </CardContent>

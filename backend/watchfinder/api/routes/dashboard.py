@@ -55,4 +55,5 @@ def dashboard(db: Session = Depends(get_db)) -> DashboardStats:
         recent_listings=recent_summaries,
         ebay_browse_search_calls=int(usage.get("browse_search", 0)),
         ebay_oauth_token_calls=int(usage.get("oauth_token", 0)),
+        ebay_browse_get_item_calls=int(usage.get("browse_get_item", 0)),
     )

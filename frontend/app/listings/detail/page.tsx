@@ -92,6 +92,8 @@ function DetailBody() {
   const [promoteBusy, setPromoteBusy] = useState(false);
   const [promoteErr, setPromoteErr] = useState<string | null>(null);
   const [promoteOk, setPromoteOk] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
 
   useEffect(() => {
     fetchJson<WatchModelListResponse>("/api/watch-models?limit=500")
@@ -99,41 +101,67 @@ function DetailBody() {
       .catch(() => setCatalog([]));
   }, []);
 
+  const applyDetail = useCallback((d: ListingDetail) => {
+    setRow(d);
+    setModelFamily(d.model_family?.value ?? "");
+    setModelFamilySrc(d.model_family?.source || "M");
+    setReference(d.reference?.value ?? "");
+    setReferenceSrc(d.reference?.source || "M");
+    setCaliber(d.caliber?.value ?? "");
+    setCaliberSrc(d.caliber?.source || "M");
+    setRepairSupp(
+      d.repair_supplement?.amount != null ? String(d.repair_supplement.amount) : "",
+    );
+    setRepairSuppSrc(d.repair_supplement?.source || "M");
+    setDonor(d.donor_cost?.amount != null ? String(d.donor_cost.amount) : "");
+    setDonorSrc(d.donor_cost?.source || "M");
+    setSalePrice(
+      d.recorded_sale?.price != null ? String(d.recorded_sale.price) : "",
+    );
+    setSaleAt(
+      d.recorded_sale?.recorded_at
+        ? d.recorded_sale.recorded_at.slice(0, 16)
+        : "",
+    );
+    setSaleSrc(d.recorded_sale?.source || "M");
+    setNotes(d.notes ?? "");
+    setWatchModelId(d.watch_model_id ?? "");
+    setSavedOk(false);
+  }, []);
+
   const load = useCallback((): Promise<void> => {
     if (!id) return Promise.resolve();
     setErr(null);
     return fetchJson<ListingDetail>(`/api/listings/${id}`)
-      .then((d) => {
-        setRow(d);
-        setModelFamily(d.model_family?.value ?? "");
-        setModelFamilySrc(d.model_family?.source || "M");
-        setReference(d.reference?.value ?? "");
-        setReferenceSrc(d.reference?.source || "M");
-        setCaliber(d.caliber?.value ?? "");
-        setCaliberSrc(d.caliber?.source || "M");
-        setRepairSupp(
-          d.repair_supplement?.amount != null ? String(d.repair_supplement.amount) : "",
-        );
-        setRepairSuppSrc(d.repair_supplement?.source || "M");
-        setDonor(d.donor_cost?.amount != null ? String(d.donor_cost.amount) : "");
-        setDonorSrc(d.donor_cost?.source || "M");
-        setSalePrice(
-          d.recorded_sale?.price != null ? String(d.recorded_sale.price) : "",
-        );
-        setSaleAt(
-          d.recorded_sale?.recorded_at
-            ? d.recorded_sale.recorded_at.slice(0, 16)
-            : "",
-        );
-        setSaleSrc(d.recorded_sale?.source || "M");
-        setNotes(d.notes ?? "");
-        setWatchModelId(d.watch_model_id ?? "");
-        setSavedOk(false);
-      })
+      .then(applyDetail)
       .catch((e: Error) => {
         setErr(e.message);
       });
-  }, [id]);
+  }, [id, applyDetail]);
+
+  const refreshFromEbay = () => {
+    if (!id) return;
+    setRefreshBusy(true);
+    setRefreshMsg(null);
+    fetch(apiUrl(`/api/listings/${id}/refresh-from-ebay`), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<ListingDetail>;
+      })
+      .then((d) => {
+        applyDetail(d);
+        setRefreshMsg(
+          d.is_active === false
+            ? "eBay has no live listing for this id — marked inactive (hidden from default lists)."
+            : "Updated from eBay (getItem).",
+        );
+      })
+      .catch((e: Error) => setRefreshMsg(e.message))
+      .finally(() => setRefreshBusy(false));
+  };
 
   useEffect(() => {
     load();
@@ -248,8 +276,19 @@ function DetailBody() {
           <h1 className="text-2xl font-semibold leading-tight">
             {row.title || row.ebay_item_id}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            eBay {row.ebay_item_id} · {dateShort(row.last_seen_at)}
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              eBay {row.ebay_item_id} · last seen {dateShort(row.last_seen_at)}
+            </span>
+            {row.is_active === false ? (
+              <Badge variant="secondary" className="border-amber-900/50 text-amber-200">
+                Inactive
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-emerald-900/40 text-emerald-200/90">
+                Active
+              </Badge>
+            )}
           </p>
           <p className="mt-1 text-sm">
             <span className="text-muted-foreground">Parsed brand</span>{" "}
@@ -261,14 +300,28 @@ function DetailBody() {
             ) : null}
           </p>
         </div>
-        {row.web_url && (
-          <Button asChild>
-            <a href={row.web_url} target="_blank" rel="noopener noreferrer">
-              View on eBay
-            </a>
+        <div className="flex flex-wrap items-center gap-2">
+          {row.web_url ? (
+            <Button asChild>
+              <a href={row.web_url} target="_blank" rel="noopener noreferrer">
+                View on eBay
+              </a>
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={refreshBusy}
+            title="Browse API getItem — refresh price/title or mark inactive if listing ended"
+            onClick={refreshFromEbay}
+          >
+            {refreshBusy ? "Refreshing…" : "Refresh from eBay"}
           </Button>
-        )}
+        </div>
       </div>
+      {refreshMsg ? (
+        <p className="text-sm text-muted-foreground">{refreshMsg}</p>
+      ) : null}
 
       {row.watch_link_review_pending ? (
         <Card className="border-amber-900/40 bg-amber-950/20">

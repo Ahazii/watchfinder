@@ -13,7 +13,11 @@ from watchfinder.models import AppSetting
 logger = logging.getLogger(__name__)
 
 _KEY = "ebay_api_usage_json"
-_DEFAULT: dict[str, int] = {"browse_search": 0, "oauth_token": 0}
+_DEFAULT: dict[str, int] = {
+    "browse_search": 0,
+    "oauth_token": 0,
+    "browse_get_item": 0,
+}
 
 
 def _parse(raw: str | None) -> dict[str, int]:
@@ -64,4 +68,12 @@ def increment_oauth_token(db: Session, n: int = 1) -> None:
         return
     c = get_ebay_api_usage(db)
     c["oauth_token"] = c["oauth_token"] + n
+    _save(db, c)
+
+
+def increment_browse_get_item(db: Session, n: int = 1) -> None:
+    if n <= 0:
+        return
+    c = get_ebay_api_usage(db)
+    c["browse_get_item"] = c["browse_get_item"] + n
     _save(db, c)

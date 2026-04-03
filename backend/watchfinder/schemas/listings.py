@@ -143,3 +143,4 @@ class DashboardStats(BaseModel):
     recent_listings: list[ListingSummary]
     ebay_browse_search_calls: int = 0
     ebay_oauth_token_calls: int = 0
+    ebay_browse_get_item_calls: int = 0

@@ -21,6 +21,8 @@ class IngestQueryIn(BaseModel):
 class SettingsOut(BaseModel):
     ingest_interval_minutes: int
     ebay_search_limit: int
+    ingest_max_pages: int = 1
+    """Browse search pages per query line (offset steps of search limit)."""
     ingest_queries: list[IngestQueryOut]
     env_fallback_query: str
     """Used when no saved lines exist or all are disabled."""
@@ -35,6 +37,12 @@ class SettingsPatch(BaseModel):
         ge=1,
         le=200,
         description="Browse item_summary/search page size per query line (eBay max 200)",
+    )
+    ingest_max_pages: int | None = Field(
+        None,
+        ge=1,
+        le=20,
+        description="How many search result pages to fetch per query line",
     )
     ingest_queries: list[IngestQueryIn] | None = None
     watch_catalog_review_mode: str | None = Field(

@@ -59,7 +59,7 @@ class Listing(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    ebay_item_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    ebay_item_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
 
     title: Mapped[str | None] = mapped_column(Text)
     subtitle: Mapped[str | None] = mapped_column(Text)
@@ -180,7 +180,7 @@ class WatchSaleRecord(Base):
     listing_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("listings.id", ondelete="SET NULL"), index=True
     )
-    ebay_item_id: Mapped[str] = mapped_column(String(32))
+    ebay_item_id: Mapped[str] = mapped_column(String(128))
     brand_key: Mapped[str] = mapped_column(String(128), index=True)
     model_family_key: Mapped[str | None] = mapped_column(String(256))
     reference_key: Mapped[str | None] = mapped_column(String(64))

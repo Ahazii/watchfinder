@@ -69,6 +69,10 @@ export default function DashboardPage() {
       label: "eBay OAuth token refreshes",
       value: data.ebay_oauth_token_calls ?? 0,
     },
+    {
+      label: "eBay getItem (listing refresh)",
+      value: data.ebay_browse_get_item_calls ?? 0,
+    },
   ];
 
   return (
@@ -80,7 +84,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         {statCards.map((s) => (
           <Card key={s.label}>
             <CardHeader className="pb-2">
@@ -92,10 +96,11 @@ export default function DashboardPage() {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Outbound eBay usage is counted per successful ingest call (one{" "}
+        Outbound eBay usage: one{" "}
         <code className="rounded bg-muted px-1">item_summary/search</code> per
-        query per cycle, plus an OAuth token request when the cached token
-        expires). Official limits and fair-use rules:{" "}
+        result page per query line, plus OAuth when the token expires, plus{" "}
+        <code className="rounded bg-muted px-1">getItem</code> when you refresh a
+        listing. Official limits:{" "}
         <a
           href={EBAY_RATE_LIMITS_URL}
           className="text-primary underline-offset-4 hover:underline"

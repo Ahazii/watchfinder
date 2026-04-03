@@ -24,6 +24,7 @@ from watchfinder.schemas.listings import (
 from watchfinder.schemas.watch_models import PromoteWatchCatalogResponse, WatchModelOut
 from watchfinder.services.pipeline import analyze_listing
 from watchfinder.services.valuation.sales_sync import sync_watch_sale_record
+from watchfinder.services.ingestion.live_refresh import refresh_listing_from_ebay
 from watchfinder.services.watch_models import (
     CatalogLinkOutcome,
     ensure_watch_catalog_for_listing,
@@ -131,6 +132,26 @@ def promote_listing_to_watch_catalog(
         outcome=out.value,
         watch_model=WatchModelOut.model_validate(wm) if wm else None,
     )
+
+
+@router.post("/{listing_id}/refresh-from-ebay", response_model=ListingDetail)
+def post_refresh_listing_from_ebay(
+    listing_id: UUID, db: Session = Depends(get_db)
+) -> ListingDetail:
+    """Live Browse **getItem** for this row: refresh fields, re-analyze, or mark ``is_active=false`` on 404."""
+    try:
+        refresh_listing_from_ebay(db, listing_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    stmt = (
+        select(Listing)
+        .options(*_listing_detail_options())
+        .where(Listing.id == listing_id)
+    )
+    listing = db.execute(stmt).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return build_listing_detail(db, listing)
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)

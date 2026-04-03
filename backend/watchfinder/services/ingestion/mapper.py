@@ -28,6 +28,11 @@ def _parse_dt(iso: str | None) -> datetime | None:
         return None
 
 
+def browse_item_to_listing_fields(item: dict[str, Any]) -> dict[str, Any]:
+    """Map Buy Browse **getItem** root object (same core fields as search itemSummary)."""
+    return item_summary_to_listing_fields(item)
+
+
 def item_summary_to_listing_fields(item: dict[str, Any]) -> dict[str, Any]:
     """Extract columns for Listing model from one itemSummary object."""
     ebay_id = item.get("itemId")

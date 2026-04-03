@@ -34,6 +34,13 @@ class Settings(BaseSettings):
         description="Browse API search query for scheduled ingest",
     )
     ebay_search_limit: int = Field(50, alias="EBAY_SEARCH_LIMIT", ge=1, le=200)
+    ingest_max_pages: int = Field(
+        1,
+        alias="INGEST_MAX_PAGES",
+        ge=1,
+        le=20,
+        description="Max Browse search result pages per query line (offset pagination)",
+    )
     ebay_marketplace_id: str = Field(
         "EBAY_GB",
         alias="EBAY_MARKETPLACE_ID",

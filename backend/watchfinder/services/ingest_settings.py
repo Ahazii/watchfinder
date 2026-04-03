@@ -100,6 +100,27 @@ def get_ingest_search_limit(db: Session, settings: Settings) -> int:
     return max(1, min(200, int(settings.ebay_search_limit)))
 
 
+def get_ingest_max_pages(db: Session, settings: Settings) -> int:
+    row = db.get(AppSetting, "ingest_max_pages")
+    if row and row.value_text:
+        try:
+            v = int(row.value_text.strip())
+            return max(1, min(20, v))
+        except ValueError:
+            pass
+    return max(1, min(20, int(settings.ingest_max_pages)))
+
+
+def set_ingest_max_pages(db: Session, n: int) -> None:
+    v = max(1, min(20, int(n)))
+    row = db.get(AppSetting, "ingest_max_pages")
+    if row:
+        row.value_text = str(v)
+    else:
+        db.add(AppSetting(key="ingest_max_pages", value_text=str(v)))
+    db.commit()
+
+
 def set_ingest_search_limit(db: Session, n: int) -> None:
     v = max(1, min(200, int(n)))
     row = db.get(AppSetting, "ingest_search_limit")

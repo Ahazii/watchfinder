@@ -174,6 +174,7 @@ export type DashboardStats = {
   recent_listings: ListingSummary[];
   ebay_browse_search_calls?: number;
   ebay_oauth_token_calls?: number;
+  ebay_browse_get_item_calls?: number;
 };
 
 export type IngestQueryDto = {
@@ -186,6 +187,7 @@ export type IngestQueryDto = {
 export type AppSettings = {
   ingest_interval_minutes: number;
   ebay_search_limit: number;
+  ingest_max_pages: number;
   ingest_queries: IngestQueryDto[];
   env_fallback_query: string;
   watch_catalog_review_mode?: string;

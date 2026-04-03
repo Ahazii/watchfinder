@@ -1,3 +1,1 @@
-from watchfinder.services.ingestion.job import run_browse_ingest
-
-__all__ = ["run_browse_ingest"]
+"""eBay → listing persistence (import submodules explicitly, e.g. ``job``)."""
