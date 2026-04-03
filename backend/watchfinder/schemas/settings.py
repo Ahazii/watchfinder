@@ -56,7 +56,12 @@ class SettingsPatch(BaseModel):
     stale_listing_refresh_enabled: bool | None = None
     stale_listing_refresh_interval_minutes: int | None = Field(None, ge=15, le=1440)
     stale_listing_refresh_max_per_run: int | None = Field(None, ge=1, le=100)
-    stale_listing_refresh_min_age_hours: int | None = Field(None, ge=1, le=720)
+    stale_listing_refresh_min_age_hours: int | None = Field(
+        None,
+        ge=0,
+        le=720,
+        description="0 = eligible if last_seen_at is null or strictly before now",
+    )
 
 
 class IngestRunResponse(BaseModel):

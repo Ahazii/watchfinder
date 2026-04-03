@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from watchfinder.config import Settings, get_settings
@@ -96,14 +96,14 @@ def get_stale_listing_refresh_min_age_hours(db: Session, settings: Settings) -> 
     if row and row.value_text:
         try:
             v = int(row.value_text.strip())
-            return max(1, min(720, v))
+            return max(0, min(720, v))
         except ValueError:
             pass
-    return max(1, min(720, int(settings.stale_listing_refresh_min_age_hours)))
+    return max(0, min(720, int(settings.stale_listing_refresh_min_age_hours)))
 
 
 def set_stale_listing_refresh_min_age_hours(db: Session, hours: int) -> None:
-    v = max(1, min(720, int(hours)))
+    v = max(0, min(720, int(hours)))
     row = db.get(AppSetting, KEY_MIN_AGE_HOURS)
     if row:
         row.value_text = str(v)
@@ -140,6 +140,19 @@ def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> 
     max_n = get_stale_listing_refresh_max_per_run(db, settings)
     min_age = get_stale_listing_refresh_min_age_hours(db, settings)
     ids = iter_stale_active_listing_ids(db, min_age_hours=min_age, limit=max_n)
+    if not ids:
+        n_active = db.scalar(
+            select(func.count()).select_from(Listing).where(Listing.is_active.is_(True))
+        )
+        n_active = int(n_active or 0)
+        logger.info(
+            "Stale listing refresh: no candidates (min_age_hours=%s, max_per_run=%s). "
+            "Active listings in DB: %s — each active row has last_seen_at newer than the cutoff, "
+            "or there are no active rows. Lower min age in Settings (0 = eligible if last_seen_at is in the past) or wait.",
+            min_age,
+            max_n,
+            n_active,
+        )
     updated = ended = errors = 0
     for i, lid in enumerate(ids):
         if i > 0 and _INTER_GET_ITEM_SLEEP_SEC > 0:

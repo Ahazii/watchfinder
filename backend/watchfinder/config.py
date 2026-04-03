@@ -80,9 +80,9 @@ class Settings(BaseSettings):
     stale_listing_refresh_min_age_hours: int = Field(
         12,
         alias="STALE_LISTING_REFRESH_MIN_AGE_HOURS",
-        ge=1,
+        ge=0,
         le=720,
-        description="Only refresh active listings older than this (by last_seen_at)",
+        description="Only refresh active listings with last_seen_at null or older than this many hours (0 = any past timestamp)",
     )
 
 

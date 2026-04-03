@@ -257,7 +257,10 @@ export default function SettingsPage() {
             Periodically re-fetch <strong>active</strong> listings whose{" "}
             <code className="rounded bg-muted px-1">last_seen_at</code> is older than the minimum age.
             Each run calls Browse <strong>getItem</strong> up to the max count, with a short pause
-            between calls. Ended listings are marked inactive (same as detail page refresh).
+            between calls. Ended listings are marked inactive (same as detail page refresh).{" "}
+            <strong>Min age</strong> skips recently seen rows (e.g. after ingest); use <strong>0</strong> to
+            refresh any active listing whose <code className="rounded bg-muted px-1">last_seen_at</code> is
+            already in the past.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -306,7 +309,7 @@ export default function SettingsPage() {
               <Input
                 id="staleAge"
                 type="number"
-                min={1}
+                min={0}
                 max={720}
                 className="w-32"
                 value={staleRefreshMinAge}
