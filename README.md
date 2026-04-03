@@ -9,7 +9,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | Document | Purpose |
 |----------|---------|
 | [`README.md`](README.md) (this file) | Quick start, API surface, Docker, Unraid summary, env vars |
-| [`PROGRESS.md`](PROGRESS.md) | What is built (phases 1–5), repo map, backlog, planned work |
+| [`PROGRESS.md`](PROGRESS.md) | What is built (phases 1–6), repo map, backlog, planned work |
 | [`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`](Kickoff%20Documents/SIMPLIFIED_NOVICE_SETUP.md) | Step-by-step Unraid install (folders, network, Postgres, app) |
 | [`Kickoff Documents/README_START_HERE.txt`](Kickoff%20Documents/README_START_HERE.txt) | Kickoff folder index |
 | [`Kickoff Documents/CURSOR_PROMPT.txt`](Kickoff%20Documents/CURSOR_PROMPT.txt) | Original full build spec (reference / Cursor) |
@@ -35,7 +35,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | `/` | Dashboard (stats, **eBay Browse / OAuth call counters**, recent listings with thumbs) |
 | `/listings/` | Listings + filters (**Title contains**, brand, price, etc.), sortable columns, thumbnails |
 | `/candidates/` | Repair candidates (same filters as listings where applicable) |
-| `/settings/` | Browse search lines, **interval** + **items per search line** (1–200), watch-catalog mode, **Ingest now** |
+| `/settings/` | Browse search lines, **interval** + **items per search line** (1–200), **stale listing refresh** (optional scheduler), watch-catalog mode, **Ingest now** / **Stale refresh now** |
 | `/watch-models/` | **Watch database** — catalog CRUD (canonical models, manual + observed price bounds) |
 | `/watch-models/detail/?id=<uuid>` | Edit one model (all fields); omit `id` to create |
 | `/watch-review/` | **Match queue** — pending catalogue links (review mode) |
@@ -50,7 +50,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings (each with **`image_urls`**), plus persisted eBay counters (**`ebay_browse_search_calls`**, **`ebay_oauth_token_calls`**, **`ebay_browse_get_item_calls`**); see [eBay REST rate limiting](https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html) |
-| GET | `/api/listings` | Paginated listings + query filters (including **`title_q`** substring on title); list rows include **`image_urls`**; **`sort_by`** / **`sort_dir`** as documented in OpenAPI |
+| GET | `/api/listings` | Paginated listings + query filters (**`title_q`**, brand, price, repair, **`listing_active`**: `active` / `inactive` / `all`, **`exclude_quartz`**, etc.); rows include **`image_urls`**, **`is_active`**; **`sort_by`** / **`sort_dir`** — see OpenAPI |
 | GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
@@ -64,9 +64,9 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | GET | `/api/watch-models/{uuid}` | One model |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
 | DELETE | `/api/watch-models/{uuid}` | Delete (listings unlinked via FK **SET NULL**) |
-| GET | `/api/candidates` | Same filters (**`title_q`**, etc.) and **sort** params as listings; only rows with `potential_profit > 0` |
-| GET | `/api/settings` | Ingest interval, **`ebay_search_limit`**, **`ingest_max_pages`** (search offset pages per line, 1–20), saved Browse query lines, env fallback hint |
-| PATCH | `/api/settings` | Update interval (5–1440), optional **`ebay_search_limit`** (1–200), **`ingest_max_pages`** (1–20), ingest query lines, **`watch_catalog_review_mode`** |
+| GET | `/api/candidates` | Same filters and **sort** as listings (**`listing_active`**, **`exclude_quartz`**, etc.); only rows with `potential_profit > 0` |
+| GET | `/api/settings` | Ingest interval, **`ebay_search_limit`**, **`ingest_max_pages`**, stale-refresh toggles (**`stale_listing_refresh_*`**), saved Browse query lines, env fallback hint |
+| PATCH | `/api/settings` | Same fields as GET: interval, limits, pages, ingest lines, **`watch_catalog_review_mode`**, **`stale_listing_refresh_enabled`**, interval/max-per-run/min-age for stale batch |
 | POST | `/api/ingest/run` | Queue a full ingest cycle in the background (check logs) |
 | POST | `/api/ingest/stale-refresh-run` | Queue one batch of **getItem** refreshes for stale **active** listings (see Settings) |
 
@@ -84,14 +84,14 @@ After upgrading, run **`alembic upgrade head`** (through **005** / **`ebay_item_
 
 - **`listings.is_active`** is set **`true`** when an item appears in Browse **ingest** results or when **`POST /api/listings/{id}/refresh-from-ebay`** returns a live **getItem** payload.
 - **`is_active`** is set **`false`** when **getItem** returns **404** (ended / removed from Buy Browse). Use **Refresh from eBay** on the listing detail page, or call the POST API above. Ingest search alone does **not** mark missing rows inactive (an item can leave your result set but still be live).
-- **Listings** / **candidates** list APIs use **`is_active = true`** only; **detail** still returns inactive rows so you can refresh or read history.
+- **Listings** / **candidates** list APIs default to **`listing_active=active`** (active rows only). Use **`listing_active=all`** or **`inactive`** to include or isolate ended listings. **Detail** still returns inactive rows so you can refresh or read history.
 
 ## Ingest searches (UI + API)
 
-- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200 → **`app_settings.ingest_search_limit`**), **pages per line** (1–20 → **`app_settings.ingest_max_pages`**; each extra page is another **`item_summary/search`** with `offset += limit`), and **interval minutes**. Rough ceiling per cycle ≈ *limit × pages × enabled lines* Browse calls. Env defaults: **`EBAY_SEARCH_LIMIT`**, **`INGEST_MAX_PAGES`**, until saved. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
+- **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200 → **`app_settings.ingest_search_limit`**), **pages per line** (1–20 → **`app_settings.ingest_max_pages`**; each extra page is another **`item_summary/search`** with `offset += limit`), and **interval minutes**. Optional **stale listing refresh**: scheduled batch **getItem** for active rows past a **min age** (capped per run); env **`STALE_LISTING_REFRESH_*`** until saved. Rough ceiling per ingest cycle ≈ *limit × pages × enabled lines* Browse calls. Env defaults: **`EBAY_SEARCH_LIMIT`**, **`INGEST_MAX_PAGES`**, until saved. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
 - **Interval:** Stored in **`app_settings.ingest_interval_minutes`** when changed from the UI; otherwise **`INGEST_INTERVAL_MINUTES`** from env. Changing interval in **Settings** reschedules the job without restarting the container.
 - **OAuth (one token per cycle):** A single **`EbayAuthClient`** + **`EbayBrowseClient`** is reused for **all** query lines in one scheduled or **Ingest now** run, so you should see **one** Identity `oauth2/token` POST per cycle when the cached token is still valid (not one token request per line). Dashboard counters **`ebay_oauth_token_calls`** / **`ebay_browse_search_calls`** persist in **`app_settings.ebay_api_usage_json`**.
-- **Ingest now:** Calls **`POST /api/ingest/run`** (background task). There is **no authentication** on these endpoints — intended for trusted LAN / self-hosted use only.
+- **Ingest now:** Calls **`POST /api/ingest/run`** (background task). **Stale refresh now** calls **`POST /api/ingest/stale-refresh-run`**. There is **no authentication** on these endpoints — intended for trusted LAN / self-hosted use only.
 
 ## Local development
 

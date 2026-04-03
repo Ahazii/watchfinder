@@ -109,7 +109,6 @@ OpenAPI: **`/docs`**.
 | **Taxonomy**-driven ingest | Client stub only. |
 | **Tests** | **Started:** mapper + stale-refresh helpers; expand to API, refresh, ingest job with mocks. |
 | **npm audit** / Next upgrades | Per your policy. |
-| **Listings filters** | **`listing_active`** + **`exclude_quartz`** on **`GET /api/listings`** and **`GET /api/candidates`** (replaces older **`include_inactive`** idea). |
 
 ---
 
