@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **31 March 2026**
+Last updated: **3 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -36,7 +36,7 @@ This document records what is implemented in the repository versus the phased pl
 
 - **Multi-page search ingest** (`job.py`): for each query line, up to **`ingest_max_pages`** calls to **`item_summary/search`** with `offset = page × limit`. Settings + **`app_settings.ingest_max_pages`**; env **`INGEST_MAX_PAGES`** default.
 - **Live item** (`browse.py` **`get_item`**, `live_refresh.py`): **`POST /api/listings/{id}/refresh-from-ebay`**; increments **`browse_get_item`** usage counter; listing detail UI **Refresh from eBay**; **`404`** → **`is_active=false`**.
-- **Stale batch refresh**: APScheduler job **`stale_listing_refresh`** (`services/stale_listing_refresh.py`, **`stale_refresh_worker.py`**) — active listings with **`last_seen_at`** older than configurable **min age** (or null), up to **max per run**, **~0.35s** between **getItem** calls. Toggle + limits in **Settings** (persisted **`app_settings`**); env **`STALE_LISTING_REFRESH_*`** defaults. **`POST /api/ingest/stale-refresh-run`** for a manual batch.
+- **Stale batch refresh**: APScheduler job **`stale_listing_refresh`** (`services/stale_listing_refresh.py`, **`stale_refresh_worker.py`**) — active listings with **`last_seen_at`** older than configurable **min age** (or null; **0** = any past timestamp), up to **max per run**, **~0.35s** between **getItem** calls. One shared **`EbayBrowseClient`** + **`EbayAuthClient`** per batch (single OAuth token while cached). Toggle + limits in **Settings** (persisted **`app_settings`**); env **`STALE_LISTING_REFRESH_*`** defaults. **`POST /api/ingest/stale-refresh-run`** for a manual batch; logs explain **attempted: 0** when no rows match the age filter.
 - **Listings / candidates API**: **`listing_active`** (**active** / **inactive** / **all**) and **`exclude_quartz`** query filters; UI status column and filters.
 - **Schema** migration **005**: **`listings.ebay_item_id`** and **`watch_sale_records.ebay_item_id`** → **128** chars (REST ids like `v1|…|0`).
 - **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
