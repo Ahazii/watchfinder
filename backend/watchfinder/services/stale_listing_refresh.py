@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from watchfinder.config import Settings, get_settings
 from watchfinder.models import AppSetting, Listing
+from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ingestion.live_refresh import refresh_listing_from_ebay
 from watchfinder.util.app_setting_text import truthy_app_value
 
@@ -153,12 +154,17 @@ def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> 
             max_n,
             n_active,
         )
+    shared_browse: EbayBrowseClient | None = None
+    if ids:
+        shared_browse = EbayBrowseClient(settings, EbayAuthClient(settings, db))
     updated = ended = errors = 0
     for i, lid in enumerate(ids):
         if i > 0 and _INTER_GET_ITEM_SLEEP_SEC > 0:
             time.sleep(_INTER_GET_ITEM_SLEEP_SEC)
         try:
-            outcome = refresh_listing_from_ebay(db, lid, settings)
+            outcome = refresh_listing_from_ebay(
+                db, lid, settings, browse=shared_browse
+            )
             if outcome == "updated":
                 updated += 1
             else:

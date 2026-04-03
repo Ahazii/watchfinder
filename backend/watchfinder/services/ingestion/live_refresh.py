@@ -24,12 +24,16 @@ def refresh_listing_from_ebay(
     db: Session,
     listing_id: UUID,
     settings: Settings | None = None,
+    *,
+    browse: EbayBrowseClient | None = None,
 ) -> Literal["updated", "ended"]:
     """
     GET /item/{id} for this row's ebay_item_id.
 
     - **updated** — item found; row merged and re-analyzed
     - **ended** — 404; ``is_active`` set False
+
+    Pass ``browse`` to reuse one OAuth token across many getItem calls (e.g. stale batch).
     """
     settings = settings or get_settings()
     stmt = (
@@ -41,12 +45,13 @@ def refresh_listing_from_ebay(
     if listing is None:
         raise ValueError("Listing not found")
 
-    auth = EbayAuthClient(settings, db)
-    browse = EbayBrowseClient(settings, auth)
+    browse_client = browse or EbayBrowseClient(
+        settings, EbayAuthClient(settings, db)
+    )
     now = datetime.now(UTC)
 
     try:
-        raw = browse.get_item(listing.ebay_item_id)
+        raw = browse_client.get_item(listing.ebay_item_id)
     finally:
         increment_browse_get_item(db)
         db.flush()
