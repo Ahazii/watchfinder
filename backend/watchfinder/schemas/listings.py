@@ -83,7 +83,6 @@ class ListingSummary(BaseModel):
 
 class ListingDetail(ListingSummary):
     subtitle: str | None = None
-    image_urls: list | None = None
     shipping_price: Decimal | None = None
     seller_username: str | None = None
     category_path: str | None = None

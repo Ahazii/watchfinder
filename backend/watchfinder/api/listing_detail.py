@@ -90,7 +90,6 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
     return ListingDetail(
         **summary.model_dump(),
         subtitle=listing.subtitle,
-        image_urls=listing.image_urls,
         shipping_price=listing.shipping_price,
         seller_username=listing.seller_username,
         category_path=listing.category_path,

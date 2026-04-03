@@ -78,6 +78,12 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 After upgrading, run **`alembic upgrade head`** (through **`watch_model_link_reviews`** / migration **004**).
 
+### Listing `is_active` (not a live eBay poll)
+
+- **`listings.is_active`** is set **`true`** whenever that item appears in a Browse **ingest** result and gets updated.
+- The app does **not** call eBay to verify an item is still for sale between ingests. Nothing currently sets **`is_active`** to **`false`** when an auction ends or is removed — that would require periodic **getItem**, search absence logic, or another strategy (see **`PROGRESS.md`** → planned **observed sale (O)**).
+- **Listings** / **candidates** API list views filter to **`is_active = true`** only; **detail** (`GET /api/listings/{id}`) still returns the row so you can open history.
+
 ## Ingest searches (UI + API)
 
 - **Web UI:** **`/settings/`** — add multiple **Browse** keyword lines (each line = one `q` per ingest cycle). Tune **items per search line** (1–200, stored in **`app_settings.ingest_search_limit`** after **Save**; until then **`EBAY_SEARCH_LIMIT`** env applies) and **interval minutes**. Rough max items touched per cycle ≈ *limit × enabled lines* (each line = one Browse API call). Only the **first page** of eBay results is fetched per line (`offset=0`); there is no multi-page crawl yet. If there are **no** saved lines (or every line is empty), ingest uses **`EBAY_SEARCH_QUERY`** from the environment.
