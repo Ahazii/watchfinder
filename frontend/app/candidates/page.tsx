@@ -36,6 +36,8 @@ export default function CandidatesPage() {
     price_max: "",
     repair_keyword: "",
     confidence_min: "",
+    listing_active: "active" as "active" | "inactive" | "all",
+    exclude_quartz: false,
   });
   const [skip, setSkip] = useState(0);
   const [queryNonce, setQueryNonce] = useState(0);
@@ -60,6 +62,8 @@ export default function CandidatesPage() {
     if (f.price_max) q.set("price_max", f.price_max);
     if (f.repair_keyword) q.set("repair_keyword", f.repair_keyword);
     if (f.confidence_min) q.set("confidence_min", f.confidence_min);
+    q.set("listing_active", f.listing_active);
+    if (f.exclude_quartz) q.set("exclude_quartz", "true");
     q.set("sort_by", sortBy);
     q.set("sort_dir", sortDir);
 
@@ -87,57 +91,89 @@ export default function CandidatesPage() {
           <CardTitle>Filters</CardTitle>
           <CardDescription>Optional refinements, then Apply.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Title contains</label>
-            <Input
-              value={filters.title_q}
-              onChange={(e) => setFilters((f) => ({ ...f, title_q: e.target.value }))}
-            />
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Title contains</label>
+              <Input
+                value={filters.title_q}
+                onChange={(e) => setFilters((f) => ({ ...f, title_q: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Brand</label>
+              <Input
+                value={filters.brand}
+                onChange={(e) => setFilters((f) => ({ ...f, brand: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Price max</label>
+              <Input
+                value={filters.price_max}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, price_max: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Repair keyword</label>
+              <Input
+                value={filters.repair_keyword}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, repair_keyword: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Confidence min</label>
+              <Input
+                value={filters.confidence_min}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, confidence_min: e.target.value }))
+                }
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={() => {
+                setSkip(0);
+                setQueryNonce((n) => n + 1);
+              }}
+            >
+              Apply
+            </Button>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Brand</label>
-            <Input
-              value={filters.brand}
-              onChange={(e) => setFilters((f) => ({ ...f, brand: e.target.value }))}
-            />
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Listing status</label>
+              <select
+                className="flex h-9 rounded-md border border-border bg-background px-2 text-sm"
+                value={filters.listing_active}
+                onChange={(e) =>
+                  setFilters((f) => ({
+                    ...f,
+                    listing_active: e.target.value as "active" | "inactive" | "all",
+                  }))
+                }
+              >
+                <option value="active">Active only</option>
+                <option value="inactive">Inactive only</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={filters.exclude_quartz}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, exclude_quartz: e.target.checked }))
+                }
+              />
+              Exclude quartz
+            </label>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Price max</label>
-            <Input
-              value={filters.price_max}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, price_max: e.target.value }))
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Repair keyword</label>
-            <Input
-              value={filters.repair_keyword}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, repair_keyword: e.target.value }))
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Confidence min</label>
-            <Input
-              value={filters.confidence_min}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, confidence_min: e.target.value }))
-              }
-            />
-          </div>
-          <Button
-            type="button"
-            onClick={() => {
-              setSkip(0);
-              setQueryNonce((n) => n + 1);
-            }}
-          >
-            Apply
-          </Button>
         </CardContent>
       </Card>
 
@@ -213,6 +249,7 @@ function CandidatesTable({
       <TableHeader>
         <TableRow>
           <TableHead className="w-14 text-muted-foreground">Photo</TableHead>
+          <TableHead className="w-24 text-muted-foreground">Status</TableHead>
           <SortableTableHead
             label="Title"
             column="title"
@@ -255,6 +292,17 @@ function CandidatesTable({
           <TableRow key={r.id}>
             <TableCell className="align-top">
               <ListingThumb urls={r.image_urls} alt="" />
+            </TableCell>
+            <TableCell className="align-top">
+              {r.is_active === false ? (
+                <Badge variant="secondary" className="whitespace-nowrap text-amber-200/90">
+                  Inactive
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="whitespace-nowrap text-emerald-200/80">
+                  Active
+                </Badge>
+              )}
             </TableCell>
             <TableCell className="max-w-xs">
               <Link

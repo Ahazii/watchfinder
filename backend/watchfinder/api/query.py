@@ -12,7 +12,7 @@ from watchfinder.models import Listing, OpportunityScore, ParsedAttribute, Repai
 
 def base_listing_select(
     *,
-    active_only: bool = True,
+    listing_active: str = "active",
     title_q: str | None = None,
     brand: str | None = None,
     price_min: Decimal | None = None,
@@ -24,11 +24,16 @@ def base_listing_select(
     confidence_min: Decimal | None = None,
     profit_min: Decimal | None = None,
     candidates_only: bool = False,
+    exclude_quartz: bool = False,
 ) -> Select:
     stmt: Select = select(Listing)
 
-    if active_only:
+    la = (listing_active or "active").strip().lower()
+    if la == "active":
         stmt = stmt.where(Listing.is_active.is_(True))
+    elif la == "inactive":
+        stmt = stmt.where(Listing.is_active.is_(False))
+    # "all" — no is_active filter
 
     if title_q:
         t = f"%{title_q.strip()}%"
@@ -144,6 +149,19 @@ def base_listing_select(
                 select(1).where(
                     OpportunityScore.listing_id == Listing.id,
                     OpportunityScore.potential_profit > 0,
+                )
+            )
+        )
+
+    if exclude_quartz:
+        qz = "%quartz%"
+        stmt = stmt.where(~Listing.title.ilike(qz)).where(
+            ~exists(
+                select(1).where(
+                    ParsedAttribute.listing_id == Listing.id,
+                    ParsedAttribute.namespace == "watch",
+                    ParsedAttribute.key == "movement",
+                    ParsedAttribute.value_text.ilike(qz),
                 )
             )
         )

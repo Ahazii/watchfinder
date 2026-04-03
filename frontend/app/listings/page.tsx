@@ -41,6 +41,8 @@ export default function ListingsPage() {
     caliber_known: "",
     confidence_min: "",
     profit_min: "",
+    listing_active: "active" as "active" | "inactive" | "all",
+    exclude_quartz: false,
   });
   const [skip, setSkip] = useState(0);
   const [queryNonce, setQueryNonce] = useState(0);
@@ -73,6 +75,8 @@ export default function ListingsPage() {
     if (f.caliber_known === "no") q.set("caliber_known", "false");
     if (f.confidence_min) q.set("confidence_min", f.confidence_min);
     if (f.profit_min) q.set("profit_min", f.profit_min);
+    q.set("listing_active", f.listing_active);
+    if (f.exclude_quartz) q.set("exclude_quartz", "true");
     q.set("sort_by", sortBy);
     q.set("sort_dir", sortDir);
 
@@ -182,6 +186,36 @@ export default function ListingsPage() {
               value={filters.profit_min}
               onChange={(v) => setFilters((f) => ({ ...f, profit_min: v }))}
             />
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Listing status
+              </label>
+              <select
+                className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                value={filters.listing_active}
+                onChange={(e) =>
+                  setFilters((f) => ({
+                    ...f,
+                    listing_active: e.target.value as "active" | "inactive" | "all",
+                  }))
+                }
+              >
+                <option value="active">Active only</option>
+                <option value="inactive">Inactive only</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 pt-6 text-sm sm:col-span-2 lg:col-span-3">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={filters.exclude_quartz}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, exclude_quartz: e.target.checked }))
+                }
+              />
+              <span>Exclude quartz (title or parsed movement)</span>
+            </label>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -208,6 +242,8 @@ export default function ListingsPage() {
                   caliber_known: "",
                   confidence_min: "",
                   profit_min: "",
+                  listing_active: "active",
+                  exclude_quartz: false,
                 });
                 setSkip(0);
                 setQueryNonce((n) => n + 1);
@@ -314,6 +350,7 @@ function ListingsTable({
       <TableHeader>
         <TableRow>
           <TableHead className="w-14 text-muted-foreground">Photo</TableHead>
+          <TableHead className="w-24 text-muted-foreground">Status</TableHead>
           <SortableTableHead
             label="Title"
             column="title"
@@ -359,6 +396,17 @@ function ListingsTable({
           <TableRow key={r.id}>
             <TableCell className="align-top">
               <ListingThumb urls={r.image_urls} alt="" />
+            </TableCell>
+            <TableCell className="align-top">
+              {r.is_active === false ? (
+                <Badge variant="secondary" className="whitespace-nowrap text-amber-200/90">
+                  Inactive
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="whitespace-nowrap text-emerald-200/80">
+                  Active
+                </Badge>
+              )}
             </TableCell>
             <TableCell className="max-w-xs">
               <Link

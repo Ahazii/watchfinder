@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -52,6 +53,14 @@ def list_listings(
     caliber_known: bool | None = None,
     confidence_min: Decimal | None = None,
     profit_min: Decimal | None = None,
+    listing_active: Literal["active", "inactive", "all"] = Query(
+        "active",
+        description="Filter by row flag: active listings, inactive only, or all",
+    ),
+    exclude_quartz: bool = Query(
+        False,
+        description="Omit rows whose title or parsed movement mentions quartz",
+    ),
     sort_by: str | None = Query(
         None,
         description="Sort column: last_seen, title, price, confidence, profit",
@@ -59,7 +68,7 @@ def list_listings(
     sort_dir: str | None = Query(None, description="asc or desc"),
 ) -> ListingListResponse:
     base = base_listing_select(
-        active_only=True,
+        listing_active=listing_active,
         title_q=title_q,
         brand=brand,
         price_min=price_min,
@@ -71,6 +80,7 @@ def list_listings(
         confidence_min=confidence_min,
         profit_min=profit_min,
         candidates_only=False,
+        exclude_quartz=exclude_quartz,
     )
     total = count_listings(db, base)
     sk, desc = normalize_sort(sort_by, sort_dir)
