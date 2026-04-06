@@ -11,6 +11,7 @@ from watchfinder.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
+# .app may 301 to api.frankfurter.dev; httpx must follow redirects (default is off).
 FRANKFURTER_LATEST = "https://api.frankfurter.app/latest?from=EUR&to=GBP"
 
 
@@ -23,7 +24,11 @@ def fetch_eur_to_gbp_rate(settings: Settings | None = None) -> Decimal | None:
     fb = getattr(settings, "eur_gbp_rate_fallback", None)
     try:
         ua = getattr(settings, "watchbase_import_user_agent", None) or "WatchFinder/1.0 (FX quote)"
-        with httpx.Client(timeout=12.0, headers={"User-Agent": ua}) as client:
+        with httpx.Client(
+            timeout=12.0,
+            headers={"User-Agent": ua},
+            follow_redirects=True,
+        ) as client:
             r = client.get(FRANKFURTER_LATEST)
             r.raise_for_status()
             data = r.json()

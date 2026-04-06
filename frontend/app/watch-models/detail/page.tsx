@@ -451,19 +451,17 @@ function DetailBody() {
     <div className="space-y-6">
       {findModalOpen ? (
         <>
-          <button
-            type="button"
-            className="fixed inset-0 z-40 cursor-default bg-black/50"
-            aria-label="Close find dialog"
-            onClick={closeFindModal}
+          {/* Dim only; pointer-events-none so you can click the page behind without closing. */}
+          <div
+            className="pointer-events-none fixed inset-0 z-40 bg-black/50"
+            aria-hidden
           />
           <div
             role="dialog"
-            aria-modal="true"
+            aria-modal="false"
             aria-labelledby="find-watchbase-title"
             className="fixed z-50 w-[calc(100%-2rem)] max-w-xl overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-xl"
             style={{ left: modalPos.x, top: modalPos.y }}
-            onMouseDown={(e) => e.stopPropagation()}
           >
             <div
               className="flex cursor-grab select-none items-start gap-2 border-b border-border bg-muted/40 px-4 py-3 active:cursor-grabbing"
@@ -473,7 +471,10 @@ function DetailBody() {
                 <h2 id="find-watchbase-title" className="text-lg font-semibold leading-tight">
                   Find watch on WatchBase
                 </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">Drag this bar to move the window</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Drag this bar to move. Click the page behind to edit the form — this panel stays open. Escape
+                  or Cancel closes it.
+                </p>
               </div>
             </div>
             <div className="max-h-[min(78vh,640px)] overflow-y-auto p-6 pt-4">
