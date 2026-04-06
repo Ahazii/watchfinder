@@ -18,6 +18,7 @@ export type ListingSummary = {
   web_url: string | null;
   condition_description: string | null;
   last_seen_at: string | null;
+  first_seen_at?: string | null;
   is_active?: boolean;
   image_urls?: string[] | null;
   score?: OpportunityScore | null;
@@ -67,6 +68,18 @@ export type WatchModel = WatchModelBrief & {
   production_start?: string | null;
   production_end?: string | null;
   description?: string | null;
+  reference_url?: string | null;
+  spec_case_material?: string | null;
+  spec_bezel?: string | null;
+  spec_crystal?: string | null;
+  spec_case_back?: string | null;
+  spec_case_diameter_mm?: string | number | null;
+  spec_case_height_mm?: string | number | null;
+  spec_lug_width_mm?: string | number | null;
+  spec_water_resistance_m?: string | number | null;
+  spec_dial_color?: string | null;
+  spec_dial_material?: string | null;
+  spec_indexes_hands?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -137,7 +150,6 @@ export type ListingDetail = ListingSummary & {
   shipping_price?: string | number | null;
   seller_username?: string | null;
   category_path?: string | null;
-  first_seen_at?: string | null;
   is_active?: boolean;
   parsed_attributes: ParsedAttribute[];
   repair_signals: RepairSignal[];

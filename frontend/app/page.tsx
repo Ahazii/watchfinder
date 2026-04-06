@@ -123,8 +123,11 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent listings</CardTitle>
-          <CardDescription>Last five updated from ingest.</CardDescription>
+          <CardTitle>Recently added</CardTitle>
+          <CardDescription>
+            Newest active listings by <strong>first seen</strong> in your database (not last eBay refresh).
+            Up to 12 rows.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <RecentTable rows={data.recent_listings} />
@@ -146,7 +149,7 @@ function RecentTable({ rows }: { rows: ListingSummary[] }) {
           <TableHead>Title</TableHead>
           <TableHead>Price</TableHead>
           <TableHead>Profit est.</TableHead>
-          <TableHead>Seen</TableHead>
+          <TableHead>First seen</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -178,7 +181,7 @@ function RecentTable({ rows }: { rows: ListingSummary[] }) {
               )}
             </TableCell>
             <TableCell className="text-muted-foreground text-xs">
-              {dateShort(r.last_seen_at)}
+              {dateShort(r.first_seen_at || r.last_seen_at)}
             </TableCell>
           </TableRow>
         ))}

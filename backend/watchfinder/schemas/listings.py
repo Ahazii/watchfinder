@@ -76,6 +76,7 @@ class ListingSummary(BaseModel):
     web_url: str | None
     condition_description: str | None
     last_seen_at: datetime | None
+    first_seen_at: datetime | None = None
     is_active: bool = True
     image_urls: list | None = None
     score: OpportunityScoreOut | None = None

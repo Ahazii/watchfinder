@@ -145,7 +145,7 @@ export default function WatchModelsPage() {
               <th className="px-3 py-2 font-medium">Model</th>
               <th className="px-3 py-2 font-medium">Observed</th>
               <th className="px-3 py-2 font-medium">Manual</th>
-              <th className="px-3 py-2 font-medium w-24" />
+              <th className="px-3 py-2 font-medium w-36">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -162,7 +162,12 @@ export default function WatchModelsPage() {
                     <ListingThumb urls={m.image_urls} alt="" />
                   </td>
                   <td className="px-3 py-2">
-                    <p className="font-medium">{label(m)}</p>
+                    <Link
+                      href={`/watch-models/detail/?id=${m.id}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {label(m)}
+                    </Link>
                     {m.model_name ? (
                       <p className="text-xs text-muted-foreground">{m.model_name}</p>
                     ) : null}
@@ -175,7 +180,7 @@ export default function WatchModelsPage() {
                   </td>
                   <td className="px-3 py-2">
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/watch-models/detail/?id=${m.id}`}>Edit</Link>
+                      <Link href={`/watch-models/detail/?id=${m.id}`}>Details</Link>
                     </Button>
                   </td>
                 </tr>

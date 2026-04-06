@@ -20,7 +20,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 - `frontend/` — Next.js 14 (App Router), TypeScript, Tailwind, shadcn-style UI
 - `backend/watchfinder/` — FastAPI app, models, eBay clients, ingestion, parsing, scoring
-- `alembic/` — database migrations through **005** (wider **`ebay_item_id`** for REST ids; prior: **004** match queue)
+- `alembic/` — database migrations through **006** (**`watch_models`** optional specs + **`reference_url`**; prior: **005** wider **`ebay_item_id`**)
 - `docker/start.sh` — wait for Postgres → `alembic upgrade head` → `uvicorn`
 - `Dockerfile` — multi-stage image (Node build + Python runtime, non-root user, healthcheck)
 - `docker-compose.yml` — local **postgres:16** + app build
@@ -55,7 +55,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
 | POST | `/api/listings/{uuid}/refresh-from-ebay` | Browse **getItem** for this row: refresh price/title/images; **`404`** → set **`is_active=false`** (listing drops off default lists) |
-| GET | `/api/watch-models` | Paginated catalog (`q` search, `skip`/`limit`) |
+| GET | `/api/watch-models` | Paginated catalog (`q` search, `skip`/`limit`); rows include optional **spec** fields and **`reference_url`** after migration **006** |
 | POST | `/api/watch-models` | Create model |
 | POST | `/api/watch-models/backfill-from-listings` | Scan active listings; link or create catalog rows (same rules as ingest analyze) |
 | GET | `/api/watch-link-reviews` | Pending match-queue rows (`skip`/`limit`) |
@@ -78,7 +78,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **Repair:** rule-based core **plus** optional **repair add-on** and **donor cost** (both included in total repair for profit math). Fees/shipping ignored.
 - **Tuning asking-sample size:** optional **`app_settings`** row **`max_comp_candidates`** (integer string, default **200** in code if unset).
 
-After upgrading, run **`alembic upgrade head`** (through **005** / **`ebay_item_id`** length).
+After upgrading, run **`alembic upgrade head`** (through **006** / watch-model specs + **`ebay_item_id`** length from **005**).
 
 ### Listing `is_active` and live checks
 

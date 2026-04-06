@@ -27,6 +27,18 @@ class WatchModelOut(WatchModelBriefOut):
     production_start: date | None = None
     production_end: date | None = None
     description: str | None = None
+    reference_url: str | None = None
+    spec_case_material: str | None = None
+    spec_bezel: str | None = None
+    spec_crystal: str | None = None
+    spec_case_back: str | None = None
+    spec_case_diameter_mm: Decimal | None = None
+    spec_case_height_mm: Decimal | None = None
+    spec_lug_width_mm: Decimal | None = None
+    spec_water_resistance_m: Decimal | None = None
+    spec_dial_color: str | None = None
+    spec_dial_material: str | None = None
+    spec_indexes_hands: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -43,6 +55,18 @@ class WatchModelCreate(BaseModel):
     description: str | None = None
     manual_price_low: Decimal | None = None
     manual_price_high: Decimal | None = None
+    reference_url: str | None = None
+    spec_case_material: str | None = None
+    spec_bezel: str | None = None
+    spec_crystal: str | None = None
+    spec_case_back: str | None = None
+    spec_case_diameter_mm: Decimal | None = None
+    spec_case_height_mm: Decimal | None = None
+    spec_lug_width_mm: Decimal | None = None
+    spec_water_resistance_m: Decimal | None = None
+    spec_dial_color: str | None = None
+    spec_dial_material: str | None = None
+    spec_indexes_hands: str | None = None
 
 
 class WatchModelPatch(BaseModel):
@@ -57,6 +81,18 @@ class WatchModelPatch(BaseModel):
     description: str | None = None
     manual_price_low: Decimal | None = None
     manual_price_high: Decimal | None = None
+    reference_url: str | None = None
+    spec_case_material: str | None = None
+    spec_bezel: str | None = None
+    spec_crystal: str | None = None
+    spec_case_back: str | None = None
+    spec_case_diameter_mm: Decimal | None = None
+    spec_case_height_mm: Decimal | None = None
+    spec_lug_width_mm: Decimal | None = None
+    spec_water_resistance_m: Decimal | None = None
+    spec_dial_color: str | None = None
+    spec_dial_material: str | None = None
+    spec_indexes_hands: str | None = None
 
 
 class WatchModelListResponse(BaseModel):

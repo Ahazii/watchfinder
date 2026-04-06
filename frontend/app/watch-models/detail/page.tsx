@@ -6,6 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson } from "@/lib/api";
 import type { WatchModel } from "@/lib/types";
 import { money } from "@/lib/format";
+import {
+  watchbaseGoogleSearchUrl,
+  watchbaseGuessUrl,
+} from "@/lib/watchbase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -48,6 +52,18 @@ function DetailBody() {
   const [manualHigh, setManualHigh] = useState("");
   const [observedLow, setObservedLow] = useState<string | number | null>(null);
   const [observedHigh, setObservedHigh] = useState<string | number | null>(null);
+  const [referenceUrl, setReferenceUrl] = useState("");
+  const [specCaseMaterial, setSpecCaseMaterial] = useState("");
+  const [specBezel, setSpecBezel] = useState("");
+  const [specCrystal, setSpecCrystal] = useState("");
+  const [specCaseBack, setSpecCaseBack] = useState("");
+  const [specCaseDia, setSpecCaseDia] = useState("");
+  const [specCaseH, setSpecCaseH] = useState("");
+  const [specLug, setSpecLug] = useState("");
+  const [specWr, setSpecWr] = useState("");
+  const [specDialColor, setSpecDialColor] = useState("");
+  const [specDialMat, setSpecDialMat] = useState("");
+  const [specIdxHands, setSpecIdxHands] = useState("");
 
   const applyModel = useCallback((m: WatchModel) => {
     setBrand(m.brand ?? "");
@@ -63,6 +79,22 @@ function DetailBody() {
     setManualHigh(m.manual_price_high != null ? String(m.manual_price_high) : "");
     setObservedLow(m.observed_price_low ?? null);
     setObservedHigh(m.observed_price_high ?? null);
+    setReferenceUrl(m.reference_url ?? "");
+    setSpecCaseMaterial(m.spec_case_material ?? "");
+    setSpecBezel(m.spec_bezel ?? "");
+    setSpecCrystal(m.spec_crystal ?? "");
+    setSpecCaseBack(m.spec_case_back ?? "");
+    setSpecCaseDia(
+      m.spec_case_diameter_mm != null ? String(m.spec_case_diameter_mm) : "",
+    );
+    setSpecCaseH(m.spec_case_height_mm != null ? String(m.spec_case_height_mm) : "");
+    setSpecLug(m.spec_lug_width_mm != null ? String(m.spec_lug_width_mm) : "");
+    setSpecWr(
+      m.spec_water_resistance_m != null ? String(m.spec_water_resistance_m) : "",
+    );
+    setSpecDialColor(m.spec_dial_color ?? "");
+    setSpecDialMat(m.spec_dial_material ?? "");
+    setSpecIdxHands(m.spec_indexes_hands ?? "");
   }, []);
 
   useEffect(() => {
@@ -82,6 +114,18 @@ function DetailBody() {
         manual_price_high: null,
         observed_price_low: null,
         observed_price_high: null,
+        reference_url: null,
+        spec_case_material: null,
+        spec_bezel: null,
+        spec_crystal: null,
+        spec_case_back: null,
+        spec_case_diameter_mm: null,
+        spec_case_height_mm: null,
+        spec_lug_width_mm: null,
+        spec_water_resistance_m: null,
+        spec_dial_color: null,
+        spec_dial_material: null,
+        spec_indexes_hands: null,
       });
       setErr(null);
       return;
@@ -121,6 +165,18 @@ function DetailBody() {
       description: description.trim() || null,
       manual_price_low: num(manualLow),
       manual_price_high: num(manualHigh),
+      reference_url: referenceUrl.trim() || null,
+      spec_case_material: specCaseMaterial.trim() || null,
+      spec_bezel: specBezel.trim() || null,
+      spec_crystal: specCrystal.trim() || null,
+      spec_case_back: specCaseBack.trim() || null,
+      spec_case_diameter_mm: num(specCaseDia),
+      spec_case_height_mm: num(specCaseH),
+      spec_lug_width_mm: num(specLug),
+      spec_water_resistance_m: num(specWr),
+      spec_dial_color: specDialColor.trim() || null,
+      spec_dial_material: specDialMat.trim() || null,
+      spec_indexes_hands: specIdxHands.trim() || null,
     };
   };
 
@@ -194,6 +250,9 @@ function DetailBody() {
     );
   }
 
+  const wbGuess = watchbaseGuessUrl(brand, modelFamily, reference);
+  const wbGoogle = watchbaseGoogleSearchUrl(brand, reference);
+
   return (
     <div className="space-y-6">
       <div>
@@ -220,6 +279,134 @@ function DetailBody() {
           <Field label="Model family" id="mf" value={modelFamily} onChange={setModelFamily} />
           <Field label="Model name" id="mn" value={modelName} onChange={setModelName} />
           <Field label="Caliber" id="cal" value={caliber} onChange={setCaliber} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>WatchBase &amp; external page</CardTitle>
+          <CardDescription>
+            <strong>Open WatchBase (guess)</strong> builds{" "}
+            <code className="rounded bg-muted px-1">watchbase.com/brand-slug/family-slug/ref-with-dashes</code>
+            . It only works when WatchBase uses the same slugs as our simple rules — otherwise use{" "}
+            <strong>Search WatchBase (Google)</strong> or paste the page you find into{" "}
+            <strong>Reference URL</strong> (example:{" "}
+            <a
+              className="text-primary underline-offset-4 hover:underline"
+              href="https://watchbase.com/omega/seamaster-diver-300m/210-30-42-20-01-001"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Omega 210.30.42.20.01.001
+            </a>
+            ). We do not scrape WatchBase; copy fields manually into specifications below. Respect their{" "}
+            <a
+              className="text-primary underline-offset-4 hover:underline"
+              href="https://watchbase.com/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              terms of use
+            </a>
+            .
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {wbGuess ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={wbGuess} target="_blank" rel="noopener noreferrer">
+                  Open WatchBase (guess)
+                </a>
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" size="sm" disabled title="Need brand, model family, and reference">
+                Open WatchBase (guess)
+              </Button>
+            )}
+            {wbGoogle ? (
+              <Button variant="secondary" size="sm" asChild>
+                <a href={wbGoogle} target="_blank" rel="noopener noreferrer">
+                  Search WatchBase (Google)
+                </a>
+              </Button>
+            ) : (
+              <Button type="button" variant="secondary" size="sm" disabled title="Need reference">
+                Search WatchBase (Google)
+              </Button>
+            )}
+            {referenceUrl.trim() ? (
+              <Button variant="ghost" size="sm" asChild>
+                <a href={referenceUrl.trim()} target="_blank" rel="noopener noreferrer">
+                  Open saved reference URL
+                </a>
+              </Button>
+            ) : null}
+          </div>
+          <div>
+            <label className="text-sm font-medium" htmlFor="refurl">
+              Reference URL
+            </label>
+            <Input
+              id="refurl"
+              className="mt-1 font-mono text-xs"
+              placeholder="https://watchbase.com/…"
+              value={referenceUrl}
+              onChange={(e) => setReferenceUrl(e.target.value)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Specifications (optional)</CardTitle>
+          <CardDescription>
+            Case, dial, and water resistance — useful when copied from a reference page such as WatchBase.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <Field
+            label="Case materials"
+            id="scm"
+            value={specCaseMaterial}
+            onChange={setSpecCaseMaterial}
+          />
+          <Field label="Bezel" id="sbz" value={specBezel} onChange={setSpecBezel} />
+          <Field label="Crystal" id="scr" value={specCrystal} onChange={setSpecCrystal} />
+          <Field label="Case back" id="scb" value={specCaseBack} onChange={setSpecCaseBack} />
+          <Field
+            label="Case diameter (mm)"
+            id="scd"
+            value={specCaseDia}
+            onChange={setSpecCaseDia}
+          />
+          <Field
+            label="Case height (mm)"
+            id="sch"
+            value={specCaseH}
+            onChange={setSpecCaseH}
+          />
+          <Field label="Lug width (mm)" id="slw" value={specLug} onChange={setSpecLug} />
+          <Field label="Water resistance (m)" id="swr" value={specWr} onChange={setSpecWr} />
+          <Field
+            label="Dial color"
+            id="sdc"
+            value={specDialColor}
+            onChange={setSpecDialColor}
+          />
+          <Field
+            label="Dial material"
+            id="sdm"
+            value={specDialMat}
+            onChange={setSpecDialMat}
+          />
+          <Field
+            label="Indexes / hands"
+            id="sih"
+            value={specIdxHands}
+            onChange={setSpecIdxHands}
+          />
         </CardContent>
       </Card>
 

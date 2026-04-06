@@ -40,8 +40,11 @@ def dashboard(db: Session = Depends(get_db)) -> DashboardStats:
     recent = db.execute(
         select(Listing)
         .where(Listing.is_active.is_(True))
-        .order_by(Listing.last_seen_at.desc())
-        .limit(5)
+        .order_by(
+            Listing.first_seen_at.desc().nulls_last(),
+            Listing.last_seen_at.desc(),
+        )
+        .limit(12)
     ).scalars().all()
     score_map = scores_for_listings(db, [r.id for r in recent])
     recent_summaries = [listing_to_summary(r, score_map.get(r.id)) for r in recent]
