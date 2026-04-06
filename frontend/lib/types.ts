@@ -66,7 +66,7 @@ export type WatchBaseImportResult = {
 };
 
 /** Proxied WatchBase `/filter/results?q=` (first page). */
-export type WatchbaseSearchHit = { url: string; label: string };
+export type WatchbaseSearchHit = { url: string; label: string; image_url?: string | null };
 export type WatchbaseSearchResponse = {
   query: string;
   items: WatchbaseSearchHit[];

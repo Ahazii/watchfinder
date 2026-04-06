@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from watchfinder.config import Settings, get_settings
 from watchfinder.models import WatchModel
 from watchfinder.services.watchbase_chart_json import parse_price_chart_json
+from watchfinder.services.watchbase_movement import caliber_from_watchbase_watch_html
 from watchfinder.services.watchbase_path import (
     canonical_watch_url,
     guessed_watch_path,
@@ -197,9 +198,9 @@ def import_watchbase_for_model(
         wm.model_name = name
         updated.append("model_name")
 
-    mov = rows.get("Movement")
-    if mov:
-        wm.caliber = mov
+    cal = caliber_from_watchbase_watch_html(html)
+    if cal:
+        wm.caliber = cal
         updated.append("caliber")
 
     py = _produced_year(rows.get("Produced"))

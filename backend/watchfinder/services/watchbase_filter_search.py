@@ -12,8 +12,38 @@ from watchfinder.services.watchbase_path import WATCHBASE_HOSTS, canonical_watch
 
 logger = logging.getLogger(__name__)
 
+_PLACEHOLDER_IMG = "FFFFFF-0.png"
 
-def parse_watches_from_filter_json(data: dict[str, Any]) -> list[dict[str, str]]:
+
+def _watch_image_url_from_anchor(a) -> str | None:
+    """Best CDN image from filter result card (lazy ``data-src``)."""
+    container = a.select_one(".img-container") or a
+    img = container.find("img")
+    if img:
+        for attr in ("data-src", "src"):
+            u = (img.get(attr) or "").strip()
+            if not u or _PLACEHOLDER_IMG in u or "logo.png" in u.lower():
+                continue
+            if u.startswith("//"):
+                return "https:" + u
+            if u.startswith("/"):
+                return "https://watchbase.com" + u
+            if u.startswith("http"):
+                return u
+    pic = container.find("picture")
+    if pic:
+        src = pic.find("source", attrs={"data-srcset": True})
+        if src and src.get("data-srcset"):
+            first = str(src["data-srcset"]).strip().split()[0]
+            if first and _PLACEHOLDER_IMG not in first:
+                if first.startswith("//"):
+                    return "https:" + first
+                if first.startswith("http"):
+                    return first
+    return None
+
+
+def parse_watches_from_filter_json(data: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Extract watch page URLs + labels from the **watchesHtml** field in filter/results JSON.
     Skips placeholder blocks and non-watch links.
@@ -23,7 +53,7 @@ def parse_watches_from_filter_json(data: dict[str, Any]) -> list[dict[str, str]]
         return []
 
     soup = BeautifulSoup(html, "html.parser")
-    items: list[dict[str, str]] = []
+    items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     for a in soup.select("a.item-block.watch-block[href]"):
@@ -72,6 +102,10 @@ def parse_watches_from_filter_json(data: dict[str, Any]) -> list[dict[str, str]]
                 label_parts.append(alt)
         label = " — ".join(p for p in label_parts if p) or path
 
-        items.append({"url": canonical_watch_url(path), "label": label})
+        img_url = _watch_image_url_from_anchor(a)
+        row: dict[str, str] = {"url": canonical_watch_url(path), "label": label}
+        if img_url:
+            row["image_url"] = img_url
+        items.append(row)
 
     return items

@@ -117,6 +117,7 @@ class WatchbaseSearchHit(BaseModel):
 
     url: str
     label: str
+    image_url: str | None = None
 
 
 class WatchbaseSearchResponse(BaseModel):

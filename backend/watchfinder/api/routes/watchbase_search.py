@@ -55,7 +55,14 @@ def get_watchbase_search(
         raise HTTPException(status_code=502, detail="Unexpected response from WatchBase search.") from e
 
     items_raw = parse_watches_from_filter_json(data)
-    items = [WatchbaseSearchHit(url=x["url"], label=x["label"]) for x in items_raw]
+    items = [
+        WatchbaseSearchHit(
+            url=x["url"],
+            label=x["label"],
+            image_url=x.get("image_url"),
+        )
+        for x in items_raw
+    ]
     total = int(data.get("numWatches") or len(items))
 
     return WatchbaseSearchResponse(query=query, items=items, total=total)

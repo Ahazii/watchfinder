@@ -74,12 +74,56 @@ function DetailBody() {
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importDetail, setImportDetail] = useState<WatchBaseImportResult | null>(null);
   const [extPrices, setExtPrices] = useState<WatchBasePriceHistory | null>(null);
-  const findWatchbaseDialogRef = useRef<HTMLDialogElement>(null);
+  const [findModalOpen, setFindModalOpen] = useState(false);
+  const [modalPos, setModalPos] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+  } | null>(null);
   const [findSearchDetail, setFindSearchDetail] = useState("");
   const [findPastedUrl, setFindPastedUrl] = useState("");
   const [findWbSearchBusy, setFindWbSearchBusy] = useState(false);
   const [findWbSearchErr, setFindWbSearchErr] = useState<string | null>(null);
   const [findWbHits, setFindWbHits] = useState<WatchbaseSearchResponse["items"] | null>(null);
+
+  const closeFindModal = useCallback(() => {
+    setFindModalOpen(false);
+    setFindPastedUrl("");
+    setFindWbHits(null);
+    setFindWbSearchErr(null);
+  }, []);
+
+  useEffect(() => {
+    if (!findModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeFindModal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [findModalOpen, closeFindModal]);
+
+  useEffect(() => {
+    if (!findModalOpen) return;
+    const onMove = (e: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      setModalPos({
+        x: d.origX + e.clientX - d.startX,
+        y: d.origY + e.clientY - d.startY,
+      });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [findModalOpen]);
 
   const applyModel = useCallback((m: WatchModel) => {
     setBrand(m.brand ?? "");
@@ -258,6 +302,17 @@ function DetailBody() {
       .finally(() => setImportBusy(false));
   };
 
+  const onFindModalDragMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: modalPos.x,
+      origY: modalPos.y,
+    };
+  };
+
   const openFindWatchbaseWizard = () => {
     const seed = reference.trim() || brand.trim() || "";
     setFindSearchDetail(seed);
@@ -265,7 +320,14 @@ function DetailBody() {
     setFindWbHits(null);
     setFindWbSearchErr(null);
     setImportMsg(null);
-    findWatchbaseDialogRef.current?.showModal();
+    if (typeof window !== "undefined") {
+      const panelW = Math.min(512, window.innerWidth - 32);
+      setModalPos({
+        x: Math.max(8, Math.round((window.innerWidth - panelW) / 2)),
+        y: Math.max(8, Math.round(window.innerHeight * 0.06)),
+      });
+    }
+    setFindModalOpen(true);
   };
 
   const findGoogleUrl = watchbaseGoogleSiteSearchUrl(findSearchDetail);
@@ -360,125 +422,167 @@ function DetailBody() {
 
   const wbGuess = watchbaseGuessUrl(brand, modelFamily, reference);
   const wbGoogle = watchbaseGoogleSearchUrl(brand, reference);
+  const selectedWbHit = findWbHits?.find((h) => h.url === findPastedUrl);
 
   return (
     <div className="space-y-6">
-      <dialog
-        ref={findWatchbaseDialogRef}
-        className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-6 text-foreground shadow-lg [&::backdrop]:bg-black/50"
-        aria-labelledby="find-watchbase-title"
-        onClose={() => {
-          setFindPastedUrl("");
-          setFindWbHits(null);
-          setFindWbSearchErr(null);
-        }}
-      >
-        <h2 id="find-watchbase-title" className="text-lg font-semibold">
-          Find watch on WatchBase
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Search uses WatchBase’s own filter API (same as their search page). Pick a result below (or paste a
-          URL), then confirm import — same as <strong>Import from WatchBase</strong>. If nothing matches, try{" "}
-          <strong>Open Google</strong> or paste a link from the site.
-        </p>
-        <div className="mt-4 space-y-2">
-          <label className="text-sm font-medium" htmlFor="find-detail">
-            Search detail
-          </label>
-          <Input
-            id="find-detail"
-            className="font-mono text-xs"
-            placeholder="e.g. 210.30.42.20.01.001 or Omega 210.30"
-            value={findSearchDetail}
-            onChange={(e) => setFindSearchDetail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                searchWatchbaseOnSite();
-              }
-            }}
-          />
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
+      {findModalOpen ? (
+        <>
+          <button
             type="button"
-            variant="default"
-            size="sm"
-            disabled={findWbSearchBusy || !findSearchDetail.trim()}
-            onClick={searchWatchbaseOnSite}
+            className="fixed inset-0 z-40 cursor-default bg-black/50"
+            aria-label="Close find dialog"
+            onClick={closeFindModal}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="find-watchbase-title"
+            className="fixed z-50 w-[calc(100%-2rem)] max-w-lg overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-xl"
+            style={{ left: modalPos.x, top: modalPos.y }}
+            onMouseDown={(e) => e.stopPropagation()}
           >
-            {findWbSearchBusy ? "Searching…" : "Search WatchBase"}
-          </Button>
-          {findGoogleUrl ? (
-            <Button variant="outline" size="sm" asChild>
-              <a href={findGoogleUrl} target="_blank" rel="noopener noreferrer">
-                Open Google (site:watchbase.com)
-              </a>
-            </Button>
-          ) : (
-            <Button type="button" variant="outline" size="sm" disabled title="Type a search detail first">
-              Open Google (site:watchbase.com)
-            </Button>
-          )}
-        </div>
-        {findWbSearchErr ? (
-          <p className="mt-3 text-sm text-red-400">{findWbSearchErr}</p>
-        ) : null}
-        {findWbHits && findWbHits.length > 0 ? (
-          <div className="mt-4">
-            <p className="mb-2 text-sm font-medium">Results — click one to select</p>
-            <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
-              {findWbHits.map((h) => (
-                <li key={h.url}>
-                  <button
-                    type="button"
-                    className={`w-full rounded px-2 py-1.5 text-left hover:bg-muted ${
-                      findPastedUrl === h.url ? "bg-muted ring-1 ring-primary" : ""
-                    }`}
-                    onClick={() => setFindPastedUrl(h.url)}
-                  >
-                    <span className="block text-xs text-muted-foreground">{h.url}</span>
-                    <span className="block">{h.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div
+              className="flex cursor-grab select-none items-start gap-2 border-b border-border bg-muted/40 px-4 py-3 active:cursor-grabbing"
+              onMouseDown={onFindModalDragMouseDown}
+            >
+              <div className="min-w-0 flex-1">
+                <h2 id="find-watchbase-title" className="text-lg font-semibold leading-tight">
+                  Find watch on WatchBase
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Drag this bar to move the window</p>
+              </div>
+            </div>
+            <div className="max-h-[min(78vh,640px)] overflow-y-auto p-6 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Search uses WatchBase’s filter API. Pick a result (thumbnail below when selected), then confirm
+                import — same as <strong>Import from WatchBase</strong>. Or use <strong>Open Google</strong> /
+                paste a URL.
+              </p>
+              <div className="mt-4 space-y-2">
+                <label className="text-sm font-medium" htmlFor="find-detail">
+                  Search detail
+                </label>
+                <Input
+                  id="find-detail"
+                  className="font-mono text-xs"
+                  placeholder="e.g. 210.30.42.20.01.001 or Omega 210.30"
+                  value={findSearchDetail}
+                  onChange={(e) => setFindSearchDetail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      searchWatchbaseOnSite();
+                    }
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  disabled={findWbSearchBusy || !findSearchDetail.trim()}
+                  onClick={searchWatchbaseOnSite}
+                >
+                  {findWbSearchBusy ? "Searching…" : "Search WatchBase"}
+                </Button>
+                {findGoogleUrl ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={findGoogleUrl} target="_blank" rel="noopener noreferrer">
+                      Open Google (site:watchbase.com)
+                    </a>
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" disabled title="Type a search detail first">
+                    Open Google (site:watchbase.com)
+                  </Button>
+                )}
+              </div>
+              {findWbSearchErr ? (
+                <p className="mt-3 text-sm text-red-400">{findWbSearchErr}</p>
+              ) : null}
+              {findWbHits && findWbHits.length > 0 ? (
+                <div className="mt-4">
+                  <p className="mb-2 text-sm font-medium">Results — click one to select</p>
+                  <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
+                    {findWbHits.map((h) => (
+                      <li key={h.url}>
+                        <button
+                          type="button"
+                          className={`flex w-full gap-2 rounded px-2 py-1.5 text-left hover:bg-muted ${
+                            findPastedUrl === h.url ? "bg-muted ring-1 ring-primary" : ""
+                          }`}
+                          onClick={() => setFindPastedUrl(h.url)}
+                        >
+                          {h.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- WatchBase CDN; dynamic URL from search API
+                            <img
+                              src={h.image_url}
+                              alt=""
+                              className="h-14 w-14 shrink-0 rounded border border-border/80 bg-muted object-cover"
+                            />
+                          ) : (
+                            <div className="h-14 w-14 shrink-0 rounded border border-dashed border-border bg-muted/50" />
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs text-muted-foreground">{h.url}</span>
+                            <span className="block">{h.label}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {findWbHits && findWbHits.length === 0 && !findWbSearchBusy ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  No watches found on WatchBase for that query.
+                </p>
+              ) : null}
+              <div className="mt-4 space-y-2">
+                <label className="text-sm font-medium" htmlFor="find-paste-url">
+                  WatchBase page URL (confirm)
+                </label>
+                <Input
+                  id="find-paste-url"
+                  className="font-mono text-xs"
+                  placeholder="https://watchbase.com/brand/family/ref-slug"
+                  value={findPastedUrl}
+                  onChange={(e) => setFindPastedUrl(e.target.value)}
+                />
+              </div>
+              {selectedWbHit?.image_url ? (
+                <div className="mt-4 rounded-md border border-border bg-muted/20 p-3">
+                  <p className="mb-2 text-center text-xs font-medium text-muted-foreground">
+                    Selected watch preview
+                  </p>
+                  <div className="flex justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- WatchBase CDN */}
+                    <img
+                      src={selectedWbHit.image_url}
+                      alt={selectedWbHit.label}
+                      className="max-h-52 max-w-full rounded-md object-contain"
+                    />
+                  </div>
+                </div>
+              ) : null}
+              <div className="mt-6 flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={closeFindModal}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={importBusy || !findPastedUrl.trim()}
+                  onClick={() => runWatchbaseImport(findPastedUrl, closeFindModal)}
+                >
+                  {importBusy ? "Importing…" : "Confirm import"}
+                </Button>
+              </div>
+            </div>
           </div>
-        ) : null}
-        {findWbHits && findWbHits.length === 0 && !findWbSearchBusy ? (
-          <p className="mt-3 text-sm text-muted-foreground">No watches found on WatchBase for that query.</p>
-        ) : null}
-        <div className="mt-4 space-y-2">
-          <label className="text-sm font-medium" htmlFor="find-paste-url">
-            WatchBase page URL (confirm)
-          </label>
-          <Input
-            id="find-paste-url"
-            className="font-mono text-xs"
-            placeholder="https://watchbase.com/brand/family/ref-slug"
-            value={findPastedUrl}
-            onChange={(e) => setFindPastedUrl(e.target.value)}
-          />
-        </div>
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => findWatchbaseDialogRef.current?.close()}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={importBusy || !findPastedUrl.trim()}
-            onClick={() =>
-              runWatchbaseImport(findPastedUrl, () => findWatchbaseDialogRef.current?.close())
-            }
-          >
-            {importBusy ? "Importing…" : "Confirm import"}
-          </Button>
-        </div>
-      </dialog>
+        </>
+      ) : null}
       <div>
         <Button variant="ghost" className="mb-2 -ml-2" asChild>
           <Link href="/watch-models/">← Watch database</Link>

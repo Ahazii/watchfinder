@@ -7,6 +7,9 @@ from watchfinder.services.watchbase_filter_search import parse_watches_from_filt
 _SAMPLE_HTML = """
 <a href="https://watchbase.com/omega/seamaster-diver-300m/210-30-42-20-01-001" class="item-block watch-block watch-30836">
   <div class="toptext"><strong>Omega</strong> Seamaster Diver 300M</div>
+  <div class="img-container">
+    <img data-src="https://cdn.watchbase.com/watch/md/omega/seamaster-diver-300m/x.png" src="https://assets.watchbase.com/img/FFFFFF-0.png" alt="Seamaster"/>
+  </div>
   <div class="bottomtext"><strong>210.30.42.20.01.001</strong> Seamaster Diver 300M Master</div>
 </a>
 <div class="item-block watch-block dummy"></div>
@@ -20,6 +23,7 @@ def test_parse_watches_from_filter_json() -> None:
     assert items[0]["url"] == "https://watchbase.com/omega/seamaster-diver-300m/210-30-42-20-01-001"
     assert "Omega" in items[0]["label"]
     assert "210.30" in items[0]["label"]
+    assert items[0].get("image_url") == "https://cdn.watchbase.com/watch/md/omega/seamaster-diver-300m/x.png"
 
 
 def test_parse_watches_empty_html() -> None:
