@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import func, nulls_last, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from watchfinder.config import get_settings
 from watchfinder.models import WatchModel
 from watchfinder.schemas.watch_models import (
     BackfillWatchCatalogResponse,
+    WatchBaseImportRequest,
     WatchBaseImportResponse,
     WatchModelCreate,
     WatchModelListResponse,
@@ -77,10 +78,17 @@ def list_watch_models(
     summary="Import WatchBase specs + EUR list price history (on-demand)",
 )
 def post_import_watchbase(
-    model_id: UUID, db: Session = Depends(get_db)
+    model_id: UUID,
+    db: Session = Depends(get_db),
+    body: WatchBaseImportRequest = Body(default_factory=WatchBaseImportRequest),
 ) -> WatchBaseImportResponse:
     try:
-        data = import_watchbase_for_model(db, model_id, get_settings())
+        data = import_watchbase_for_model(
+            db,
+            model_id,
+            get_settings(),
+            reference_url_override=body.reference_url,
+        )
     except WatchBaseImportError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e)) from e
     return WatchBaseImportResponse(**data)

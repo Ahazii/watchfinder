@@ -17,7 +17,19 @@ def slugify_segment(s: str) -> str:
 
 def path_from_watchbase_url(url: str) -> str | None:
     """Return path like /omega/seamaster-diver-300m/210-30-42-20-01-001 or None."""
-    p = urlparse((url or "").strip())
+    raw = (url or "").replace("\u00a0", " ").strip()
+    if not raw:
+        return None
+    # Paste without scheme: watchbase.com/omega/...
+    low = raw.lower()
+    if "://" not in raw and (low.startswith("watchbase.com/") or low.startswith("www.watchbase.com/")):
+        raw = "https://" + raw.split("?", 1)[0].split("#", 1)[0]
+    # Path-only: /omega/seamaster-diver-300m/ref-slug
+    elif "://" not in raw and raw.startswith("/"):
+        path_only = raw.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+        if path_only.count("/") >= 3:
+            raw = f"{WATCHBASE_ORIGIN}{path_only}"
+    p = urlparse(raw)
     if p.scheme not in ("http", "https"):
         return None
     if p.netloc.lower() not in WATCHBASE_HOSTS:

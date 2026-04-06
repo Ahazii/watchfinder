@@ -106,11 +106,15 @@ def _parse_info_rows(html: str) -> dict[str, str]:
     return out
 
 
-def resolve_watch_path(wm: WatchModel) -> str:
-    if wm.reference_url:
-        p = path_from_watchbase_url(wm.reference_url)
-        if p:
-            return p
+def resolve_watch_path(wm: WatchModel, reference_url_override: str | None = None) -> str:
+    for candidate in (
+        (reference_url_override or "").strip() or None,
+        (wm.reference_url or "").strip() or None,
+    ):
+        if candidate:
+            p = path_from_watchbase_url(candidate)
+            if p:
+                return p
     g = guessed_watch_path(wm.brand, wm.model_family or "", wm.reference or "")
     if g:
         return g
@@ -124,6 +128,8 @@ def import_watchbase_for_model(
     db: Session,
     model_id: UUID,
     settings: Settings | None = None,
+    *,
+    reference_url_override: str | None = None,
 ) -> dict[str, Any]:
     """
     Fetch watch HTML + /prices JSON, merge into model. Does not change brand / reference / model_family
@@ -139,7 +145,7 @@ def import_watchbase_for_model(
     if wm is None:
         raise WatchBaseImportError("Watch model not found", status_code=404)
 
-    path = resolve_watch_path(wm)
+    path = resolve_watch_path(wm, reference_url_override=reference_url_override)
     page_url = canonical_watch_url(path)
     prices_url = f"{page_url}/prices"
 

@@ -112,6 +112,12 @@ class PromoteWatchCatalogResponse(BaseModel):
     watch_model: WatchModelOut | None = None
 
 
+class WatchBaseImportRequest(BaseModel):
+    """Optional body for POST import-watchbase (use unsaved Reference URL from the form)."""
+
+    reference_url: str | None = None
+
+
 class WatchBaseImportResponse(BaseModel):
     """Result of POST /api/watch-models/{id}/import-watchbase."""
 

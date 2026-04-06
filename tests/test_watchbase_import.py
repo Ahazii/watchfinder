@@ -29,6 +29,25 @@ def test_path_from_watchbase_url() -> None:
     assert p == "/omega/seamaster-diver-300m/210-30-42-20-01-001"
 
 
+def test_path_from_watchbase_url_trailing_space() -> None:
+    p = path_from_watchbase_url(
+        "https://watchbase.com/omega/seamaster-diver-300m/210-30-42-20-01-001 "
+    )
+    assert p == "/omega/seamaster-diver-300m/210-30-42-20-01-001"
+
+
+def test_path_from_watchbase_url_no_scheme() -> None:
+    p = path_from_watchbase_url(
+        "watchbase.com/omega/seamaster-diver-300m/210-30-42-20-01-001"
+    )
+    assert p == "/omega/seamaster-diver-300m/210-30-42-20-01-001"
+
+
+def test_path_from_watchbase_url_path_only() -> None:
+    p = path_from_watchbase_url("/omega/seamaster-diver-300m/210-30-42-20-01-001")
+    assert p == "/omega/seamaster-diver-300m/210-30-42-20-01-001"
+
+
 def test_guessed_watch_path() -> None:
     g = guessed_watch_path("Omega", "Seamaster Diver 300M", "210.30.42.20.01.001")
     assert g == "/omega/seamaster-diver-300m/210-30-42-20-01-001"

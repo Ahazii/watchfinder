@@ -196,7 +196,16 @@ function DetailBody() {
     setImportBusy(true);
     setImportMsg(null);
     setImportDetail(null);
-    fetch(apiUrl(`/api/watch-models/${id}/import-watchbase`), { method: "POST" })
+    fetch(apiUrl(`/api/watch-models/${id}/import-watchbase`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        reference_url: referenceUrl.trim() || null,
+      }),
+    })
       .then(async (res) => {
         const text = await res.text();
         if (!res.ok) {
@@ -350,7 +359,8 @@ function DetailBody() {
             >
               Data Feed
             </a>
-            . Set <strong>Reference URL</strong> or brand + family + reference so we know which page to open.
+            . Paste the watch page in <strong>Reference URL</strong> (below) or rely on brand + family +
+            reference; the import uses whatever is in that URL field — you do not need to save the form first.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
