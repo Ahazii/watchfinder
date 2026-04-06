@@ -96,8 +96,10 @@ export default function WatchModelsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Watch database</h1>
           <p className="mt-1 text-muted-foreground">
-            Canonical models (brand + reference or family). Many listings can link to one row.
-            Observed prices update from linked listings and matching sale records.
+            Canonical models (brand + reference or family). Many listings can link to one row.{" "}
+            <strong>Observed</strong> and <strong>manual</strong> columns are price ranges in{" "}
+            <strong>British pounds (£)</strong> — observed values come from linked eBay listings and recorded
+            sales in your database.
           </p>
         </div>
         <Button asChild>
@@ -157,8 +159,18 @@ export default function WatchModelsPage() {
                 </div>
               </th>
               <th className="px-3 py-2 font-medium">Model</th>
-              <th className="px-3 py-2 font-medium">Observed</th>
-              <th className="px-3 py-2 font-medium">Manual</th>
+              <th className="px-3 py-2 font-medium align-top">
+                <span className="block">Observed</span>
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                  Auto £ range from linked data
+                </span>
+              </th>
+              <th className="px-3 py-2 font-medium align-top">
+                <span className="block">Manual</span>
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                  Your £ bounds
+                </span>
+              </th>
               <th className="px-3 py-2 font-medium w-36">Actions</th>
             </tr>
           </thead>
@@ -187,10 +199,10 @@ export default function WatchModelsPage() {
                     ) : null}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">
-                    {money(m.observed_price_low)} – {money(m.observed_price_high)}
+                    {money(m.observed_price_low, "GBP")} – {money(m.observed_price_high, "GBP")}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">
-                    {money(m.manual_price_low)} – {money(m.manual_price_high)}
+                    {money(m.manual_price_low, "GBP")} – {money(m.manual_price_high, "GBP")}
                   </td>
                   <td className="px-3 py-2">
                     <Button variant="outline" size="sm" asChild>

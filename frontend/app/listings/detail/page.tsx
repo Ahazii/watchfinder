@@ -9,7 +9,7 @@ import type {
   WatchModel,
   WatchModelListResponse,
 } from "@/lib/types";
-import { money, dateShort } from "@/lib/format";
+import { currencyInputLabelSuffix, money, dateShort } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -265,6 +265,8 @@ function DetailBody() {
 
   const latest = row.opportunity_scores?.[0];
   const g = row.field_guidance || {};
+  const listCur = row.currency?.trim() || "GBP";
+  const curSuf = currencyInputLabelSuffix(listCur);
 
   return (
     <div className="space-y-6">
@@ -354,7 +356,9 @@ function DetailBody() {
           <CardDescription>
             New and updated listings try to match the catalog first, then <strong>create</strong> a
             catalog row when brand + reference (or brand + family) are known. Use the button below
-            to run that on demand, or pick a row manually.
+            to run that on demand, or pick a row manually. <strong>Catalog obs</strong> is the linked
+            watch model’s observed price band in <strong>£ GBP</strong> (from all listings/sales tied
+            to that catalog row), not this listing’s currency alone.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -370,8 +374,8 @@ function DetailBody() {
                   .join(" · ")}
               </Link>
               <span className="ml-2 text-muted-foreground tabular-nums">
-                obs {money(row.watch_model.observed_price_low, row.currency)} –{" "}
-                {money(row.watch_model.observed_price_high, row.currency)}
+                catalog obs {money(row.watch_model.observed_price_low, "GBP")} –{" "}
+                {money(row.watch_model.observed_price_high, "GBP")}
               </span>
             </p>
           ) : (
@@ -444,12 +448,19 @@ function DetailBody() {
       <Card>
         <CardHeader>
           <CardTitle>Internal comps</CardTitle>
-          <CardDescription>{g.comps}</CardDescription>
+          <CardDescription>
+            {g.comps} Bands use prices already in your database: recorded sales and other active listings
+            with the same parsed brand. Figures in the two boxes below are shown in this listing’s eBay
+            currency (<strong>{listCur}</strong>) with the usual money symbols.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 text-sm">
           <div className="rounded-md border border-border p-3">
             <p className="font-medium">Recorded sales</p>
-            <p className="text-xs text-muted-foreground">{row.comp_sales.label}</p>
+            <p className="text-xs text-muted-foreground">
+              {row.comp_sales.label} Prices you (or the pipeline) saved as sold outcomes; percentiles help
+              judge typical realised values in <strong>{listCur}</strong>.
+            </p>
             <p className="mt-2 tabular-nums">
               n={row.comp_sales.count}
               {row.comp_sales.count > 0 ? (
@@ -463,7 +474,13 @@ function DetailBody() {
           </div>
           <div className="rounded-md border border-border p-3">
             <p className="font-medium">Active asking (your DB)</p>
-            <p className="text-xs text-muted-foreground">{row.comp_asking.label}</p>
+            <p className="text-xs text-muted-foreground">
+              {row.comp_asking.label} Current <strong>Buy It Now / asking</strong> prices from other live
+              listings in your ingest that share the same brand — rough market spread in <strong>
+                {listCur}
+              </strong>
+              .
+            </p>
             <p className="mt-2 tabular-nums">
               n={row.comp_asking.count}
               {row.comp_asking.count > 0 ? (
@@ -482,7 +499,9 @@ function DetailBody() {
         <CardHeader>
           <CardTitle>Your valuation inputs</CardTitle>
           <CardDescription>
-            Edit and save. Source letters are stored per field. See legend below.
+            Edit and save. Source letters are stored per field (see legend below). Enter repair, donor, and
+            recorded sale amounts in the same currency as this listing{curSuf} — eBay uses code{" "}
+            <strong>{listCur}</strong> for this row.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -565,6 +584,7 @@ function DetailBody() {
             <div>
               <label className="text-sm font-medium" htmlFor="rs">
                 Repair add-on (manual / historical)
+                {curSuf}
               </label>
               <Input
                 id="rs"
@@ -592,6 +612,7 @@ function DetailBody() {
             <div>
               <label className="text-sm font-medium" htmlFor="dn">
                 Donor / parts cost
+                {curSuf}
               </label>
               <Input
                 id="dn"
@@ -615,6 +636,7 @@ function DetailBody() {
             <div>
               <label className="text-sm font-medium" htmlFor="sp">
                 Recorded sale price
+                {curSuf}
               </label>
               <Input
                 id="sp"
@@ -685,10 +707,14 @@ function DetailBody() {
         <Card>
           <CardHeader>
             <CardTitle>Listing</CardTitle>
+            <CardDescription>
+              As last ingested or refreshed from eBay. <strong>Price</strong> and <strong>shipping</strong>{" "}
+              are in the listing’s marketplace currency (<strong>{listCur}</strong>).
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <Row k="Price" v={money(row.current_price, row.currency)} />
-            <Row k="Shipping" v={money(row.shipping_price, row.currency)} />
+            <Row k={`Price (${listCur})`} v={money(row.current_price, row.currency)} />
+            <Row k={`Shipping (${listCur})`} v={money(row.shipping_price, row.currency)} />
             <Row k="Seller" v={row.seller_username || "—"} />
             <Row k="Condition" v={row.condition_description || "—"} />
             <Row k="Category" v={row.category_path || "—"} />
@@ -700,26 +726,28 @@ function DetailBody() {
           <CardHeader>
             <CardTitle>Opportunity score</CardTitle>
             <CardDescription>
-              Rule-based core + your repair add-on and donor cost.
+              Rule-based core + your repair add-on and donor cost. All monetary lines below use this
+              listing’s eBay currency (<strong>{listCur}</strong>) so they stay comparable to{" "}
+              <strong>Price</strong> above.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {latest ? (
               <>
                 <Row
-                  k="Potential profit"
+                  k={`Potential profit (${listCur})`}
                   v={money(latest.potential_profit, row.currency)}
                 />
                 <Row
-                  k="Est. resale"
+                  k={`Est. resale (${listCur})`}
                   v={money(latest.estimated_resale, row.currency)}
                 />
                 <Row
-                  k="Est. repair (total)"
+                  k={`Est. repair (total) (${listCur})`}
                   v={money(latest.estimated_repair_cost, row.currency)}
                 />
                 <Row
-                  k="Max buy (rule)"
+                  k={`Max buy (rule) (${listCur})`}
                   v={money(latest.advised_max_buy, row.currency)}
                 />
                 <Row
@@ -752,7 +780,10 @@ function DetailBody() {
         <Card>
           <CardHeader>
             <CardTitle>Why it was scored</CardTitle>
-            <CardDescription>Transparent rule output.</CardDescription>
+            <CardDescription>
+              Human-readable reasons the scorer produced this result (which rules fired, rough logic). Not
+              financial advice.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
@@ -764,10 +795,13 @@ function DetailBody() {
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Repair signals</CardTitle>
-        </CardHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle>Repair signals</CardTitle>
+            <CardDescription>
+              Keywords and phrases detected in the title or parsed fields that suggest work may be needed.
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           {row.repair_signals?.length ? (
             <div className="flex flex-wrap gap-2">
@@ -784,10 +818,13 @@ function DetailBody() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Parsed attributes</CardTitle>
-        </CardHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle>Parsed attributes</CardTitle>
+            <CardDescription>
+              Structured key/value pairs extracted from the listing text for matching and display.
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           {row.parsed_attributes?.length ? (
             <dl className="grid gap-2 text-sm sm:grid-cols-2">

@@ -181,9 +181,27 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-1 text-muted-foreground">
-          Browse search strings, ingest timing, and manual runs.
+          Browse search strings, ingest timing, watch-catalog behaviour, stale listing refresh, and manual
+          API runs. Marketplace and pricing on listings come from your eBay app config (see{" "}
+          <code className="rounded bg-muted px-1">EBAY_MARKETPLACE_ID</code> in{" "}
+          <code className="rounded bg-muted px-1">.env.example</code>).
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Prices &amp; currencies in the UI</CardTitle>
+          <CardDescription>
+            This page does not edit money fields. Elsewhere in the app: <strong>watch database</strong> manual
+            and observed bounds are stored and shown in <strong>British pounds (£)</strong>.{" "}
+            <strong>eBay listing</strong> prices, shipping, scores, and your per-listing valuation inputs are
+            shown in <strong>that listing’s currency</strong> (symbols from eBay, e.g. £ / $ / €).{" "}
+            <strong>WatchBase</strong> imported chart points stay in <strong>euros (€)</strong> until converted
+            to GBP for manual bounds on import. List/candidate <strong>price filters</strong> compare plain
+            numbers as stored — they do not convert between currencies.
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -229,7 +247,9 @@ export default function SettingsPage() {
           <CardDescription>
             When <strong>Review queue</strong> is on, only exact brand+reference or brand+family
             matches link automatically. Everything else (fuzzy title, or creating a new catalog row)
-            goes to the <strong>Match queue</strong> for you to confirm.
+            goes to the <strong>Match queue</strong> for you to confirm. Candidate rows on the queue
+            show <strong>catalog observed</strong> ranges in <strong>£ GBP</strong> (aggregated from
+            linked listings and recorded sales for that watch model — not the listing’s own currency).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -482,17 +502,29 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">{ingestMsg}</p>
       ) : null}
 
-      <div className="flex flex-wrap gap-3">
-        <Button type="button" disabled={saving} onClick={save}>
-          {saving ? "Saving…" : "Save settings"}
-        </Button>
-        <Button type="button" variant="outline" onClick={ingestNow}>
-          Ingest now
-        </Button>
-        <Button type="button" variant="outline" onClick={staleRefreshNow}>
-          Stale refresh now
-        </Button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Save &amp; manual jobs</CardTitle>
+          <CardDescription>
+            <strong>Save settings</strong> writes this form to the database (and affects the next scheduler
+            runs). <strong>Ingest now</strong> queues a full Browse search cycle in the background (same as
+            the timer): check container logs for progress or errors. <strong>Stale refresh now</strong> runs
+            one batch of <strong>getItem</strong> calls using the max-per-run and min-age limits above,
+            independent of the schedule checkbox — useful to test after changing those numbers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Button type="button" disabled={saving} onClick={save}>
+            {saving ? "Saving…" : "Save settings"}
+          </Button>
+          <Button type="button" variant="outline" onClick={ingestNow}>
+            Ingest now
+          </Button>
+          <Button type="button" variant="outline" onClick={staleRefreshNow}>
+            Stale refresh now
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

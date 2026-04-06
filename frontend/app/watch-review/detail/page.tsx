@@ -131,7 +131,9 @@ function Body() {
         <CardHeader>
           <CardTitle>Probable catalog matches</CardTitle>
           <CardDescription>
-            Scores are heuristic (reference, family, title vs model name). Pick one or create new.
+            Scores are heuristic (reference, family, title vs model name). Pick one or create new.{" "}
+            <strong>Observed</strong> ranges are from the watch database in <strong>£ GBP</strong> (min/max
+            across linked listings and recorded sales for that catalog row).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -153,7 +155,7 @@ function Body() {
                       <p className="text-xs text-muted-foreground">{m.model_name}</p>
                     ) : null}
                     <p className="text-xs text-muted-foreground tabular-nums">
-                      obs {money(m.observed_price_low)} – {money(m.observed_price_high)}
+                      catalog obs {money(m.observed_price_low, "GBP")} – {money(m.observed_price_high, "GBP")}
                       {sc != null ? ` · match score ${sc}` : ""}
                     </p>
                   </div>

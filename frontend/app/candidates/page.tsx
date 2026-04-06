@@ -82,14 +82,18 @@ export default function CandidatesPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Repair candidates</h1>
         <p className="mt-1 text-muted-foreground">
-          Listings where rule-based <strong>potential profit</strong> is positive.
+          Listings where rule-based <strong>potential profit</strong> is positive. Prices and profit in the
+          table use each row’s eBay currency (see symbols in cells).
         </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Filters</CardTitle>
-          <CardDescription>Optional refinements, then Apply.</CardDescription>
+          <CardDescription>
+            Optional refinements, then Apply. <strong>Price max</strong> is a plain numeric filter (no currency
+            conversion).
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -108,7 +112,7 @@ export default function CandidatesPage() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Price max</label>
+              <label className="text-xs text-muted-foreground">Price max (numeric)</label>
               <Input
                 value={filters.price_max}
                 onChange={(e) =>
@@ -263,6 +267,7 @@ function CandidatesTable({
             sortBy={sortBy}
             sortDir={sortDir}
             onSort={onSort}
+            title="eBay asking price in that listing’s currency."
           />
           <SortableTableHead
             label="Profit"
@@ -270,6 +275,7 @@ function CandidatesTable({
             sortBy={sortBy}
             sortDir={sortDir}
             onSort={onSort}
+            title="Estimated potential profit in the listing’s currency."
           />
           <SortableTableHead
             label="Confidence"

@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **31 March 2026**
+Last updated: **6 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -67,6 +67,7 @@ OpenAPI: **`/docs`**.
 ## Phase 3 (complete)
 
 - **Pages**: dashboard (extra counter card), listings, listing detail (**Refresh from eBay**, active/inactive badge), candidates, settings (**pages per search line**, **stale listing refresh**), watch-models, watch-review.
+- **UI (2026):** **`money()`** in **`frontend/lib/format.ts`** formats with **Intl** currency (default **GBP** when code missing); **`currencyInputLabelSuffix`** for numeric field labels. Explanatory **CardDescription** / intro copy on listing detail, watch detail/list, listings/candidates tables (**SortableTableHead** `title`), dashboard, match queue, and **Settings** (**Prices & currencies**, **Save & manual jobs**). Watch detail: **Refresh data from WatchBase** (same as import).
 
 ---
 

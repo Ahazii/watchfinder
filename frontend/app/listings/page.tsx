@@ -115,8 +115,9 @@ export default function ListingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Listings</h1>
         <p className="mt-1 text-muted-foreground">
-          Search ingested eBay items; open a row for full parse, signals, and score
-          explanations.
+          Search ingested eBay items; open a row for full parse, signals, and score explanations.{" "}
+          <strong>Price</strong> and <strong>profit</strong> in the table use each row’s eBay currency (symbol
+          in the cell). <strong>Price min/max</strong> filters compare raw numbers as stored.
         </p>
       </div>
 
@@ -124,7 +125,8 @@ export default function ListingsPage() {
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            Adjust fields, then Apply. Pagination keeps the same filters.
+            Adjust fields, then Apply. Pagination keeps the same filters. Price and profit filters are plain
+            numeric comparisons (they do not convert currencies).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -140,12 +142,12 @@ export default function ListingsPage() {
               onChange={(v) => setFilters((f) => ({ ...f, brand: v }))}
             />
             <Field
-              label="Price min"
+              label="Price min (numeric)"
               value={filters.price_min}
               onChange={(v) => setFilters((f) => ({ ...f, price_min: v }))}
             />
             <Field
-              label="Price max"
+              label="Price max (numeric)"
               value={filters.price_max}
               onChange={(v) => setFilters((f) => ({ ...f, price_max: v }))}
             />
@@ -186,7 +188,7 @@ export default function ListingsPage() {
               onChange={(v) => setFilters((f) => ({ ...f, confidence_min: v }))}
             />
             <Field
-              label="Profit min"
+              label="Profit min (numeric)"
               value={filters.profit_min}
               onChange={(v) => setFilters((f) => ({ ...f, profit_min: v }))}
             />
@@ -380,6 +382,7 @@ function ListingsTable({
             sortBy={sortBy}
             sortDir={sortDir}
             onSort={onSort}
+            title="Current asking price from eBay, formatted in that listing’s currency (£, $, €, …)."
           />
           <SortableTableHead
             label="Confidence"
@@ -394,6 +397,7 @@ function ListingsTable({
             sortBy={sortBy}
             sortDir={sortDir}
             onSort={onSort}
+            title="Rule-based potential profit in the same currency as the listing’s price."
           />
           <SortableTableHead
             label="Seen"

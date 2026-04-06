@@ -10,7 +10,7 @@ import type {
   WatchModel,
   WatchbaseSearchResponse,
 } from "@/lib/types";
-import { money } from "@/lib/format";
+import { currencyInputLabelSuffix, money } from "@/lib/format";
 import {
   watchbaseGoogleSearchUrl,
   watchbaseGoogleSiteSearchUrl,
@@ -627,7 +627,10 @@ function DetailBody() {
         <Card>
           <CardHeader>
             <CardTitle>External links</CardTitle>
-            <CardDescription>WatchBase catalog page and active eBay listings linked to this model.</CardDescription>
+            <CardDescription>
+              Open the WatchBase reference page or any eBay listing URL that is currently linked to this catalog
+              row (active listings only).
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {referenceUrl.trim() ? (
@@ -684,7 +687,8 @@ function DetailBody() {
         <CardHeader>
           <CardTitle>WatchBase &amp; external page</CardTitle>
           <CardDescription>
-            Use <strong>Import from WatchBase</strong> to fetch this model’s public HTML and the same{" "}
+            Use <strong>Import from WatchBase</strong> or <strong>Refresh data from WatchBase</strong> to fetch
+            this model’s public HTML and the same{" "}
             <code className="rounded bg-muted px-1">/prices</code> JSON the site uses for its chart (EUR list
             prices); min/max EUR are converted to GBP for <strong>Manual low / high</strong> (Frankfurter ECB
             rate, or <code className="rounded bg-muted px-1">EUR_GBP_RATE_FALLBACK</code> if the API fails).
@@ -721,6 +725,14 @@ function DetailBody() {
                 onClick={() => runWatchbaseImport()}
               >
                 {importBusy ? "Importing…" : "Import from WatchBase"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={importBusy}
+                onClick={() => runWatchbaseImport()}
+              >
+                {importBusy ? "Refreshing…" : "Refresh data from WatchBase"}
               </Button>
               <Button
                 type="button"
@@ -855,9 +867,12 @@ function DetailBody() {
           <CardHeader>
             <CardTitle>List prices (imported)</CardTitle>
             <CardDescription>
-              {extPrices.currency === "EUR" ? "EUR" : extPrices.currency || "—"} · source{" "}
+              Historical <strong>manufacturer / list</strong> prices from WatchBase’s chart (not live offers).
+              Amounts are in{" "}
+              <strong>{extPrices.currency === "EUR" ? "euros (€)" : extPrices.currency || "—"}</strong> · source{" "}
               {extPrices.source || "watchbase"}
-              {extPrices.fetched_at ? ` · fetched ${extPrices.fetched_at.slice(0, 10)}` : ""}
+              {extPrices.fetched_at ? ` · fetched ${extPrices.fetched_at.slice(0, 10)}` : ""}. Manual low/high on
+              this page are converted to <strong>£ GBP</strong> when you import.
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -866,7 +881,7 @@ function DetailBody() {
                 <tr>
                   <th className="py-2 pr-3 font-medium">Date</th>
                   <th className="py-2 pr-3 font-medium">Series</th>
-                  <th className="py-2 font-medium tabular-nums">Amount</th>
+                  <th className="py-2 font-medium tabular-nums">Amount (import currency)</th>
                 </tr>
               </thead>
               <tbody>
@@ -874,7 +889,9 @@ function DetailBody() {
                   <tr key={`${p.date}-${i}`} className="border-b border-border/50">
                     <td className="py-1.5 pr-3">{p.date}</td>
                     <td className="py-1.5 pr-3">{p.series}</td>
-                    <td className="py-1.5 tabular-nums">{p.amount}</td>
+                    <td className="py-1.5 tabular-nums">
+                      {money(p.amount, extPrices.currency === "EUR" ? "EUR" : undefined)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -959,6 +976,9 @@ function DetailBody() {
       <Card>
         <CardHeader>
           <CardTitle>Production window</CardTitle>
+          <CardDescription>
+            Approximate years this reference was in production (from specs, import, or your own notes). Optional.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
@@ -992,15 +1012,18 @@ function DetailBody() {
         <CardHeader>
           <CardTitle>Price bounds</CardTitle>
           <CardDescription>
-            Manual range is yours (WatchBase import can pre-fill GBP from the EUR chart). Observed min/max
-            are derived from linked listings and compatible sale records (refreshed on save and when
-            listings analyze).
+            All bounds on this card are stored and shown in <strong>British pounds (£)</strong>.{" "}
+            <strong>Manual</strong> low/high are whatever you set (WatchBase import can pre-fill them from the
+            EUR chart). <strong>Observed</strong> low/high are computed for you from asking prices on{" "}
+            <strong>eBay listings linked</strong> to this model plus compatible <strong>recorded sale</strong>{" "}
+            rows in your database — they refresh when you save this form or when a linked listing is
+            re-analyzed.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="text-sm font-medium" htmlFor="ml">
-              Manual low
+              Manual low{currencyInputLabelSuffix("GBP")}
             </label>
             <Input
               id="ml"
@@ -1013,7 +1036,7 @@ function DetailBody() {
           </div>
           <div>
             <label className="text-sm font-medium" htmlFor="mh">
-              Manual high
+              Manual high{currencyInputLabelSuffix("GBP")}
             </label>
             <Input
               id="mh"
@@ -1026,8 +1049,14 @@ function DetailBody() {
           </div>
           <div className="md:col-span-2 rounded-md border border-border bg-muted/20 p-3 text-sm">
             <p className="font-medium text-foreground">Observed (read-only)</p>
-            <p className="mt-1 tabular-nums text-muted-foreground">
-              {money(observedLow)} – {money(observedHigh)}
+            <p className="mt-1 text-muted-foreground">
+              The <strong>lowest and highest</strong> prices we see from data already in WatchFinder: current
+              asking prices on <strong>linked eBay listings</strong> (that you have ingested) and any{" "}
+              <strong>recorded sales</strong> you entered that match this catalog row. This is not a live
+              market appraisal — it reflects your linked data only, in <strong>£</strong>.
+            </p>
+            <p className="mt-2 tabular-nums text-foreground">
+              {money(observedLow, "GBP")} – {money(observedHigh, "GBP")}
             </p>
           </div>
         </CardContent>

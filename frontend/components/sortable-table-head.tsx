@@ -12,6 +12,8 @@ type Props = {
   sortDir: SortDir;
   onSort: (column: string) => void;
   className?: string;
+  /** Native tooltip (e.g. explain currency). */
+  title?: string;
 };
 
 export function SortableTableHead({
@@ -21,12 +23,14 @@ export function SortableTableHead({
   sortDir,
   onSort,
   className,
+  title,
 }: Props) {
   const active = sortBy === column;
   return (
     <TableHead className={className}>
       <button
         type="button"
+        title={title}
         className={cn(
           "-ml-2 inline-flex items-center gap-1 rounded-md px-2 py-1 text-left font-medium text-foreground hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           active && "bg-muted/50",

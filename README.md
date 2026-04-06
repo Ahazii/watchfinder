@@ -80,6 +80,13 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **Repair:** rule-based core **plus** optional **repair add-on** and **donor cost** (both included in total repair for profit math). Fees/shipping ignored.
 - **Tuning asking-sample size:** optional **`app_settings`** row **`max_comp_candidates`** (integer string, default **200** in code if unset).
 
+### UI: currencies and on-screen help
+
+- **`watch_models`** **manual** and **observed** bounds are stored and displayed in **GBP (£)**. **WatchBase** chart points stay in **EUR (€)** in the imported table; import converts min/max to GBP for manual bounds when FX works.
+- **eBay listings** use **that item’s currency** for price, shipping, opportunity score lines, and (for consistency) your per-listing valuation inputs — see symbols in cells (**`money()`** in `frontend/lib/format.ts` defaults to GBP only when no valid ISO code is passed).
+- **List / candidate price filters** compare **numeric** amounts as stored; they do not convert currencies.
+- **Settings** includes a **“Prices & currencies in the UI”** card; listing, watch, dashboard, and match-queue pages use **CardDescription** text and table header **tooltips** where prices appear.
+
 After upgrading, run **`alembic upgrade head`** (through **007** / WatchBase import columns + prior migrations).
 
 ### Listing `is_active` and live checks

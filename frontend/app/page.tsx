@@ -80,7 +80,9 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="mt-1 text-muted-foreground">
-          Ingested listings, repair signals, and opportunity highlights.
+          Ingested listings, repair signals, and opportunity highlights. Counter cards are <strong>counts</strong>{" "}
+          only (no money). The table below shows listing <strong>price</strong> and <strong>profit</strong> with
+          each row’s eBay currency symbol.
         </p>
       </div>
 
@@ -126,7 +128,8 @@ export default function DashboardPage() {
           <CardTitle>Recently added</CardTitle>
           <CardDescription>
             Newest active listings by <strong>first seen</strong> in your database (not last eBay refresh).
-            Up to 12 rows.
+            Up to 12 rows. <strong>Price</strong> and <strong>profit</strong> use each listing’s eBay currency
+            (see £ / $ / € etc. in the cells).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -147,8 +150,10 @@ function RecentTable({ rows }: { rows: ListingSummary[] }) {
         <TableRow>
           <TableHead className="w-14" />
           <TableHead>Title</TableHead>
-          <TableHead>Price</TableHead>
-          <TableHead>Profit est.</TableHead>
+          <TableHead title="Asking price from eBay in that listing’s currency.">Price</TableHead>
+          <TableHead title="Rule-based profit estimate in the same currency as price.">
+            Profit est.
+          </TableHead>
           <TableHead>First seen</TableHead>
         </TableRow>
       </TableHeader>

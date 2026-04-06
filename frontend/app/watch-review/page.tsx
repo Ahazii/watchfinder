@@ -39,7 +39,10 @@ export default function WatchReviewQueuePage() {
             <Link href="/settings/" className="text-primary underline">
               Settings → Watch catalog matching → Review queue
             </Link>
-            .
+            . On each review detail page, candidate watch rows show <strong>catalog observed</strong> price
+            bands in <strong>£ GBP</strong> (from your database), while the eBay listing uses its own
+            currency — see <Link href="/settings/" className="text-primary underline">Settings</Link> for a
+            full note on money display.
           </p>
         </div>
         <Button type="button" variant="outline" onClick={load}>
