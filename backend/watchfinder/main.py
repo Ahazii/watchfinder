@@ -20,6 +20,7 @@ from watchfinder.api.routes import (
     listings,
     watch_link_reviews,
     watch_models,
+    watchbase_search,
 )
 from watchfinder.api.routes import settings as settings_routes
 from watchfinder.config import get_settings
@@ -71,6 +72,7 @@ app.include_router(watch_link_reviews.router, prefix="/api")
 app.include_router(candidates.router, prefix="/api")
 app.include_router(settings_routes.router, prefix="/api")
 app.include_router(ingest_admin.router, prefix="/api")
+app.include_router(watchbase_search.router, prefix="/api")
 
 
 @app.get("/health")

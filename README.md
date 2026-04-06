@@ -63,6 +63,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | POST | `/api/watch-link-reviews/{uuid}/resolve` | Body `{ "action": "match"|"create"|"dismiss", "watch_model_id"?: uuid }` |
 | GET | `/api/watch-models/{uuid}` | One model |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
+| GET | `/api/watchbase/search?q=…` | Proxies WatchBase **`/filter/results?q=`** (their on-site search). Returns watch page URLs + labels for the find wizard. **`WATCHBASE_IMPORT_ENABLED=false`** disables |
 | POST | `/api/watch-models/{uuid}/import-watchbase` | Body optional `{"reference_url": "…"}` (uses saved DB URL if omitted). Fetches WatchBase HTML + **`/prices`** JSON; fills specs, **`external_price_history`**. **`WATCHBASE_IMPORT_ENABLED=false`** disables |
 | DELETE | `/api/watch-models/{uuid}` | Delete (listings unlinked via FK **SET NULL**) |
 | GET | `/api/candidates` | Same filters and **sort** as listings (**`listing_active`**, **`exclude_quartz`**, etc.); only rows with `potential_profit > 0` |

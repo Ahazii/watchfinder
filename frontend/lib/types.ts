@@ -65,6 +65,14 @@ export type WatchBaseImportResult = {
   price_points: number;
 };
 
+/** Proxied WatchBase `/filter/results?q=` (first page). */
+export type WatchbaseSearchHit = { url: string; label: string };
+export type WatchbaseSearchResponse = {
+  query: string;
+  items: WatchbaseSearchHit[];
+  total: number;
+};
+
 export type WatchModelBrief = {
   id: string;
   brand: string;

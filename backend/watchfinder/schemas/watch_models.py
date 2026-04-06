@@ -112,6 +112,21 @@ class PromoteWatchCatalogResponse(BaseModel):
     watch_model: WatchModelOut | None = None
 
 
+class WatchbaseSearchHit(BaseModel):
+    """One watch page from WatchBase filter search."""
+
+    url: str
+    label: str
+
+
+class WatchbaseSearchResponse(BaseModel):
+    """GET /api/watchbase/search — proxied WatchBase `/filter/results?q=`."""
+
+    query: str
+    items: list[WatchbaseSearchHit]
+    total: int
+
+
 class WatchBaseImportRequest(BaseModel):
     """Optional body for POST import-watchbase (use unsaved Reference URL from the form)."""
 

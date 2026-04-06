@@ -8,6 +8,7 @@ import type {
   WatchBaseImportResult,
   WatchBasePriceHistory,
   WatchModel,
+  WatchbaseSearchResponse,
 } from "@/lib/types";
 import { money } from "@/lib/format";
 import {
@@ -76,6 +77,9 @@ function DetailBody() {
   const findWatchbaseDialogRef = useRef<HTMLDialogElement>(null);
   const [findSearchDetail, setFindSearchDetail] = useState("");
   const [findPastedUrl, setFindPastedUrl] = useState("");
+  const [findWbSearchBusy, setFindWbSearchBusy] = useState(false);
+  const [findWbSearchErr, setFindWbSearchErr] = useState<string | null>(null);
+  const [findWbHits, setFindWbHits] = useState<WatchbaseSearchResponse["items"] | null>(null);
 
   const applyModel = useCallback((m: WatchModel) => {
     setBrand(m.brand ?? "");
@@ -258,11 +262,31 @@ function DetailBody() {
     const seed = reference.trim() || brand.trim() || "";
     setFindSearchDetail(seed);
     setFindPastedUrl("");
+    setFindWbHits(null);
+    setFindWbSearchErr(null);
     setImportMsg(null);
     findWatchbaseDialogRef.current?.showModal();
   };
 
   const findGoogleUrl = watchbaseGoogleSiteSearchUrl(findSearchDetail);
+
+  const searchWatchbaseOnSite = () => {
+    const q = findSearchDetail.trim();
+    if (!q) return;
+    setFindWbSearchBusy(true);
+    setFindWbSearchErr(null);
+    setFindWbHits(null);
+    setFindPastedUrl("");
+    fetchJson<WatchbaseSearchResponse>(`/api/watchbase/search?q=${encodeURIComponent(q)}`)
+      .then((res) => {
+        setFindWbHits(res.items);
+        if (res.items.length === 1) {
+          setFindPastedUrl(res.items[0].url);
+        }
+      })
+      .catch((e: Error) => setFindWbSearchErr(e.message))
+      .finally(() => setFindWbSearchBusy(false));
+  };
 
   const save = () => {
     if (!brand.trim()) {
@@ -343,16 +367,19 @@ function DetailBody() {
         ref={findWatchbaseDialogRef}
         className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-6 text-foreground shadow-lg [&::backdrop]:bg-black/50"
         aria-labelledby="find-watchbase-title"
-        onClose={() => setFindPastedUrl("")}
+        onClose={() => {
+          setFindPastedUrl("");
+          setFindWbHits(null);
+          setFindWbSearchErr(null);
+        }}
       >
         <h2 id="find-watchbase-title" className="text-lg font-semibold">
           Find watch on WatchBase
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter a reference or any search detail. We open Google with{" "}
-          <code className="rounded bg-muted px-1">site:watchbase.com</code> — you pick the right result,
-          then paste the WatchBase page URL here to import specs and list prices (same as{" "}
-          <strong>Import from WatchBase</strong>).
+          Search uses WatchBase’s own filter API (same as their search page). Pick a result below (or paste a
+          URL), then confirm import — same as <strong>Import from WatchBase</strong>. If nothing matches, try{" "}
+          <strong>Open Google</strong> or paste a link from the site.
         </p>
         <div className="mt-4 space-y-2">
           <label className="text-sm font-medium" htmlFor="find-detail">
@@ -364,21 +391,63 @@ function DetailBody() {
             placeholder="e.g. 210.30.42.20.01.001 or Omega 210.30"
             value={findSearchDetail}
             onChange={(e) => setFindSearchDetail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                searchWatchbaseOnSite();
+              }
+            }}
           />
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            disabled={findWbSearchBusy || !findSearchDetail.trim()}
+            onClick={searchWatchbaseOnSite}
+          >
+            {findWbSearchBusy ? "Searching…" : "Search WatchBase"}
+          </Button>
           {findGoogleUrl ? (
             <Button variant="outline" size="sm" asChild>
               <a href={findGoogleUrl} target="_blank" rel="noopener noreferrer">
-                Open Google results
+                Open Google (site:watchbase.com)
               </a>
             </Button>
           ) : (
             <Button type="button" variant="outline" size="sm" disabled title="Type a search detail first">
-              Open Google results
+              Open Google (site:watchbase.com)
             </Button>
           )}
         </div>
+        {findWbSearchErr ? (
+          <p className="mt-3 text-sm text-red-400">{findWbSearchErr}</p>
+        ) : null}
+        {findWbHits && findWbHits.length > 0 ? (
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium">Results — click one to select</p>
+            <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
+              {findWbHits.map((h) => (
+                <li key={h.url}>
+                  <button
+                    type="button"
+                    className={`w-full rounded px-2 py-1.5 text-left hover:bg-muted ${
+                      findPastedUrl === h.url ? "bg-muted ring-1 ring-primary" : ""
+                    }`}
+                    onClick={() => setFindPastedUrl(h.url)}
+                  >
+                    <span className="block text-xs text-muted-foreground">{h.url}</span>
+                    <span className="block">{h.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {findWbHits && findWbHits.length === 0 && !findWbSearchBusy ? (
+          <p className="mt-3 text-sm text-muted-foreground">No watches found on WatchBase for that query.</p>
+        ) : null}
         <div className="mt-4 space-y-2">
           <label className="text-sm font-medium" htmlFor="find-paste-url">
             WatchBase page URL (confirm)
