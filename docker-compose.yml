@@ -49,6 +49,10 @@ services:
       APP_PORT: "8080"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       INGEST_INTERVAL_MINUTES: ${INGEST_INTERVAL_MINUTES:-30}
+      LOCAL_MEDIA_ROOT: /data/media
+    volumes:
+      - watchfinder_media:/data/media
 
 volumes:
   postgres_data:
+  watchfinder_media:

@@ -168,6 +168,8 @@ docker compose up --build
 
 The compose file uses the Docker service name **`postgres`** in `DATABASE_URL`, not `watchfinder-postgres` (that name is for Unraid parity).
 
+**Watch images:** eBay gallery photos for linked catalog rows are downloaded into the named volume mounted at **`LOCAL_MEDIA_ROOT`** (default **`/data/media`** in Compose) and served at **`/api/media/...`**. Persist this volume on Unraid so thumbnails survive container recreation.
+
 ## CI/CD — GitHub Container Registry
 
 - Workflow: **`.github/workflows/docker-publish.yml`**

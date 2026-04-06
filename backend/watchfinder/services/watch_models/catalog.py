@@ -7,7 +7,9 @@ from enum import Enum
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from watchfinder.config import get_settings
 from watchfinder.models import Listing, ListingEdit, WatchModel
+from watchfinder.services.local_media import enrich_watch_model_image_from_listing
 from watchfinder.services.valuation.effective import (
     effective_caliber,
     effective_model_family,
@@ -212,6 +214,7 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
             stats["skipped_no_identity"] += 1
         if listing.watch_model_id is not None:
             refresh_watch_model_observed_bounds(db, listing.watch_model_id)
+            enrich_watch_model_image_from_listing(db, listing, get_settings())
     return stats
 
 

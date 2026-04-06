@@ -9,6 +9,13 @@ export function apiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+/** Resolve API-served media paths (e.g. cached eBay images under `/api/media/...`). */
+export function mediaUrl(src: string): string {
+  const s = src.trim();
+  if (s.startsWith("/api/")) return apiUrl(s);
+  return s;
+}
+
 export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(apiUrl(path), {
     ...init,

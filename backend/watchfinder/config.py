@@ -94,6 +94,21 @@ class Settings(BaseSettings):
         alias="WATCHBASE_HTTP_USER_AGENT",
         description="Optional override User-Agent for WatchBase HTTP requests",
     )
+    local_media_root: str = Field(
+        "./data/media",
+        alias="LOCAL_MEDIA_ROOT",
+        description="Writable directory for cached watch images from eBay listings; mount a volume in Docker",
+    )
+    media_download_enabled: bool = Field(
+        True,
+        alias="MEDIA_DOWNLOAD_ENABLED",
+        description="When false, skip fetching listing gallery images into local_media_root",
+    )
+    media_download_user_agent: str | None = Field(
+        None,
+        alias="MEDIA_DOWNLOAD_USER_AGENT",
+        description="Optional User-Agent for listing image downloads",
+    )
 
 
 @lru_cache

@@ -27,6 +27,9 @@ else:
     raise SystemExit("PostgreSQL did not become ready in time")
 PY
 
+MEDIA_ROOT="${LOCAL_MEDIA_ROOT:-./data/media}"
+mkdir -p "$MEDIA_ROOT" 2>/dev/null || true
+
 echo "Running Alembic migrations..."
 cd /app
 export PYTHONPATH=/app/backend

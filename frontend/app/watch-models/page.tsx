@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { LayoutGrid, Square } from "lucide-react";
 import { apiUrl, fetchJson } from "@/lib/api";
 import type {
   BackfillWatchCatalogResponse,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/card";
 
 const PAGE = 50;
+const THUMB_STORAGE_KEY = "watchfinder-watch-db-thumb";
 
 export default function WatchModelsPage() {
   const [q, setQ] = useState("");
@@ -31,6 +33,25 @@ export default function WatchModelsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
+  const [thumbSize, setThumbSize] = useState<"sm" | "lg">("sm");
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(THUMB_STORAGE_KEY);
+      if (v === "lg" || v === "sm") setThumbSize(v);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const setThumbAndPersist = useCallback((size: "sm" | "lg") => {
+    setThumbSize(size);
+    try {
+      localStorage.setItem(THUMB_STORAGE_KEY, size);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
@@ -141,7 +162,39 @@ export default function WatchModelsPage() {
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-b border-border bg-muted/40">
             <tr>
-              <th className="px-3 py-2 font-medium w-14">Photo</th>
+              <th className="px-3 py-2 font-medium">
+                <div className="flex items-center gap-2">
+                  <span>Photo</span>
+                  <span
+                    className="inline-flex rounded-md border border-border bg-background p-0.5"
+                    role="group"
+                    aria-label="Thumbnail size"
+                  >
+                    <Button
+                      type="button"
+                      variant={thumbSize === "sm" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 w-7 shrink-0 p-0"
+                      title="Smaller thumbnails"
+                      aria-pressed={thumbSize === "sm"}
+                      onClick={() => setThumbAndPersist("sm")}
+                    >
+                      <LayoutGrid className="h-4 w-4" aria-hidden />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={thumbSize === "lg" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 w-7 shrink-0 p-0"
+                      title="Larger thumbnails"
+                      aria-pressed={thumbSize === "lg"}
+                      onClick={() => setThumbAndPersist("lg")}
+                    >
+                      <Square className="h-4 w-4" aria-hidden />
+                    </Button>
+                  </span>
+                </div>
+              </th>
               <th className="px-3 py-2 font-medium">Model</th>
               <th className="px-3 py-2 font-medium">Observed</th>
               <th className="px-3 py-2 font-medium">Manual</th>
@@ -159,7 +212,11 @@ export default function WatchModelsPage() {
               rows.map((m) => (
                 <tr key={m.id} className="border-b border-border/60">
                   <td className="px-3 py-2 align-top">
-                    <ListingThumb urls={m.image_urls} alt="" />
+                    <ListingThumb
+                      urls={m.image_urls}
+                      alt=""
+                      sizeClass={thumbSize === "lg" ? "h-20 w-20" : "h-10 w-10"}
+                    />
                   </td>
                   <td className="px-3 py-2">
                     <Link

@@ -15,6 +15,8 @@ from watchfinder.models import (
 from watchfinder.services.parsing import build_listing_corpus, parse_watch_attributes
 from watchfinder.services.repair import extract_repair_signals
 from watchfinder.services.scoring import compute_opportunity_score
+from watchfinder.config import get_settings
+from watchfinder.services.local_media import enrich_watch_model_image_from_listing
 from watchfinder.services.watch_models import (
     ensure_watch_catalog_for_listing,
     refresh_watch_model_observed_bounds,
@@ -75,3 +77,4 @@ def analyze_listing(db: Session, listing: Listing) -> None:
     ensure_watch_catalog_for_listing(db, listing, parsed, edit)
     if listing.watch_model_id:
         refresh_watch_model_observed_bounds(db, listing.watch_model_id)
+        enrich_watch_model_image_from_listing(db, listing, get_settings())

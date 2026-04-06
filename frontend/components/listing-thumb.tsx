@@ -1,5 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- eBay CDN URLs; static export avoids next/image remote config */
-/** First image URL from eBay ingest or manual catalog URLs; plain img for static export. */
+import { mediaUrl } from "@/lib/api";
+
+/** First image URL from eBay ingest, cached `/api/media/...`, or manual catalog URLs. */
 
 export function ListingThumb({
   urls,
@@ -21,7 +23,7 @@ export function ListingThumb({
   }
   return (
     <img
-      src={u.trim()}
+      src={mediaUrl(u.trim())}
       alt={alt}
       className={`shrink-0 rounded object-cover bg-muted ${sizeClass}`}
       loading="lazy"
