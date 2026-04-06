@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson } from "@/lib/api";
@@ -12,6 +12,7 @@ import type {
 import { money } from "@/lib/format";
 import {
   watchbaseGoogleSearchUrl,
+  watchbaseGoogleSiteSearchUrl,
   watchbaseGuessUrl,
 } from "@/lib/watchbase";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,9 @@ function DetailBody() {
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importDetail, setImportDetail] = useState<WatchBaseImportResult | null>(null);
   const [extPrices, setExtPrices] = useState<WatchBasePriceHistory | null>(null);
+  const findWatchbaseDialogRef = useRef<HTMLDialogElement>(null);
+  const [findSearchDetail, setFindSearchDetail] = useState("");
+  const [findPastedUrl, setFindPastedUrl] = useState("");
 
   const applyModel = useCallback((m: WatchModel) => {
     setBrand(m.brand ?? "");
@@ -191,8 +195,22 @@ function DetailBody() {
     };
   };
 
-  const importFromWatchbase = () => {
+  /**
+   * WatchBase import. `urlOverride` undefined → use Reference URL field (may be null so backend can guess
+   * from brand / family / reference). `urlOverride` set (wizard) → must be non-empty WatchBase URL.
+   */
+  const runWatchbaseImport = (urlOverride?: string | null, onSuccess?: () => void) => {
     if (!id || isNew) return;
+    let refUrl: string | null;
+    if (urlOverride !== undefined) {
+      refUrl = (urlOverride && urlOverride.trim()) || null;
+      if (!refUrl) {
+        setImportMsg("Paste the WatchBase watch page URL from the address bar, then confirm import.");
+        return;
+      }
+    } else {
+      refUrl = referenceUrl.trim() || null;
+    }
     setImportBusy(true);
     setImportMsg(null);
     setImportDetail(null);
@@ -203,7 +221,7 @@ function DetailBody() {
         Accept: "application/json",
       },
       body: JSON.stringify({
-        reference_url: referenceUrl.trim() || null,
+        reference_url: refUrl,
       }),
     })
       .then(async (res) => {
@@ -228,10 +246,23 @@ function DetailBody() {
         );
         return fetchJson<WatchModel>(`/api/watch-models/${id}`);
       })
-      .then(applyModel)
+      .then((m) => {
+        applyModel(m);
+        onSuccess?.();
+      })
       .catch((e: Error) => setImportMsg(e.message))
       .finally(() => setImportBusy(false));
   };
+
+  const openFindWatchbaseWizard = () => {
+    const seed = reference.trim() || brand.trim() || "";
+    setFindSearchDetail(seed);
+    setFindPastedUrl("");
+    setImportMsg(null);
+    findWatchbaseDialogRef.current?.showModal();
+  };
+
+  const findGoogleUrl = watchbaseGoogleSiteSearchUrl(findSearchDetail);
 
   const save = () => {
     if (!brand.trim()) {
@@ -308,6 +339,77 @@ function DetailBody() {
 
   return (
     <div className="space-y-6">
+      <dialog
+        ref={findWatchbaseDialogRef}
+        className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-6 text-foreground shadow-lg [&::backdrop]:bg-black/50"
+        aria-labelledby="find-watchbase-title"
+        onClose={() => setFindPastedUrl("")}
+      >
+        <h2 id="find-watchbase-title" className="text-lg font-semibold">
+          Find watch on WatchBase
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Enter a reference or any search detail. We open Google with{" "}
+          <code className="rounded bg-muted px-1">site:watchbase.com</code> — you pick the right result,
+          then paste the WatchBase page URL here to import specs and list prices (same as{" "}
+          <strong>Import from WatchBase</strong>).
+        </p>
+        <div className="mt-4 space-y-2">
+          <label className="text-sm font-medium" htmlFor="find-detail">
+            Search detail
+          </label>
+          <Input
+            id="find-detail"
+            className="font-mono text-xs"
+            placeholder="e.g. 210.30.42.20.01.001 or Omega 210.30"
+            value={findSearchDetail}
+            onChange={(e) => setFindSearchDetail(e.target.value)}
+          />
+        </div>
+        <div className="mt-3">
+          {findGoogleUrl ? (
+            <Button variant="outline" size="sm" asChild>
+              <a href={findGoogleUrl} target="_blank" rel="noopener noreferrer">
+                Open Google results
+              </a>
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" size="sm" disabled title="Type a search detail first">
+              Open Google results
+            </Button>
+          )}
+        </div>
+        <div className="mt-4 space-y-2">
+          <label className="text-sm font-medium" htmlFor="find-paste-url">
+            WatchBase page URL (confirm)
+          </label>
+          <Input
+            id="find-paste-url"
+            className="font-mono text-xs"
+            placeholder="https://watchbase.com/brand/family/ref-slug"
+            value={findPastedUrl}
+            onChange={(e) => setFindPastedUrl(e.target.value)}
+          />
+        </div>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => findWatchbaseDialogRef.current?.close()}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={importBusy || !findPastedUrl.trim()}
+            onClick={() =>
+              runWatchbaseImport(findPastedUrl, () => findWatchbaseDialogRef.current?.close())
+            }
+          >
+            {importBusy ? "Importing…" : "Confirm import"}
+          </Button>
+        </div>
+      </dialog>
       <div>
         <Button variant="ghost" className="mb-2 -ml-2" asChild>
           <Link href="/watch-models/">← Watch database</Link>
@@ -370,9 +472,17 @@ function DetailBody() {
                 type="button"
                 variant="default"
                 disabled={importBusy}
-                onClick={importFromWatchbase}
+                onClick={() => runWatchbaseImport()}
               >
                 {importBusy ? "Importing…" : "Import from WatchBase"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={importBusy}
+                onClick={openFindWatchbaseWizard}
+              >
+                Find on WatchBase…
               </Button>
               {importDetail ? (
                 <span className="text-xs text-muted-foreground">
