@@ -13,6 +13,9 @@ export function ListingThumb({
   sizeClass?: string;
 }) {
   const u = urls?.find((x) => typeof x === "string" && x.trim().length > 0);
+  const largeThumb =
+    /\bh-(2[4-9]|[3-9]\d)\b/.test(sizeClass) || sizeClass.includes("h-56");
+  const objectFit = largeThumb ? "object-contain" : "object-cover";
   if (!u) {
     return (
       <span
@@ -25,7 +28,7 @@ export function ListingThumb({
     <img
       src={mediaUrl(u.trim())}
       alt={alt}
-      className={`shrink-0 rounded object-cover bg-muted ${sizeClass}`}
+      className={`shrink-0 rounded bg-muted ${objectFit} ${sizeClass}`}
       loading="lazy"
       referrerPolicy="no-referrer"
     />

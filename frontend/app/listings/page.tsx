@@ -28,6 +28,8 @@ import {
   type SortDir,
 } from "@/components/sortable-table-head";
 import { ListingThumb } from "@/components/listing-thumb";
+import { TableThumbSizeSelect } from "@/components/table-thumb-size-select";
+import { TABLE_THUMB_STORAGE, usePersistedTableThumbSize } from "@/lib/table-thumb-sizes";
 
 export default function ListingsPage() {
   const [filters, setFilters] = useState({
@@ -54,6 +56,8 @@ export default function ListingsPage() {
   const [loading, setLoading] = useState(true);
   const [promoteBusyId, setPromoteBusyId] = useState<string | null>(null);
   const [promoteMsg, setPromoteMsg] = useState<string | null>(null);
+  const { sizeId: listingsThumbId, setSizeId: setListingsThumbId, sizeClass: listingsThumbClass } =
+    usePersistedTableThumbSize(TABLE_THUMB_STORAGE.listings);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -265,29 +269,39 @@ export default function ListingsPage() {
         <p className="text-muted-foreground">Loading…</p>
       ) : data ? (
         <>
-          <p className="text-sm text-muted-foreground">
-            Showing {data.items.length} of {data.total} (skip {data.skip}, limit{" "}
-            {data.limit})
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Showing {data.items.length} of {data.total} (skip {data.skip}, limit{" "}
+              {data.limit})
+            </p>
+            <TableThumbSizeSelect
+              id="listings-thumb-size"
+              value={listingsThumbId}
+              onChange={setListingsThumbId}
+            />
+          </div>
           {promoteMsg ? (
             <p className="text-sm text-muted-foreground">{promoteMsg}</p>
           ) : null}
-          <ListingsTable
-            rows={data.items}
-            sortBy={sortBy}
-            sortDir={sortDir}
-            promoteBusyId={promoteBusyId}
-            onPromoteToCatalog={promoteToCatalog}
-            onSort={(column) => {
-              if (sortBy === column) {
-                setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-              } else {
-                setSortBy(column);
-                setSortDir(column === "title" ? "asc" : "desc");
-              }
-              setSkip(0);
-            }}
-          />
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <ListingsTable
+              rows={data.items}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              promoteBusyId={promoteBusyId}
+              thumbSizeClass={listingsThumbClass}
+              onPromoteToCatalog={promoteToCatalog}
+              onSort={(column) => {
+                if (sortBy === column) {
+                  setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                } else {
+                  setSortBy(column);
+                  setSortDir(column === "title" ? "asc" : "desc");
+                }
+                setSkip(0);
+              }}
+            />
+          </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -333,6 +347,7 @@ function ListingsTable({
   sortDir,
   onSort,
   promoteBusyId,
+  thumbSizeClass,
   onPromoteToCatalog,
 }: {
   rows: ListingSummary[];
@@ -340,6 +355,7 @@ function ListingsTable({
   sortDir: SortDir;
   onSort: (column: string) => void;
   promoteBusyId: string | null;
+  thumbSizeClass: string;
   onPromoteToCatalog: (listingId: string) => void;
 }) {
   if (!rows.length) {
@@ -349,7 +365,7 @@ function ListingsTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-14 text-muted-foreground">Photo</TableHead>
+          <TableHead className="min-w-[3rem] text-muted-foreground">Photo</TableHead>
           <TableHead className="w-24 text-muted-foreground">Status</TableHead>
           <SortableTableHead
             label="Title"
@@ -395,7 +411,7 @@ function ListingsTable({
         {rows.map((r) => (
           <TableRow key={r.id}>
             <TableCell className="align-top">
-              <ListingThumb urls={r.image_urls} alt="" />
+              <ListingThumb urls={r.image_urls} alt="" sizeClass={thumbSizeClass} />
             </TableCell>
             <TableCell className="align-top">
               {r.is_active === false ? (

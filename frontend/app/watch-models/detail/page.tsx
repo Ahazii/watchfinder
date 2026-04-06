@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { apiUrl, fetchJson } from "@/lib/api";
+import { apiUrl, fetchJson, mediaUrl } from "@/lib/api";
 import type {
   WatchBaseImportResult,
   WatchBasePriceHistory,
@@ -409,6 +409,12 @@ function DetailBody() {
       .finally(() => setDeleting(false));
   };
 
+  const previewImageUrls = useMemo(
+    () => imageLines.split(/\r?\n/).map((l) => l.trim()).filter(Boolean),
+    [imageLines],
+  );
+  const photoAlt = [brand, reference, modelFamily].filter(Boolean).join(" · ") || "Watch";
+
   if (err) {
     return (
       <div className="space-y-2">
@@ -595,6 +601,29 @@ function DetailBody() {
           auto-link when data matches; you can override on each listing.
         </p>
       </div>
+
+      {previewImageUrls.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Photo</CardTitle>
+            <CardDescription>
+              First image from <strong>Image URLs</strong> below (cached eBay, WatchBase, or manual link).
+              {previewImageUrls.length > 1
+                ? ` ${previewImageUrls.length} URLs total — showing the first.`
+                : ""}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center pt-0">
+            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic catalog / eBay URLs */}
+            <img
+              src={mediaUrl(previewImageUrls[0])}
+              alt={photoAlt}
+              className="max-h-[min(28rem,75vh)] w-auto max-w-full rounded-lg border border-border bg-muted/30 object-contain shadow-sm"
+              referrerPolicy="no-referrer"
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
