@@ -2,8 +2,27 @@
 
 from __future__ import annotations
 
-from watchfinder.services.watchbase_chart_json import parse_price_chart_json
+from decimal import Decimal
+
+from watchfinder.services.watchbase_chart_json import (
+    min_max_eur_from_price_history,
+    parse_price_chart_json,
+)
 from watchfinder.services.watchbase_path import guessed_watch_path, path_from_watchbase_url
+
+
+def test_min_max_eur_from_price_history() -> None:
+    hist = {
+        "source": "watchbase",
+        "currency": "EUR",
+        "points": [
+            {"date": "2020-01-01", "amount": "1000", "series": "New"},
+            {"date": "2021-01-01", "amount": "2,500.50", "series": "New"},
+        ],
+    }
+    lo, hi = min_max_eur_from_price_history(hist)
+    assert lo == Decimal("1000")
+    assert hi == Decimal("2500.50")
 
 
 def test_parse_price_chart_json() -> None:

@@ -61,10 +61,10 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | GET | `/api/watch-link-reviews` | Pending match-queue rows (`skip`/`limit`) |
 | GET | `/api/watch-link-reviews/{uuid}` | One queue item + scored candidate models |
 | POST | `/api/watch-link-reviews/{uuid}/resolve` | Body `{ "action": "match"|"create"|"dismiss", "watch_model_id"?: uuid }` |
-| GET | `/api/watch-models/{uuid}` | One model |
+| GET | `/api/watch-models/{uuid}` | One model; includes **`linked_ebay_urls`** (active linked listings’ **`web_url`** values) |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
 | GET | `/api/watchbase/search?q=…` | Proxies WatchBase **`/filter/results?q=`** (their on-site search). Returns watch page URLs + labels for the find wizard. **`WATCHBASE_IMPORT_ENABLED=false`** disables |
-| POST | `/api/watch-models/{uuid}/import-watchbase` | Body optional `{"reference_url": "…"}` (uses saved DB URL if omitted). Fetches WatchBase HTML + **`/prices`** JSON; fills specs, **`external_price_history`**. **`WATCHBASE_IMPORT_ENABLED=false`** disables |
+| POST | `/api/watch-models/{uuid}/import-watchbase` | Body optional `{"reference_url": "…"}` (uses saved DB URL if omitted). Fetches WatchBase HTML + **`/prices`** JSON; fills specs, **`external_price_history`**; **Family** row → **`model_family`**; EUR chart min/max → **`manual_price_low` / `manual_price_high`** in **GBP** (Frankfurter API, or **`EUR_GBP_RATE_FALLBACK`**). **`WATCHBASE_IMPORT_ENABLED=false`** disables |
 | DELETE | `/api/watch-models/{uuid}` | Delete (listings unlinked via FK **SET NULL**) |
 | GET | `/api/candidates` | Same filters and **sort** as listings (**`listing_active`**, **`exclude_quartz`**, etc.); only rows with `potential_profit > 0` |
 | GET | `/api/settings` | Ingest interval, **`ebay_search_limit`**, **`ingest_max_pages`**, stale-refresh toggles (**`stale_listing_refresh_*`**), saved Browse query lines, env fallback hint |
@@ -211,6 +211,11 @@ Full list and comments: **[`.env.example`](.env.example)**. On Unraid, set the s
 | `APP_PORT` | Uvicorn listen port (match published port; healthcheck uses this) |
 | `LOG_LEVEL` | Python logging level |
 | `INGEST_INTERVAL_MINUTES` | Default minutes between ingest jobs (5–1440); UI can persist override in **`app_settings.ingest_interval_minutes`** |
+| `WATCHBASE_IMPORT_ENABLED` | Allow **`POST …/import-watchbase`** (default **true**) |
+| `WATCHBASE_HTTP_USER_AGENT` | Optional User-Agent for WatchBase HTTP requests |
+| `EUR_GBP_RATE_FALLBACK` | Optional GBP-per-EUR rate if Frankfurter FX API fails during import (e.g. **0.85**) |
+| `LOCAL_MEDIA_ROOT` / `MEDIA_DOWNLOAD_*` | Cached listing images for catalog thumbs (see **`.env.example`**) |
+| `STALE_LISTING_REFRESH_*` | Stale **getItem** batch defaults until overridden in Settings (see **`.env.example`**) |
 
 Optional for **local Next dev only:** `NEXT_PUBLIC_API_BASE` (see Local development above).
 

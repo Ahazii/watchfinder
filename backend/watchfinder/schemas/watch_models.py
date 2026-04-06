@@ -23,6 +23,7 @@ class WatchModelBriefOut(BaseModel):
 
 
 class WatchModelOut(WatchModelBriefOut):
+    linked_ebay_urls: list[str] = Field(default_factory=list)
     caliber: str | None = None
     image_urls: list[str] | None = None
     production_start: date | None = None

@@ -16,6 +16,8 @@ import {
   watchbaseGoogleSiteSearchUrl,
   watchbaseGuessUrl,
 } from "@/lib/watchbase";
+import { ListingThumb } from "@/components/listing-thumb";
+import { TableThumbSizeSelect } from "@/components/table-thumb-size-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +27,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  TABLE_THUMB_STORAGE,
+  WATCHBASE_FIND_PREVIEW_MAX_CLASS,
+  usePersistedTableThumbSize,
+} from "@/lib/table-thumb-sizes";
 
 export default function WatchModelDetailPage() {
   return (
@@ -70,6 +77,7 @@ function DetailBody() {
   const [specDialColor, setSpecDialColor] = useState("");
   const [specDialMat, setSpecDialMat] = useState("");
   const [specIdxHands, setSpecIdxHands] = useState("");
+  const [linkedEbayUrls, setLinkedEbayUrls] = useState<string[]>([]);
   const [importBusy, setImportBusy] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importDetail, setImportDetail] = useState<WatchBaseImportResult | null>(null);
@@ -87,6 +95,13 @@ function DetailBody() {
   const [findWbSearchBusy, setFindWbSearchBusy] = useState(false);
   const [findWbSearchErr, setFindWbSearchErr] = useState<string | null>(null);
   const [findWbHits, setFindWbHits] = useState<WatchbaseSearchResponse["items"] | null>(null);
+
+  const {
+    sizeId: wbFindThumbId,
+    setSizeId: setWbFindThumbId,
+    sizeClass: wbFindThumbClass,
+  } = usePersistedTableThumbSize(TABLE_THUMB_STORAGE.watchbaseFind);
+  const wbFindPreviewMaxClass = WATCHBASE_FIND_PREVIEW_MAX_CLASS[wbFindThumbId];
 
   const closeFindModal = useCallback(() => {
     setFindModalOpen(false);
@@ -156,6 +171,7 @@ function DetailBody() {
     setSpecDialMat(m.spec_dial_material ?? "");
     setSpecIdxHands(m.spec_indexes_hands ?? "");
     setExtPrices(m.external_price_history ?? null);
+    setLinkedEbayUrls(m.linked_ebay_urls ?? []);
   }, []);
 
   useEffect(() => {
@@ -189,6 +205,7 @@ function DetailBody() {
         spec_indexes_hands: null,
         external_price_history: null,
         watchbase_imported_at: null,
+        linked_ebay_urls: [],
       });
       setErr(null);
       return;
@@ -444,7 +461,7 @@ function DetailBody() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="find-watchbase-title"
-            className="fixed z-50 w-[calc(100%-2rem)] max-w-lg overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-xl"
+            className="fixed z-50 w-[calc(100%-2rem)] max-w-xl overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-xl"
             style={{ left: modalPos.x, top: modalPos.y }}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -465,6 +482,14 @@ function DetailBody() {
                 import — same as <strong>Import from WatchBase</strong>. Or use <strong>Open Google</strong> /
                 paste a URL.
               </p>
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
+                <TableThumbSizeSelect
+                  id="watchbase-find-thumb-size"
+                  compact
+                  value={wbFindThumbId}
+                  onChange={setWbFindThumbId}
+                />
+              </div>
               <div className="mt-4 space-y-2">
                 <label className="text-sm font-medium" htmlFor="find-detail">
                   Search detail
@@ -511,26 +536,21 @@ function DetailBody() {
               {findWbHits && findWbHits.length > 0 ? (
                 <div className="mt-4">
                   <p className="mb-2 text-sm font-medium">Results — click one to select</p>
-                  <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
+                  <ul className="max-h-[min(50vh,22rem)] space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
                     {findWbHits.map((h) => (
                       <li key={h.url}>
                         <button
                           type="button"
-                          className={`flex w-full gap-2 rounded px-2 py-1.5 text-left hover:bg-muted ${
+                          className={`flex w-full items-start gap-2 rounded px-2 py-1.5 text-left hover:bg-muted ${
                             findPastedUrl === h.url ? "bg-muted ring-1 ring-primary" : ""
                           }`}
                           onClick={() => setFindPastedUrl(h.url)}
                         >
-                          {h.image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- WatchBase CDN; dynamic URL from search API
-                            <img
-                              src={h.image_url}
-                              alt=""
-                              className="h-14 w-14 shrink-0 rounded border border-border/80 bg-muted object-cover"
-                            />
-                          ) : (
-                            <div className="h-14 w-14 shrink-0 rounded border border-dashed border-border bg-muted/50" />
-                          )}
+                          <ListingThumb
+                            urls={h.image_url ? [h.image_url] : null}
+                            alt=""
+                            sizeClass={wbFindThumbClass}
+                          />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs text-muted-foreground">{h.url}</span>
                             <span className="block">{h.label}</span>
@@ -561,14 +581,14 @@ function DetailBody() {
               {selectedWbHit?.image_url ? (
                 <div className="mt-4 rounded-md border border-border bg-muted/20 p-3">
                   <p className="mb-2 text-center text-xs font-medium text-muted-foreground">
-                    Selected watch preview
+                    Selected watch preview (same Photo size setting)
                   </p>
                   <div className="flex justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element -- WatchBase CDN */}
                     <img
                       src={selectedWbHit.image_url}
                       alt={selectedWbHit.label}
-                      className="max-h-52 max-w-full rounded-md object-contain"
+                      className={`${wbFindPreviewMaxClass} w-auto max-w-full rounded-md object-contain`}
                     />
                   </div>
                 </div>
@@ -602,6 +622,49 @@ function DetailBody() {
         </p>
       </div>
 
+      {!isNew && (referenceUrl.trim() || linkedEbayUrls.length > 0) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>External links</CardTitle>
+            <CardDescription>WatchBase catalog page and active eBay listings linked to this model.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {referenceUrl.trim() ? (
+              <p>
+                <span className="font-medium text-foreground">WatchBase: </span>
+                <a
+                  className="text-primary underline-offset-4 hover:underline break-all"
+                  href={referenceUrl.trim()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {referenceUrl.trim()}
+                </a>
+              </p>
+            ) : null}
+            {linkedEbayUrls.length > 0 ? (
+              <div>
+                <p className="font-medium text-foreground">eBay listings</p>
+                <ul className="mt-1 list-inside list-disc space-y-1 text-muted-foreground">
+                  {linkedEbayUrls.map((u) => (
+                    <li key={u} className="break-all">
+                      <a
+                        className="text-primary underline-offset-4 hover:underline"
+                        href={u}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {u}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Core identity</CardTitle>
@@ -622,7 +685,10 @@ function DetailBody() {
           <CardDescription>
             Use <strong>Import from WatchBase</strong> to fetch this model’s public HTML and the same{" "}
             <code className="rounded bg-muted px-1">/prices</code> JSON the site uses for its chart (EUR list
-            prices). Only click when needed — keep volume low and comply with{" "}
+            prices); min/max EUR are converted to GBP for <strong>Manual low / high</strong> (Frankfurter ECB
+            rate, or <code className="rounded bg-muted px-1">EUR_GBP_RATE_FALLBACK</code> if the API fails).
+            The <strong>Family</strong> row fills <strong>Model family</strong>. Only click when needed —
+            keep volume low and comply with{" "}
             <a
               className="text-primary underline-offset-4 hover:underline"
               href="https://watchbase.com/terms"
@@ -925,8 +991,9 @@ function DetailBody() {
         <CardHeader>
           <CardTitle>Price bounds</CardTitle>
           <CardDescription>
-            Manual range is yours. Observed min/max are derived from linked listings and compatible
-            sale records (refreshed on save and when listings analyze).
+            Manual range is yours (WatchBase import can pre-fill GBP from the EUR chart). Observed min/max
+            are derived from linked listings and compatible sale records (refreshed on save and when
+            listings analyze).
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">

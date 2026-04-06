@@ -16,7 +16,11 @@ from sqlalchemy.orm import Session
 
 from watchfinder.config import Settings, get_settings
 from watchfinder.models import WatchModel
-from watchfinder.services.watchbase_chart_json import parse_price_chart_json
+from watchfinder.services.fx_frankfurter import fetch_eur_to_gbp_rate
+from watchfinder.services.watchbase_chart_json import (
+    min_max_eur_from_price_history,
+    parse_price_chart_json,
+)
 from watchfinder.services.watchbase_movement import caliber_from_watchbase_watch_html
 from watchfinder.services.watchbase_path import (
     canonical_watch_url,
@@ -133,8 +137,9 @@ def import_watchbase_for_model(
     reference_url_override: str | None = None,
 ) -> dict[str, Any]:
     """
-    Fetch watch HTML + /prices JSON, merge into model. Does not change brand / reference / model_family
-    (identity keys). Sets **reference_url** to canonical WatchBase page.
+    Fetch watch HTML + /prices JSON, merge into model. Does not change brand or reference (identity keys).
+    Sets **reference_url** to canonical WatchBase page; **model_family** from WatchBase **Family** row when
+    present; **manual_price_low/high** in GBP from EUR chart min/max when FX is available.
     """
     settings = settings or get_settings()
     if not settings.watchbase_import_enabled:
@@ -198,6 +203,11 @@ def import_watchbase_for_model(
         wm.model_name = name
         updated.append("model_name")
 
+    family = rows.get("Family")
+    if family:
+        wm.model_family = family.strip()
+        updated.append("model_family")
+
     cal = caliber_from_watchbase_watch_html(html)
     if cal:
         wm.caliber = cal
@@ -259,6 +269,14 @@ def import_watchbase_for_model(
 
     if price_payload:
         hist = parse_price_chart_json(price_payload)
+        bounds = min_max_eur_from_price_history(hist)
+        if bounds:
+            rate = fetch_eur_to_gbp_rate(settings)
+            if rate is not None:
+                lo_eur, hi_eur = bounds
+                wm.manual_price_low = (lo_eur * rate).quantize(Decimal("0.01"))
+                wm.manual_price_high = (hi_eur * rate).quantize(Decimal("0.01"))
+                updated.extend(["manual_price_low", "manual_price_high"])
         hist["fetched_at"] = now.isoformat()
         wm.external_price_history = hist
         updated.append("external_price_history")

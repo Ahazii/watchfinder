@@ -109,6 +109,11 @@ class Settings(BaseSettings):
         alias="MEDIA_DOWNLOAD_USER_AGENT",
         description="Optional User-Agent for listing image downloads",
     )
+    eur_gbp_rate_fallback: float | None = Field(
+        None,
+        alias="EUR_GBP_RATE_FALLBACK",
+        description="Optional GBP-per-EUR rate if Frankfurter API is unreachable (e.g. 0.85)",
+    )
 
 
 @lru_cache

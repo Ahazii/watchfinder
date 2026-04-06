@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from watchfinder.api.deps import get_db
 from watchfinder.config import get_settings
-from watchfinder.models import WatchModel
+from watchfinder.models import Listing, WatchModel
 from watchfinder.schemas.watch_models import (
     BackfillWatchCatalogResponse,
     WatchBaseImportRequest,
@@ -23,6 +23,33 @@ from watchfinder.services.watch_models import backfill_watch_catalog, refresh_wa
 from watchfinder.services.watchbase_import import WatchBaseImportError, import_watchbase_for_model
 
 router = APIRouter(prefix="/watch-models", tags=["watch-models"])
+
+
+def _linked_ebay_urls_for_model(db: Session, model_id: UUID) -> list[str]:
+    stmt = (
+        select(Listing.web_url)
+        .where(
+            Listing.watch_model_id == model_id,
+            Listing.is_active.is_(True),
+            Listing.web_url.isnot(None),
+        )
+        .order_by(nulls_last(Listing.last_seen_at.desc()))
+        .limit(50)
+    )
+    seen: set[str] = set()
+    out: list[str] = []
+    for u in db.scalars(stmt).all():
+        s = (u or "").strip()
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
+def _watch_model_out(db: Session, wm: WatchModel) -> WatchModelOut:
+    out = WatchModelOut.model_validate(wm)
+    ebay = _linked_ebay_urls_for_model(db, wm.id)
+    return out.model_copy(update={"linked_ebay_urls": ebay})
 
 
 @router.post(
@@ -99,7 +126,7 @@ def get_watch_model(model_id: UUID, db: Session = Depends(get_db)) -> WatchModel
     wm = db.get(WatchModel, model_id)
     if not wm:
         raise HTTPException(status_code=404, detail="Watch model not found")
-    return WatchModelOut.model_validate(wm)
+    return _watch_model_out(db, wm)
 
 
 @router.post("", response_model=WatchModelOut)
@@ -129,7 +156,7 @@ def create_watch_model(body: WatchModelCreate, db: Session = Depends(get_db)) ->
     refresh_watch_model_observed_bounds(db, wm.id)
     db.commit()
     db.refresh(wm)
-    return WatchModelOut.model_validate(wm)
+    return _watch_model_out(db, wm)
 
 
 @router.patch("/{model_id}", response_model=WatchModelOut)
@@ -158,7 +185,7 @@ def patch_watch_model(
     refresh_watch_model_observed_bounds(db, wm.id)
     db.commit()
     db.refresh(wm)
-    return WatchModelOut.model_validate(wm)
+    return _watch_model_out(db, wm)
 
 
 @router.delete("/{model_id}", status_code=204)

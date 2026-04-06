@@ -6,11 +6,25 @@ import { useCallback, useEffect, useState } from "react";
 export const TABLE_THUMB_STORAGE = {
   listings: "watchfinder-listings-thumb-size",
   watchDatabase: "watchfinder-watch-db-thumb-size",
+  /** “Find on WatchBase” modal — result row thumbs + selected preview scale */
+  watchbaseFind: "watchfinder-watchbase-find-thumb-size",
 } as const;
 
 const LEGACY_WATCH_DB_KEY = "watchfinder-watch-db-thumb";
 
 export type TableThumbSizeId = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
+
+/**
+ * Max height for the selected-hit preview image in the WatchBase find modal (ties to Photo size).
+ */
+export const WATCHBASE_FIND_PREVIEW_MAX_CLASS: Record<TableThumbSizeId, string> = {
+  xs: "max-h-36",
+  sm: "max-h-44",
+  md: "max-h-52",
+  lg: "max-h-64",
+  xl: "max-h-80",
+  xxl: "max-h-[min(32rem,70vh)]",
+};
 
 export const TABLE_THUMB_OPTIONS: {
   id: TableThumbSizeId;
@@ -34,11 +48,33 @@ export function getThumbClassById(id: string | null | undefined): string {
   return "h-10 w-10";
 }
 
-function parseStoredThumbSize(raw: string | null): TableThumbSizeId {
+function parseStoredThumbSize(raw: string | null, storageKey: string): TableThumbSizeId {
   if (raw && VALID_IDS.has(raw as TableThumbSizeId)) {
     return raw as TableThumbSizeId;
   }
+  if (storageKey === TABLE_THUMB_STORAGE.watchbaseFind) {
+    return "md";
+  }
   return "sm";
+}
+
+function readThumbSizeFromStorage(storageKey: string): TableThumbSizeId {
+  try {
+    let raw = localStorage.getItem(storageKey);
+    if (!raw && storageKey === TABLE_THUMB_STORAGE.watchDatabase) {
+      const legacy = localStorage.getItem(LEGACY_WATCH_DB_KEY);
+      if (legacy === "lg") {
+        raw = "md";
+        localStorage.setItem(storageKey, raw);
+      } else if (legacy === "sm") {
+        raw = "sm";
+        localStorage.setItem(storageKey, raw);
+      }
+    }
+    return parseStoredThumbSize(raw, storageKey);
+  } catch {
+    return parseStoredThumbSize(null, storageKey);
+  }
 }
 
 /**
@@ -46,25 +82,12 @@ function parseStoredThumbSize(raw: string | null): TableThumbSizeId {
  * Migrates legacy watch-db `sm` / `lg` boolean key once.
  */
 export function usePersistedTableThumbSize(storageKey: string) {
-  const [sizeId, setSizeIdState] = useState<TableThumbSizeId>("sm");
+  const [sizeId, setSizeIdState] = useState<TableThumbSizeId>(() =>
+    readThumbSizeFromStorage(storageKey),
+  );
 
   useEffect(() => {
-    try {
-      let raw = localStorage.getItem(storageKey);
-      if (!raw && storageKey === TABLE_THUMB_STORAGE.watchDatabase) {
-        const legacy = localStorage.getItem(LEGACY_WATCH_DB_KEY);
-        if (legacy === "lg") {
-          raw = "md";
-          localStorage.setItem(storageKey, raw);
-        } else if (legacy === "sm") {
-          raw = "sm";
-          localStorage.setItem(storageKey, raw);
-        }
-      }
-      setSizeIdState(parseStoredThumbSize(raw));
-    } catch {
-      setSizeIdState("sm");
-    }
+    setSizeIdState(readThumbSizeFromStorage(storageKey));
   }, [storageKey]);
 
   const setSizeId = useCallback(

@@ -86,6 +86,8 @@ export type WatchModelBrief = {
 };
 
 export type WatchModel = WatchModelBrief & {
+  /** Active linked eBay listing URLs (GET detail only; list endpoint may omit or empty). */
+  linked_ebay_urls?: string[];
   caliber?: string | null;
   image_urls?: string[] | null;
   production_start?: string | null;

@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **3 April 2026**
+Last updated: **31 March 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -91,6 +91,7 @@ OpenAPI: **`/docs`**.
 - **Matching + create + queue**: **`auto`** vs **`review`** mode; **`watch_model_link_reviews`**; **`POST /api/watch-link-reviews/{id}/resolve`**; **`promote-watch-catalog`** bypasses queue; listing detail **Catalogue review pending** banner.
 - **Observed bounds**: linked listings + compatible **`watch_sale_records`**; refreshed on analyze and model changes.
 - **API / UI**: **`/api/watch-models`**, nav **Watch database**, listing **Watch catalog link** card. **Watch model detail**: optional **spec** fields + **Reference URL**; **WatchBase** guess + Google links; **`POST …/import-watchbase`** fetches public HTML + **`/prices`** JSON (EUR list price history in **`external_price_history`**), **BeautifulSoup** table parse, **`WATCHBASE_IMPORT_ENABLED`**. **Dashboard** “Recently added” uses **`first_seen_at`**.
+- **WatchBase import (extended):** info-table **Family** → **`model_family`**; when **`/prices`** parses, min/max EUR → **`manual_price_low` / `manual_price_high`** in **GBP** via [Frankfurter](https://www.frankfurter.app/) ECB rates, with optional env **`EUR_GBP_RATE_FALLBACK`** if the FX request fails. **`GET`/`PATCH`/`POST` watch-model responses** include **`linked_ebay_urls`** (distinct **`web_url`** from active listings linked to the model). Detail UI: **External links** card (clickable WatchBase + eBay URLs); **Find on WatchBase** modal uses the same **Photo size** control as listings / watch DB tables (persisted **`watchfinder-watchbase-find-thumb-size`**).
 
 ## Phase 5c — Match queue (complete)
 
