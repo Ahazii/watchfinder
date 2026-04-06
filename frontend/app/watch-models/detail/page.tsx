@@ -602,29 +602,6 @@ function DetailBody() {
         </p>
       </div>
 
-      {previewImageUrls.length > 0 ? (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Photo</CardTitle>
-            <CardDescription>
-              First image from <strong>Image URLs</strong> below (cached eBay, WatchBase, or manual link).
-              {previewImageUrls.length > 1
-                ? ` ${previewImageUrls.length} URLs total — showing the first.`
-                : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center pt-0">
-            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic catalog / eBay URLs */}
-            <img
-              src={mediaUrl(previewImageUrls[0])}
-              alt={photoAlt}
-              className="max-h-[min(28rem,75vh)] w-auto max-w-full rounded-lg border border-border bg-muted/30 object-contain shadow-sm"
-              referrerPolicy="no-referrer"
-            />
-          </CardContent>
-        </Card>
-      ) : null}
-
       <Card>
         <CardHeader>
           <CardTitle>Core identity</CardTitle>
@@ -842,8 +819,49 @@ function DetailBody() {
       <Card>
         <CardHeader>
           <CardTitle>Media &amp; notes</CardTitle>
+          <CardDescription>
+            When you add URLs, a preview and a clickable list appear above the text field. The large image uses the
+            first line; <code className="rounded bg-muted px-1">/api/media/…</code> paths open via the API base.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {previewImageUrls.length > 0 ? (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/15 p-4">
+              <p className="text-sm font-medium">Image preview</p>
+              <div className="flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element -- dynamic catalog / eBay URLs */}
+                <img
+                  src={mediaUrl(previewImageUrls[0])}
+                  alt={photoAlt}
+                  className="max-h-[min(24rem,70vh)] w-auto max-w-full rounded-md border border-border bg-muted/30 object-contain shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">URLs (same order as the field below)</p>
+                <ul className="space-y-2 text-sm">
+                  {previewImageUrls.map((u, i) => (
+                    <li
+                      key={`${i}-${u.slice(0, 48)}`}
+                      className="rounded-md border border-border/80 bg-background/80 px-2 py-1.5"
+                    >
+                      <span className="mb-0.5 block text-xs text-muted-foreground">
+                        {i === 0 ? "Line 1 (preview above)" : `Line ${i + 1}`}
+                      </span>
+                      <a
+                        href={mediaUrl(u)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="break-all font-mono text-xs text-primary underline-offset-2 hover:underline"
+                      >
+                        {u}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
           <div>
             <label className="text-sm font-medium" htmlFor="img">
               Image URLs (one per line)
