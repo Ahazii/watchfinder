@@ -50,6 +50,21 @@ export type CompBand = {
   label: string;
 };
 
+/** Stored from WatchBase /prices JSON (EUR list prices). */
+export type WatchBasePriceHistory = {
+  source?: string;
+  currency?: string;
+  fetched_at?: string;
+  points?: { date: string; amount: string; series: string }[];
+};
+
+export type WatchBaseImportResult = {
+  canonical_url: string;
+  prices_url: string;
+  fields_updated: string[];
+  price_points: number;
+};
+
 export type WatchModelBrief = {
   id: string;
   brand: string;
@@ -80,6 +95,8 @@ export type WatchModel = WatchModelBrief & {
   spec_dial_color?: string | null;
   spec_dial_material?: string | null;
   spec_indexes_hands?: string | null;
+  external_price_history?: WatchBasePriceHistory | null;
+  watchbase_imported_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

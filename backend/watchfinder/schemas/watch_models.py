@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,6 +40,8 @@ class WatchModelOut(WatchModelBriefOut):
     spec_dial_color: str | None = None
     spec_dial_material: str | None = None
     spec_indexes_hands: str | None = None
+    external_price_history: dict[str, Any] | None = None
+    watchbase_imported_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -107,6 +110,15 @@ class PromoteWatchCatalogResponse(BaseModel):
 
     outcome: str
     watch_model: WatchModelOut | None = None
+
+
+class WatchBaseImportResponse(BaseModel):
+    """Result of POST /api/watch-models/{id}/import-watchbase."""
+
+    canonical_url: str
+    prices_url: str
+    fields_updated: list[str]
+    price_points: int
 
 
 class BackfillWatchCatalogResponse(BaseModel):

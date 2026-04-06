@@ -8,15 +8,18 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from watchfinder.api.deps import get_db
+from watchfinder.config import get_settings
 from watchfinder.models import WatchModel
 from watchfinder.schemas.watch_models import (
     BackfillWatchCatalogResponse,
+    WatchBaseImportResponse,
     WatchModelCreate,
     WatchModelListResponse,
     WatchModelOut,
     WatchModelPatch,
 )
 from watchfinder.services.watch_models import backfill_watch_catalog, refresh_watch_model_observed_bounds
+from watchfinder.services.watchbase_import import WatchBaseImportError, import_watchbase_for_model
 
 router = APIRouter(prefix="/watch-models", tags=["watch-models"])
 
@@ -66,6 +69,21 @@ def list_watch_models(
         skip=skip,
         limit=limit,
     )
+
+
+@router.post(
+    "/{model_id}/import-watchbase",
+    response_model=WatchBaseImportResponse,
+    summary="Import WatchBase specs + EUR list price history (on-demand)",
+)
+def post_import_watchbase(
+    model_id: UUID, db: Session = Depends(get_db)
+) -> WatchBaseImportResponse:
+    try:
+        data = import_watchbase_for_model(db, model_id, get_settings())
+    except WatchBaseImportError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e)) from e
+    return WatchBaseImportResponse(**data)
 
 
 @router.get("/{model_id}", response_model=WatchModelOut)

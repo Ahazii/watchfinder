@@ -38,7 +38,7 @@ This document records what is implemented in the repository versus the phased pl
 - **Live item** (`browse.py` **`get_item`**, `live_refresh.py`): **`POST /api/listings/{id}/refresh-from-ebay`**; increments **`browse_get_item`** usage counter; listing detail UI **Refresh from eBay**; **`404`** → **`is_active=false`**.
 - **Stale batch refresh**: APScheduler job **`stale_listing_refresh`** (`services/stale_listing_refresh.py`, **`stale_refresh_worker.py`**) — active listings with **`last_seen_at`** older than configurable **min age** (or null; **0** = any past timestamp), up to **max per run**, **~0.35s** between **getItem** calls. One shared **`EbayBrowseClient`** + **`EbayAuthClient`** per batch (single OAuth token while cached). Toggle + limits in **Settings** (persisted **`app_settings`**); env **`STALE_LISTING_REFRESH_*`** defaults. **`POST /api/ingest/stale-refresh-run`** for a manual batch; logs explain **attempted: 0** when no rows match the age filter.
 - **Listings / candidates API**: **`listing_active`** (**active** / **inactive** / **all**) and **`exclude_quartz`** query filters; UI status column and filters.
-- **Schema** migrations **005**–**006**: **`ebay_item_id`** width **128**; **`watch_models.reference_url`** + optional spec columns (case, dial, WR, etc.) for manual enrichment (e.g. WatchBase).
+- **Schema** migrations **005**–**007**: **`ebay_item_id`** width **128**; **`watch_models`** spec columns + **`reference_url`**; **`external_price_history`** (JSONB) + **`watchbase_imported_at`** for on-demand WatchBase import.
 - **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
 
 ---
@@ -49,7 +49,7 @@ This document records what is implemented in the repository versus the phased pl
 - **Settings** via `pydantic-settings` (`watchfinder/config.py`): `DATABASE_URL`, eBay credentials, marketplace, search query/limit, **`ingest_max_pages`**, etc.
 - **PostgreSQL** via SQLAlchemy 2 + **psycopg** (`watchfinder/db.py`).
 - **Models** (`watchfinder/models/listing.py`): `listings`, `listing_snapshots`, `parsed_attributes`, `repair_signals`, `opportunity_scores`, `saved_searches`, `app_settings`, **`listing_edits`**, **`watch_sale_records`**, **`watch_models`** (listing **`watch_model_id`** FK **SET NULL**).
-- **Alembic**: **001**–**006** (latest: **`watch_models`** **`reference_url`** + optional WatchBase-style spec columns).
+- **Alembic**: **001**–**007** (latest: **`external_price_history`** + **`watchbase_imported_at`**; **006** specs + **`reference_url`**).
 - **eBay**: client-credentials OAuth (`services/ebay/auth.py`), **Browse** search + **getItem** (`browse.py`), **Taxonomy** client stub (`taxonomy.py`).
 - **Ingestion**: `mapper.py`, `job.py`, `live_refresh.py`; multi-query cycle from **`saved_searches`** or env fallback; shared **`EbayBrowseClient`** per cycle.
 - **Docker** / **CI** / **Kickoff docs** as before.
@@ -90,7 +90,7 @@ OpenAPI: **`/docs`**.
 - **Schema**: **`watch_models`** (brand, model family/name, reference, caliber, image URLs, production dates, description, **manual** and **observed** price low/high). Partial unique index: normalized **brand + reference** when reference is non-empty.
 - **Matching + create + queue**: **`auto`** vs **`review`** mode; **`watch_model_link_reviews`**; **`POST /api/watch-link-reviews/{id}/resolve`**; **`promote-watch-catalog`** bypasses queue; listing detail **Catalogue review pending** banner.
 - **Observed bounds**: linked listings + compatible **`watch_sale_records`**; refreshed on analyze and model changes.
-- **API / UI**: **`/api/watch-models`**, nav **Watch database**, listing **Watch catalog link** card. **Watch model detail**: optional **spec** fields + **Reference URL**; **WatchBase** guess + Google `site:watchbase.com` buttons (manual copy from third-party pages; no scraping). **Dashboard** “Recently added” uses **`first_seen_at`** (not **`last_seen_at`** after refresh).
+- **API / UI**: **`/api/watch-models`**, nav **Watch database**, listing **Watch catalog link** card. **Watch model detail**: optional **spec** fields + **Reference URL**; **WatchBase** guess + Google links; **`POST …/import-watchbase`** fetches public HTML + **`/prices`** JSON (EUR list price history in **`external_price_history`**), **BeautifulSoup** table parse, **`WATCHBASE_IMPORT_ENABLED`**. **Dashboard** “Recently added” uses **`first_seen_at`**.
 
 ## Phase 5c — Match queue (complete)
 
@@ -125,7 +125,7 @@ OpenAPI: **`/docs`**.
 | `backend/watchfinder/stale_refresh_worker.py` | APScheduler job entry |
 | `backend/watchfinder/services/ingest_settings.py` | Ingest queries, interval, **`ingest_search_limit`**, **`ingest_max_pages`** |
 | `tests/` | **`pytest`** targets |
-| `alembic/versions/` | **001**–**006** |
+| `alembic/versions/` | **001**–**007** |
 | `pytest.ini` | `pythonpath = backend` |
 
 ---
@@ -137,4 +137,4 @@ OpenAPI: **`/docs`**.
 3. Use **`watch_models`** in scoring when formula is defined.
 4. First-class **O** (ended / last sold) if you want beyond **getItem** + inactive.
 
-For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **006**).
+For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **007**).

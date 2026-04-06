@@ -4,7 +4,11 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson } from "@/lib/api";
-import type { WatchModel } from "@/lib/types";
+import type {
+  WatchBaseImportResult,
+  WatchBasePriceHistory,
+  WatchModel,
+} from "@/lib/types";
 import { money } from "@/lib/format";
 import {
   watchbaseGoogleSearchUrl,
@@ -64,6 +68,10 @@ function DetailBody() {
   const [specDialColor, setSpecDialColor] = useState("");
   const [specDialMat, setSpecDialMat] = useState("");
   const [specIdxHands, setSpecIdxHands] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importDetail, setImportDetail] = useState<WatchBaseImportResult | null>(null);
+  const [extPrices, setExtPrices] = useState<WatchBasePriceHistory | null>(null);
 
   const applyModel = useCallback((m: WatchModel) => {
     setBrand(m.brand ?? "");
@@ -95,6 +103,7 @@ function DetailBody() {
     setSpecDialColor(m.spec_dial_color ?? "");
     setSpecDialMat(m.spec_dial_material ?? "");
     setSpecIdxHands(m.spec_indexes_hands ?? "");
+    setExtPrices(m.external_price_history ?? null);
   }, []);
 
   useEffect(() => {
@@ -126,6 +135,8 @@ function DetailBody() {
         spec_dial_color: null,
         spec_dial_material: null,
         spec_indexes_hands: null,
+        external_price_history: null,
+        watchbase_imported_at: null,
       });
       setErr(null);
       return;
@@ -178,6 +189,39 @@ function DetailBody() {
       spec_dial_material: specDialMat.trim() || null,
       spec_indexes_hands: specIdxHands.trim() || null,
     };
+  };
+
+  const importFromWatchbase = () => {
+    if (!id || isNew) return;
+    setImportBusy(true);
+    setImportMsg(null);
+    setImportDetail(null);
+    fetch(apiUrl(`/api/watch-models/${id}/import-watchbase`), { method: "POST" })
+      .then(async (res) => {
+        const text = await res.text();
+        if (!res.ok) {
+          try {
+            const j = JSON.parse(text) as { detail?: string | unknown };
+            const d = j.detail;
+            throw new Error(
+              typeof d === "string" ? d : Array.isArray(d) ? JSON.stringify(d) : text,
+            );
+          } catch {
+            throw new Error(text || res.statusText);
+          }
+        }
+        return JSON.parse(text) as WatchBaseImportResult;
+      })
+      .then((r) => {
+        setImportDetail(r);
+        setImportMsg(
+          `Imported ${r.price_points} price point(s). Updated: ${r.fields_updated.join(", ")}.`,
+        );
+        return fetchJson<WatchModel>(`/api/watch-models/${id}`);
+      })
+      .then(applyModel)
+      .catch((e: Error) => setImportMsg(e.message))
+      .finally(() => setImportBusy(false));
   };
 
   const save = () => {
@@ -286,32 +330,62 @@ function DetailBody() {
         <CardHeader>
           <CardTitle>WatchBase &amp; external page</CardTitle>
           <CardDescription>
-            <strong>Open WatchBase (guess)</strong> builds{" "}
-            <code className="rounded bg-muted px-1">watchbase.com/brand-slug/family-slug/ref-with-dashes</code>
-            . It only works when WatchBase uses the same slugs as our simple rules — otherwise use{" "}
-            <strong>Search WatchBase (Google)</strong> or paste the page you find into{" "}
-            <strong>Reference URL</strong> (example:{" "}
+            Use <strong>Import from WatchBase</strong> to fetch this model’s public HTML and the same{" "}
+            <code className="rounded bg-muted px-1">/prices</code> JSON the site uses for its chart (EUR list
+            prices). Only click when needed — keep volume low and comply with{" "}
             <a
               className="text-primary underline-offset-4 hover:underline"
-              href="https://watchbase.com/omega/seamaster-diver-300m/210-30-42-20-01-001"
+              href="https://watchbase.com/terms"
               target="_blank"
               rel="noreferrer"
             >
-              Omega 210.30.42.20.01.001
+              WatchBase terms
             </a>
-            ). We do not scrape WatchBase; copy fields manually into specifications below. Respect their{" "}
+            ; for automated or commercial scale use their{" "}
             <a
               className="text-primary underline-offset-4 hover:underline"
               href="https://watchbase.com/"
               target="_blank"
               rel="noreferrer"
             >
-              terms of use
+              Data Feed
             </a>
-            .
+            . Set <strong>Reference URL</strong> or brand + family + reference so we know which page to open.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!isNew ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="default"
+                disabled={importBusy}
+                onClick={importFromWatchbase}
+              >
+                {importBusy ? "Importing…" : "Import from WatchBase"}
+              </Button>
+              {importDetail ? (
+                <span className="text-xs text-muted-foreground">
+                  Last: {importDetail.price_points} prices ·{" "}
+                  <a
+                    className="text-primary underline-offset-4 hover:underline"
+                    href={importDetail.canonical_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    page
+                  </a>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {importMsg ? (
+            <p
+              className={`text-sm ${importMsg.includes("Imported") ? "text-muted-foreground" : "text-red-400"}`}
+            >
+              {importMsg}
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             {wbGuess ? (
               <Button variant="outline" size="sm" asChild>
@@ -409,6 +483,39 @@ function DetailBody() {
           />
         </CardContent>
       </Card>
+
+      {extPrices?.points && extPrices.points.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>List prices (imported)</CardTitle>
+            <CardDescription>
+              {extPrices.currency === "EUR" ? "EUR" : extPrices.currency || "—"} · source{" "}
+              {extPrices.source || "watchbase"}
+              {extPrices.fetched_at ? ` · fetched ${extPrices.fetched_at.slice(0, 10)}` : ""}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full min-w-[320px] text-left text-sm">
+              <thead className="border-b border-border text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-3 font-medium">Date</th>
+                  <th className="py-2 pr-3 font-medium">Series</th>
+                  <th className="py-2 font-medium tabular-nums">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {extPrices.points.map((p, i) => (
+                  <tr key={`${p.date}-${i}`} className="border-b border-border/50">
+                    <td className="py-1.5 pr-3">{p.date}</td>
+                    <td className="py-1.5 pr-3">{p.series}</td>
+                    <td className="py-1.5 tabular-nums">{p.amount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

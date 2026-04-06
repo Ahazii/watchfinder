@@ -20,7 +20,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 - `frontend/` — Next.js 14 (App Router), TypeScript, Tailwind, shadcn-style UI
 - `backend/watchfinder/` — FastAPI app, models, eBay clients, ingestion, parsing, scoring
-- `alembic/` — database migrations through **006** (**`watch_models`** optional specs + **`reference_url`**; prior: **005** wider **`ebay_item_id`**)
+- `alembic/` — database migrations through **007** (**`external_price_history`** JSONB + **`watchbase_imported_at`**; **006** specs + **`reference_url`**; **005** **`ebay_item_id`**)
 - `docker/start.sh` — wait for Postgres → `alembic upgrade head` → `uvicorn`
 - `Dockerfile` — multi-stage image (Node build + Python runtime, non-root user, healthcheck)
 - `docker-compose.yml` — local **postgres:16** + app build
@@ -63,6 +63,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | POST | `/api/watch-link-reviews/{uuid}/resolve` | Body `{ "action": "match"|"create"|"dismiss", "watch_model_id"?: uuid }` |
 | GET | `/api/watch-models/{uuid}` | One model |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
+| POST | `/api/watch-models/{uuid}/import-watchbase` | Server fetches WatchBase watch HTML + public **`/prices`** JSON; fills specs, description, **`external_price_history`** (EUR list prices). Low-volume / manual use; set **`WATCHBASE_IMPORT_ENABLED=false`** to disable |
 | DELETE | `/api/watch-models/{uuid}` | Delete (listings unlinked via FK **SET NULL**) |
 | GET | `/api/candidates` | Same filters and **sort** as listings (**`listing_active`**, **`exclude_quartz`**, etc.); only rows with `potential_profit > 0` |
 | GET | `/api/settings` | Ingest interval, **`ebay_search_limit`**, **`ingest_max_pages`**, stale-refresh toggles (**`stale_listing_refresh_*`**), saved Browse query lines, env fallback hint |
@@ -78,7 +79,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **Repair:** rule-based core **plus** optional **repair add-on** and **donor cost** (both included in total repair for profit math). Fees/shipping ignored.
 - **Tuning asking-sample size:** optional **`app_settings`** row **`max_comp_candidates`** (integer string, default **200** in code if unset).
 
-After upgrading, run **`alembic upgrade head`** (through **006** / watch-model specs + **`ebay_item_id`** length from **005**).
+After upgrading, run **`alembic upgrade head`** (through **007** / WatchBase import columns + prior migrations).
 
 ### Listing `is_active` and live checks
 

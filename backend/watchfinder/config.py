@@ -84,6 +84,16 @@ class Settings(BaseSettings):
         le=720,
         description="Only refresh active listings with last_seen_at null or older than this many hours (0 = any past timestamp)",
     )
+    watchbase_import_enabled: bool = Field(
+        True,
+        alias="WATCHBASE_IMPORT_ENABLED",
+        description="Allow POST import from WatchBase (button on watch model detail)",
+    )
+    watchbase_import_user_agent: str | None = Field(
+        None,
+        alias="WATCHBASE_HTTP_USER_AGENT",
+        description="Optional override User-Agent for WatchBase HTTP requests",
+    )
 
 
 @lru_cache
