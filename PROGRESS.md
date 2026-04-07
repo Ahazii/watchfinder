@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **6 April 2026**
+Last updated: **7 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -68,6 +68,7 @@ OpenAPI: **`/docs`**.
 
 - **Pages**: dashboard (extra counter card), listings, listing detail (**Refresh from eBay**, active/inactive badge), candidates, settings (**pages per search line**, **stale listing refresh**), watch-models, watch-review.
 - **UI (2026):** **`money()`** in **`frontend/lib/format.ts`** formats with **Intl** currency (default **GBP** when code missing); **`currencyInputLabelSuffix`** for numeric field labels. Explanatory **CardDescription** / intro copy on listing detail, watch detail/list, listings/candidates tables (**SortableTableHead** `title`), dashboard, match queue, and **Settings** (**Prices & currencies**, **Save & manual jobs**). Watch detail: **Refresh data from WatchBase** (same as import).
+- **Watch database / WatchBase (2026):** **`/watch-models/`** — checkbox selection (Shift+range on current page), **Select all on page** / **none**, presets **Select unmatched (catalog)** (U3: no Reference URL or never imported) and **Select without pricing (catalog)** (P3: no price history points or no manual bounds); presets paginate the full API result respecting list search. **Supervised WatchBase import** draggable modeless wizard: side-by-side large images (DB vs WatchBase hits), **Yes** per hit or saved URL, **No match** to skip; random **1–5 s** delay between WatchBase HTTP steps; **Open full detail** in new tab. Helpers **`frontend/lib/watch-models-batch.ts`**, **`WatchbaseBatchWizard`** component.
 
 ---
 

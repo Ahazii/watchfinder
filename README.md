@@ -86,6 +86,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **eBay listings** use **that item’s currency** for price, shipping, opportunity score lines, and (for consistency) your per-listing valuation inputs — see symbols in cells (**`money()`** in `frontend/lib/format.ts` defaults to GBP only when no valid ISO code is passed).
 - **List / candidate price filters** compare **numeric** amounts as stored; they do not convert currencies.
 - **Settings** includes a **“Prices & currencies in the UI”** card; listing, watch, dashboard, and match-queue pages use **CardDescription** text and table header **tooltips** where prices appear.
+- **Watch database (`/watch-models/`):** supervised **batch** WatchBase import with per-row verification (large images, **Yes** / **No match**), checkbox + Shift range selection, catalog-wide presets (unmatched / without pricing), and jittered delays between WatchBase calls.
 
 After upgrading, run **`alembic upgrade head`** (through **007** / WatchBase import columns + prior migrations).
 

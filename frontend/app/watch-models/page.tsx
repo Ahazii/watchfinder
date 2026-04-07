@@ -1,16 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiUrl, fetchJson } from "@/lib/api";
 import { TABLE_THUMB_STORAGE, usePersistedTableThumbSize } from "@/lib/table-thumb-sizes";
 import { TableThumbSizeSelect } from "@/components/table-thumb-size-select";
+import { WatchbaseBatchWizard } from "@/components/watchbase-batch-wizard";
 import type {
   BackfillWatchCatalogResponse,
   WatchModel,
   WatchModelListResponse,
 } from "@/lib/types";
 import { money } from "@/lib/format";
+import {
+  fetchAllWatchModels,
+  isUnmatchedU3,
+  lacksPricingP3,
+  sortIdsForBatch,
+} from "@/lib/watch-models-batch";
 import { ListingThumb } from "@/components/listing-thumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +42,15 @@ export default function WatchModelsPage() {
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
   const { sizeId: thumbSizeId, setSizeId: setThumbSizeId, sizeClass: thumbSizeClass } =
     usePersistedTableThumbSize(TABLE_THUMB_STORAGE.watchDatabase);
+
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const shiftAnchorRef = useRef<number | null>(null);
+  const [presetBusy, setPresetBusy] = useState(false);
+  const [presetErr, setPresetErr] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardOrderedIds, setWizardOrderedIds] = useState<string[]>([]);
+
+  const rowOrderHint = useMemo(() => new Map(rows.map((r, i) => [r.id, i])), [rows]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
@@ -90,6 +106,63 @@ export default function WatchModelsPage() {
       .finally(() => setBackfillBusy(false));
   };
 
+  const handleCheckboxChange = (id: string, rowIndex: number, checked: boolean, shiftKey: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (shiftKey && shiftAnchorRef.current !== null) {
+        const lo = Math.min(shiftAnchorRef.current, rowIndex);
+        const hi = Math.max(shiftAnchorRef.current, rowIndex);
+        for (let i = lo; i <= hi; i++) {
+          const rid = rows[i]?.id;
+          if (!rid) continue;
+          if (checked) next.add(rid);
+          else next.delete(rid);
+        }
+      } else {
+        shiftAnchorRef.current = rowIndex;
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllOnPage = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of rows) next.add(r.id);
+      return next;
+    });
+    shiftAnchorRef.current = rows.length ? 0 : null;
+  };
+
+  const selectNone = () => {
+    setSelected(new Set());
+    shiftAnchorRef.current = null;
+  };
+
+  const runPreset = async (predicate: (m: WatchModel) => boolean) => {
+    setPresetErr(null);
+    setPresetBusy(true);
+    try {
+      const all = await fetchAllWatchModels(debounced);
+      const ids = new Set(all.filter(predicate).map((m) => m.id));
+      setSelected(ids);
+      shiftAnchorRef.current = null;
+    } catch (e) {
+      setPresetErr((e as Error).message);
+    } finally {
+      setPresetBusy(false);
+    }
+  };
+
+  const startWizard = () => {
+    if (selected.size === 0) return;
+    const ordered = sortIdsForBatch(selected, rowOrderHint);
+    setWizardOrderedIds(ordered);
+    setWizardOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -106,6 +179,72 @@ export default function WatchModelsPage() {
           <Link href="/watch-models/detail/">Add model</Link>
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Supervised WatchBase import (batch)</CardTitle>
+          <CardDescription>
+            Select rows with checkboxes (Shift+click to range-select on the <strong>current page</strong>).
+            Presets load the <strong>whole catalog</strong> matching your search box (same filter as the table),
+            then replace the selection. Each watch runs a WatchBase search, shows large images side by side, and
+            requires <strong>Yes</strong> on a match or <strong>No match</strong> to skip. Random 1–5 s delay
+            between WatchBase requests. Open <strong>full detail</strong> in a new tab from the wizard when you
+            need more context. Comply with{" "}
+            <a
+              className="text-primary underline-offset-4 hover:underline"
+              href="https://watchbase.com/terms"
+              target="_blank"
+              rel="noreferrer"
+            >
+              WatchBase terms
+            </a>
+            .
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+          <Button type="button" variant="outline" size="sm" onClick={selectAllOnPage} disabled={rows.length === 0}>
+            Select all on page
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={selectNone} disabled={selected.size === 0}>
+            Select none
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={presetBusy}
+            onClick={() => runPreset(isUnmatchedU3)}
+          >
+            {presetBusy ? "Loading…" : "Select unmatched (catalog)"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={presetBusy}
+            onClick={() => runPreset(lacksPricingP3)}
+          >
+            {presetBusy ? "Loading…" : "Select without pricing (catalog)"}
+          </Button>
+          <Button type="button" disabled={selected.size === 0} onClick={startWizard}>
+            Start supervised import…
+          </Button>
+        </CardContent>
+        {presetErr ? <p className="mt-2 text-sm text-red-400">{presetErr}</p> : null}
+        <CardContent className="border-t border-border pt-4 text-xs text-muted-foreground">
+          <strong>Unmatched:</strong> no Reference URL <em>or</em> never WatchBase-imported.{" "}
+          <strong>Without pricing:</strong> no imported price history points <em>or</em> both manual low/high
+          empty.
+        </CardContent>
+      </Card>
+
+      <WatchbaseBatchWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        orderedIds={wizardOrderedIds}
+        onImported={load}
+      />
 
       <Card>
         <CardHeader>
@@ -144,9 +283,12 @@ export default function WatchModelsPage() {
       {err ? <p className="text-sm text-red-400">{err}</p> : null}
 
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[800px] text-left text-sm">
+        <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-border bg-muted/40">
             <tr>
+              <th className="w-10 px-2 py-2 font-medium" title="Shift+click for range on this page">
+                <span className="sr-only">Select</span>
+              </th>
               <th className="px-3 py-2 font-medium align-bottom">
                 <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
                   <span>Photo</span>
@@ -177,13 +319,29 @@ export default function WatchModelsPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
                   No models yet. Add one or widen your search.
                 </td>
               </tr>
             ) : (
-              rows.map((m) => (
+              rows.map((m, rowIndex) => (
                 <tr key={m.id} className="border-b border-border/60">
+                  <td className="px-2 py-2 align-top">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={selected.has(m.id)}
+                      onChange={(e) =>
+                        handleCheckboxChange(
+                          m.id,
+                          rowIndex,
+                          e.target.checked,
+                          (e.nativeEvent as globalThis.MouseEvent).shiftKey,
+                        )
+                      }
+                      aria-label={`Select ${label(m)}`}
+                    />
+                  </td>
                   <td className="px-3 py-2 align-top">
                     <ListingThumb urls={m.image_urls} alt="" sizeClass={thumbSizeClass} />
                   </td>
