@@ -31,7 +31,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-const PAGE = 50;
+const WM_PAGE_SIZE_KEY = "watchfinder-watch-models-page-size";
+const WM_PAGE_SIZE_OPTIONS = [25, 50, 100, 200, 500, "all"] as const;
+type WatchModelsPageSize = (typeof WM_PAGE_SIZE_OPTIONS)[number];
+
+function parseWatchModelsPageSize(raw: string | null): WatchModelsPageSize {
+  if (raw === "all") return "all";
+  const n = Number(raw);
+  if (Number.isFinite(n) && [25, 50, 100, 200, 500].includes(n)) {
+    return n as 25 | 50 | 100 | 200 | 500;
+  }
+  return 50;
+}
 
 export default function WatchModelsPage() {
   const [q, setQ] = useState("");
@@ -41,9 +52,13 @@ export default function WatchModelsPage() {
   const [modelNameFilter, setModelNameFilter] = useState("");
   const [caliberFilter, setCaliberFilter] = useState("");
   const [debouncedListFilters, setDebouncedListFilters] = useState<WatchModelListFilters>({});
+  const [pageSize, setPageSizeState] = useState<WatchModelsPageSize>(() =>
+    typeof window === "undefined" ? 50 : parseWatchModelsPageSize(localStorage.getItem(WM_PAGE_SIZE_KEY)),
+  );
   const [skip, setSkip] = useState(0);
   const [rows, setRows] = useState<WatchModel[]>([]);
   const [total, setTotal] = useState(0);
+  const [loadBusy, setLoadBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
@@ -56,8 +71,18 @@ export default function WatchModelsPage() {
   const [presetErr, setPresetErr] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardOrderedIds, setWizardOrderedIds] = useState<string[]>([]);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
 
   const rowOrderHint = useMemo(() => new Map(rows.map((r, i) => [r.id, i])), [rows]);
+
+  const setPageSize = useCallback((v: WatchModelsPageSize) => {
+    setPageSizeState(v);
+    try {
+      localStorage.setItem(WM_PAGE_SIZE_KEY, String(v));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -92,11 +117,26 @@ export default function WatchModelsPage() {
     setSkip(0);
   }, [debouncedListFilters]);
 
+  useEffect(() => {
+    setSkip(0);
+  }, [pageSize]);
+
   const load = useCallback(() => {
     setErr(null);
+    setLoadBusy(true);
+    if (pageSize === "all") {
+      fetchAllWatchModels(debouncedListFilters)
+        .then((items) => {
+          setRows(items);
+          setTotal(items.length);
+        })
+        .catch((e: Error) => setErr(e.message))
+        .finally(() => setLoadBusy(false));
+      return;
+    }
     const params = new URLSearchParams({
       skip: String(skip),
-      limit: String(PAGE),
+      limit: String(pageSize),
     });
     appendWatchModelListFilters(params, debouncedListFilters);
     fetchJson<WatchModelListResponse>(`/api/watch-models?${params}`)
@@ -104,8 +144,9 @@ export default function WatchModelsPage() {
         setRows(r.items);
         setTotal(r.total);
       })
-      .catch((e: Error) => setErr(e.message));
-  }, [skip, debouncedListFilters]);
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setLoadBusy(false));
+  }, [skip, debouncedListFilters, pageSize]);
 
   useEffect(() => {
     load();
@@ -194,6 +235,43 @@ export default function WatchModelsPage() {
     setWizardOpen(true);
   };
 
+  const deleteSelected = async () => {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    const n = ids.length;
+    if (
+      !window.confirm(
+        `Delete ${n} catalog row${n === 1 ? "" : "s"}? Linked listings will be unlinked (FK SET NULL). This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBulkDeleteBusy(true);
+    setErr(null);
+    let ok = 0;
+    let lastErr = "";
+    for (const id of ids) {
+      try {
+        const res = await fetch(apiUrl(`/api/watch-models/${id}`), { method: "DELETE" });
+        if (!res.ok) lastErr = await res.text();
+        else ok += 1;
+      } catch (e) {
+        lastErr = (e as Error).message;
+      }
+    }
+    setBulkDeleteBusy(false);
+    setSelected(new Set());
+    shiftAnchorRef.current = null;
+    if (ok < n) {
+      setErr(
+        lastErr
+          ? `Deleted ${ok} of ${n}. Last error: ${lastErr}`
+          : `Deleted ${ok} of ${n}.`,
+      );
+    }
+    load();
+  };
+
   const onWizardDeleted = useCallback(
     (id: string) => {
       setWizardOrderedIds((prev) => prev.filter((x) => x !== id));
@@ -274,6 +352,15 @@ export default function WatchModelsPage() {
           </Button>
           <Button type="button" disabled={selected.size === 0} onClick={startWizard}>
             Start supervised import…
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-red-800 text-red-400 hover:bg-red-950/40"
+            disabled={selected.size === 0 || bulkDeleteBusy}
+            onClick={() => void deleteSelected()}
+          >
+            {bulkDeleteBusy ? "Deleting…" : `Delete selected (${selected.size})`}
           </Button>
         </CardContent>
         {presetErr ? <p className="mt-2 text-sm text-red-400">{presetErr}</p> : null}
@@ -391,6 +478,34 @@ export default function WatchModelsPage() {
 
       {err ? <p className="text-sm text-red-400">{err}</p> : null}
 
+      <div className="flex flex-wrap items-center justify-end gap-3 text-sm text-muted-foreground">
+        {loadBusy ? (
+          <span className="text-muted-foreground" aria-live="polite">
+            Loading…
+          </span>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="wm-page-size" className="text-xs font-medium text-muted-foreground">
+            Rows per page
+          </label>
+          <select
+            id="wm-page-size"
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={String(pageSize)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setPageSize(v === "all" ? "all" : parseWatchModelsPageSize(v));
+            }}
+          >
+            {WM_PAGE_SIZE_OPTIONS.map((opt) => (
+              <option key={String(opt)} value={String(opt)}>
+                {opt === "all" ? "All (matching filters)" : opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-border bg-muted/40">
@@ -485,26 +600,36 @@ export default function WatchModelsPage() {
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         <span>
-          {total === 0 ? "0" : `${skip + 1}–${Math.min(skip + rows.length, total)}`} of {total}
+          {pageSize === "all"
+            ? total === 0
+              ? "0"
+              : `All ${total} shown`
+            : total === 0
+              ? "0"
+              : `${skip + 1}–${Math.min(skip + rows.length, total)} of ${total}`}
         </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={skip <= 0}
-          onClick={() => setSkip((s) => Math.max(0, s - PAGE))}
-        >
-          Previous
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={skip + PAGE >= total}
-          onClick={() => setSkip((s) => s + PAGE)}
-        >
-          Next
-        </Button>
+        {pageSize !== "all" ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={skip <= 0 || loadBusy}
+              onClick={() => setSkip((s) => Math.max(0, s - pageSize))}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={skip + pageSize >= total || loadBusy}
+              onClick={() => setSkip((s) => s + pageSize)}
+            >
+              Next
+            </Button>
+          </>
+        ) : null}
       </div>
     </div>
   );
