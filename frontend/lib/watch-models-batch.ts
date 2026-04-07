@@ -1,6 +1,25 @@
 import type { WatchModel, WatchModelListResponse } from "@/lib/types";
 import { fetchJson } from "@/lib/api";
 
+/** Filters for GET /api/watch-models (AND between fields; `q` ORs across main text columns). */
+export type WatchModelListFilters = {
+  q?: string;
+  brand?: string;
+  reference?: string;
+  model_family?: string;
+  model_name?: string;
+  caliber?: string;
+};
+
+export function appendWatchModelListFilters(params: URLSearchParams, f: WatchModelListFilters): void {
+  if (f.q?.trim()) params.set("q", f.q.trim());
+  if (f.brand?.trim()) params.set("brand", f.brand.trim());
+  if (f.reference?.trim()) params.set("reference", f.reference.trim());
+  if (f.model_family?.trim()) params.set("model_family", f.model_family.trim());
+  if (f.model_name?.trim()) params.set("model_name", f.model_name.trim());
+  if (f.caliber?.trim()) params.set("caliber", f.caliber.trim());
+}
+
 /** U3: no reference URL or never WatchBase-imported. */
 export function isUnmatchedU3(m: WatchModel): boolean {
   const noUrl = !(m.reference_url && m.reference_url.trim());
@@ -23,14 +42,14 @@ export function buildWatchbaseSearchQuery(
   return parts.join(" ").trim();
 }
 
-/** All pages for current search (respects same `q` as list UI). */
-export async function fetchAllWatchModels(searchQ: string): Promise<WatchModel[]> {
+/** All pages for current list filters (used by catalog presets). */
+export async function fetchAllWatchModels(filters: WatchModelListFilters): Promise<WatchModel[]> {
   const items: WatchModel[] = [];
   let skip = 0;
   const limit = 200;
   for (;;) {
     const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
-    if (searchQ.trim()) params.set("q", searchQ.trim());
+    appendWatchModelListFilters(params, filters);
     const r = await fetchJson<WatchModelListResponse>(`/api/watch-models?${params}`);
     items.push(...r.items);
     if (r.items.length < limit || items.length >= r.total) break;

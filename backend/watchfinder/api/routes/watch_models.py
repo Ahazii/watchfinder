@@ -75,17 +75,62 @@ def _apply_search(stmt, q: str | None):
     )
 
 
+def _apply_field_contains(stmt, column, value: str | None):
+    if not value or not str(value).strip():
+        return stmt
+    needle = f"%{str(value).strip().lower()}%"
+    return stmt.where(func.lower(func.coalesce(column, "")).like(needle))
+
+
+def _apply_watch_model_list_filters(
+    stmt,
+    q: str | None,
+    brand: str | None,
+    reference: str | None,
+    model_family: str | None,
+    model_name: str | None,
+    caliber: str | None,
+):
+    stmt = _apply_field_contains(stmt, WatchModel.brand, brand)
+    stmt = _apply_field_contains(stmt, WatchModel.reference, reference)
+    stmt = _apply_field_contains(stmt, WatchModel.model_family, model_family)
+    stmt = _apply_field_contains(stmt, WatchModel.model_name, model_name)
+    stmt = _apply_field_contains(stmt, WatchModel.caliber, caliber)
+    return _apply_search(stmt, q)
+
+
 @router.get("", response_model=WatchModelListResponse)
 def list_watch_models(
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     q: str | None = None,
+    brand: str | None = Query(None, description="Contains match (case-insensitive) on brand"),
+    reference: str | None = Query(None, description="Contains match on reference"),
+    model_family: str | None = Query(None, description="Contains match on model family"),
+    model_name: str | None = Query(None, description="Contains match on model name"),
+    caliber: str | None = Query(None, description="Contains match on caliber"),
 ) -> WatchModelListResponse:
-    count_stmt = _apply_search(select(func.count()).select_from(WatchModel), q)
+    count_stmt = _apply_watch_model_list_filters(
+        select(func.count()).select_from(WatchModel),
+        q,
+        brand,
+        reference,
+        model_family,
+        model_name,
+        caliber,
+    )
     total = db.scalar(count_stmt) or 0
 
-    list_stmt = _apply_search(select(WatchModel), q)
+    list_stmt = _apply_watch_model_list_filters(
+        select(WatchModel),
+        q,
+        brand,
+        reference,
+        model_family,
+        model_name,
+        caliber,
+    )
     rows = db.scalars(
         list_stmt.order_by(WatchModel.brand, nulls_last(WatchModel.reference))
         .offset(skip)

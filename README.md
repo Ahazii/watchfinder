@@ -55,7 +55,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
 | POST | `/api/listings/{uuid}/refresh-from-ebay` | Browse **getItem** for this row: refresh price/title/images; **`404`** → set **`is_active=false`** (listing drops off default lists) |
-| GET | `/api/watch-models` | Paginated catalog (`q` search, `skip`/`limit`); rows include optional **spec** fields and **`reference_url`** after migration **006** |
+| GET | `/api/watch-models` | Paginated catalog (`skip`/`limit`). **`q`** — case-insensitive substring OR across brand, reference, model family, model name. Optional **AND** filters (each case-insensitive contains): **`brand`**, **`reference`**, **`model_family`**, **`model_name`**, **`caliber`**. Rows include optional **spec** fields and **`reference_url`** after migration **006** |
 | POST | `/api/watch-models` | Create model |
 | POST | `/api/watch-models/backfill-from-listings` | Scan active listings; link or create catalog rows (same rules as ingest analyze) |
 | GET | `/api/watch-link-reviews` | Pending match-queue rows (`skip`/`limit`) |
@@ -86,7 +86,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **eBay listings** use **that item’s currency** for price, shipping, opportunity score lines, and (for consistency) your per-listing valuation inputs — see symbols in cells (**`money()`** in `frontend/lib/format.ts` defaults to GBP only when no valid ISO code is passed).
 - **List / candidate price filters** compare **numeric** amounts as stored; they do not convert currencies.
 - **Settings** includes a **“Prices & currencies in the UI”** card; listing, watch, dashboard, and match-queue pages use **CardDescription** text and table header **tooltips** where prices appear.
-- **Watch database (`/watch-models/`):** supervised **batch** WatchBase import with per-row verification (large images, **Yes** / **No match**), checkbox + Shift range selection, catalog-wide presets (unmatched / without pricing), and jittered delays between WatchBase calls.
+- **Watch database (`/watch-models/`):** **Search and filters** card — global **`q`** plus separate contains fields (brand, reference, model family, model name, caliber); presets use the same filter set. Supervised **batch** WatchBase wizard: side-by-side images, auto search hits, optional **Delete this catalog entry** (unlinks listings), **Fix match — manual WatchBase search** (query, **Search WatchBase**, Google site link, paste page URL, import), **No match — skip**; checkbox + Shift range selection; catalog-wide presets (unmatched / without pricing); jittered delays between WatchBase calls.
 
 After upgrading, run **`alembic upgrade head`** (through **007** / WatchBase import columns + prior migrations).
 

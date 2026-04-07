@@ -13,14 +13,17 @@ import {
   randomWatchbaseDelayMs,
   sleep,
 } from "@/lib/watch-models-batch";
+import { watchbaseGoogleSiteSearchUrl } from "@/lib/watchbase";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  /** Process in this order */
   orderedIds: string[];
   onImported: () => void;
+  /** After DELETE; parent should remove id from queue and selection. */
+  onDeleted?: (id: string) => void;
 };
 
 export function WatchbaseBatchWizard({
@@ -28,6 +31,7 @@ export function WatchbaseBatchWizard({
   onClose,
   orderedIds,
   onImported,
+  onDeleted,
 }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
   const [modalPos, setModalPos] = useState({ x: 0, y: 0 });
@@ -44,10 +48,17 @@ export function WatchbaseBatchWizard({
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [lastOk, setLastOk] = useState<WatchBaseImportResult | null>(null);
 
+  const [manualQuery, setManualQuery] = useState("");
+  const [manualHits, setManualHits] = useState<WatchbaseSearchResponse["items"] | null>(null);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualErr, setManualErr] = useState<string | null>(null);
+  const [pastedUrl, setPastedUrl] = useState("");
+
   const total = orderedIds.length;
-  const done = stepIndex >= total;
+  const done = total === 0 || stepIndex >= total;
   const currentId = !done ? orderedIds[stepIndex] : null;
 
   useEffect(() => {
@@ -58,6 +69,10 @@ export function WatchbaseBatchWizard({
       setSearchErr(null);
       setImportErr(null);
       setLastOk(null);
+      setManualHits(null);
+      setManualErr(null);
+      setManualQuery("");
+      setPastedUrl("");
       return;
     }
     if (typeof window !== "undefined") {
@@ -80,12 +95,16 @@ export function WatchbaseBatchWizard({
       setSearchErr(null);
       setImportErr(null);
       setLastOk(null);
+      setManualHits(null);
+      setManualErr(null);
+      setPastedUrl("");
       try {
         await sleep(randomWatchbaseDelayMs());
         if (cancelled) return;
         const m = await fetchJson<WatchModel>(`/api/watch-models/${currentId}`);
         if (cancelled) return;
         setCurrentModel(m);
+        setManualQuery(buildWatchbaseSearchQuery(m));
 
         const q = buildWatchbaseSearchQuery(m);
         if (!q) {
@@ -203,9 +222,54 @@ export function WatchbaseBatchWizard({
     setStepIndex((i) => i + 1);
   }, []);
 
+  const runManualSearch = useCallback(async () => {
+    const q = manualQuery.trim();
+    if (!q) return;
+    setManualBusy(true);
+    setManualErr(null);
+    setManualHits(null);
+    try {
+      await sleep(randomWatchbaseDelayMs());
+      const res = await fetchJson<WatchbaseSearchResponse>(
+        `/api/watchbase/search?q=${encodeURIComponent(q)}`,
+      );
+      setManualHits(res.items);
+    } catch (e) {
+      setManualErr((e as Error).message);
+      setManualHits([]);
+    } finally {
+      setManualBusy(false);
+    }
+  }, [manualQuery]);
+
+  const deleteCurrent = useCallback(async () => {
+    if (!currentModel || !onDeleted) return;
+    if (
+      !window.confirm(
+        `Delete this catalog row?\n\n${currentModel.brand} ${currentModel.reference ?? ""}\n\nLinked listings will be unlinked (FK SET NULL). This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleteBusy(true);
+    setImportErr(null);
+    try {
+      const res = await fetch(apiUrl(`/api/watch-models/${currentModel.id}`), { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+      onDeleted(currentModel.id);
+    } catch (e) {
+      setImportErr((e as Error).message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }, [currentModel, onDeleted]);
+
   if (!open) return null;
 
   const ourImage = currentModel?.image_urls?.find((u) => typeof u === "string" && u.trim())?.trim();
+  const googleUrl = watchbaseGoogleSiteSearchUrl(
+    manualQuery.trim() || (currentModel ? buildWatchbaseSearchQuery(currentModel) : "") || "",
+  );
 
   return (
     <>
@@ -226,8 +290,8 @@ export function WatchbaseBatchWizard({
               Supervised WatchBase import
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Drag header to move. Click the dimmed page behind to use the list; click this panel to continue.
-              Random 1–5 s delay between WatchBase calls. Escape closes (progress is not saved).
+              Drag header to move. Use <strong>Manual search</strong> if auto results are wrong. Random 1–5 s
+              delay between WatchBase calls. Escape closes (progress is not saved).
             </p>
           </div>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
@@ -236,7 +300,9 @@ export function WatchbaseBatchWizard({
         </div>
 
         <div className="max-h-[min(85vh,900px)] overflow-y-auto p-4">
-          {done ? (
+          {total === 0 ? (
+            <p className="text-sm text-muted-foreground">No watches in the queue.</p>
+          ) : done ? (
             <p className="text-sm text-muted-foreground">
               Finished all <strong>{total}</strong> selected model(s). Close to return to the list.
             </p>
@@ -305,73 +371,178 @@ export function WatchbaseBatchWizard({
                         </div>
                       ) : null}
                     </dl>
+                    {onDeleted ? (
+                      <div className="mt-4 border-t border-border pt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full border-red-800 text-red-400 hover:bg-red-950/40"
+                          disabled={deleteBusy || importBusy}
+                          onClick={() => void deleteCurrent()}
+                        >
+                          {deleteBusy ? "Deleting…" : "Delete this catalog entry"}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
 
-                  <div className="rounded-lg border border-border p-4">
-                    <p className="text-sm font-semibold text-foreground">WatchBase matches</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Query: <span className="font-mono">{buildWatchbaseSearchQuery(currentModel) || "—"}</span>
-                    </p>
-                    {searchErr ? (
-                      <p className="mt-2 text-sm text-red-400">{searchErr}</p>
-                    ) : null}
-
-                    <div className="mt-3 space-y-3">
-                      {currentModel.reference_url?.trim() ? (
-                        <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
-                          <p className="text-xs font-medium text-muted-foreground">Saved URL option</p>
-                          <Button
-                            type="button"
-                            className="mt-2 w-full"
-                            disabled={importBusy}
-                            onClick={() => runImport(currentModel.reference_url!.trim())}
-                          >
-                            {importBusy ? "Importing…" : "Yes — import using saved Reference URL"}
-                          </Button>
-                        </div>
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-border p-4">
+                      <p className="text-sm font-semibold text-foreground">WatchBase — auto search</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Query:{" "}
+                        <span className="font-mono">{buildWatchbaseSearchQuery(currentModel) || "—"}</span>
+                      </p>
+                      {searchErr ? (
+                        <p className="mt-2 text-sm text-red-400">{searchErr}</p>
                       ) : null}
 
-                      {hits && hits.length === 0 && !searchErr ? (
-                        <p className="text-sm text-muted-foreground">No WatchBase search results.</p>
-                      ) : null}
-
-                      {hits?.map((h) => (
-                        <div
-                          key={h.url}
-                          className="flex flex-col gap-2 rounded-md border border-border bg-muted/10 p-3 sm:flex-row"
-                        >
-                          <div className="flex shrink-0 justify-center sm:w-40">
-                            {h.image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={h.image_url}
-                                alt=""
-                                className="max-h-56 max-w-full rounded border border-border object-contain bg-muted/40"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="flex h-40 w-32 items-center justify-center rounded border border-dashed text-xs text-muted-foreground">
-                                No image
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1 space-y-2">
-                            <p className="text-sm font-medium leading-snug">{h.label}</p>
-                            <p className="break-all font-mono text-xs text-muted-foreground">{h.url}</p>
+                      <div className="mt-3 space-y-3">
+                        {currentModel.reference_url?.trim() ? (
+                          <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
+                            <p className="text-xs font-medium text-muted-foreground">Saved URL option</p>
                             <Button
                               type="button"
-                              size="sm"
+                              className="mt-2 w-full"
                               disabled={importBusy}
-                              onClick={() => runImport(h.url)}
+                              onClick={() => runImport(currentModel.reference_url!.trim())}
                             >
-                              {importBusy ? "Importing…" : "Yes — import this WatchBase page"}
+                              {importBusy ? "Importing…" : "Yes — import using saved Reference URL"}
                             </Button>
                           </div>
-                        </div>
-                      ))}
+                        ) : null}
+
+                        {hits && hits.length === 0 && !searchErr ? (
+                          <p className="text-sm text-muted-foreground">No WatchBase search results.</p>
+                        ) : null}
+
+                        {hits?.map((h) => (
+                          <div
+                            key={h.url}
+                            className="flex flex-col gap-2 rounded-md border border-border bg-muted/10 p-3 sm:flex-row"
+                          >
+                            <div className="flex shrink-0 justify-center sm:w-40">
+                              {h.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={h.image_url}
+                                  alt=""
+                                  className="max-h-56 max-w-full rounded border border-border object-contain bg-muted/40"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="flex h-40 w-32 items-center justify-center rounded border border-dashed text-xs text-muted-foreground">
+                                  No image
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <p className="text-sm font-medium leading-snug">{h.label}</p>
+                              <p className="break-all font-mono text-xs text-muted-foreground">{h.url}</p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={importBusy}
+                                onClick={() => runImport(h.url)}
+                              >
+                                {importBusy ? "Importing…" : "Yes — import this WatchBase page"}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className="mt-4 border-t border-border pt-4">
+                    <div className="rounded-lg border border-amber-900/40 bg-amber-950/15 p-4">
+                      <p className="text-sm font-semibold text-foreground">Fix match — manual WatchBase search</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Edit the query, run search, then import from a result — or paste a watch page URL below.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Input
+                          className="min-w-[200px] flex-1 font-mono text-xs"
+                          value={manualQuery}
+                          onChange={(e) => setManualQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void runManualSearch();
+                            }
+                          }}
+                          placeholder="e.g. Cartier W7100046"
+                        />
+                        <Button type="button" disabled={manualBusy || importBusy} onClick={() => void runManualSearch()}>
+                          {manualBusy ? "Searching…" : "Search WatchBase"}
+                        </Button>
+                        {googleUrl ? (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={googleUrl} target="_blank" rel="noopener noreferrer">
+                              Open Google (site:watchbase.com)
+                            </a>
+                          </Button>
+                        ) : null}
+                      </div>
+                      {manualErr ? <p className="mt-2 text-sm text-red-400">{manualErr}</p> : null}
+                      <div className="mt-3 space-y-3">
+                        {manualHits?.map((h) => (
+                          <div
+                            key={`m-${h.url}`}
+                            className="flex flex-col gap-2 rounded-md border border-border bg-muted/10 p-3 sm:flex-row"
+                          >
+                            <div className="flex shrink-0 justify-center sm:w-36">
+                              {h.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={h.image_url}
+                                  alt=""
+                                  className="max-h-48 max-w-full rounded border border-border object-contain bg-muted/40"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <div className="flex h-36 w-28 items-center justify-center rounded border border-dashed text-xs text-muted-foreground">
+                                  No image
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <p className="text-sm font-medium leading-snug">{h.label}</p>
+                              <p className="break-all font-mono text-xs text-muted-foreground">{h.url}</p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={importBusy}
+                                onClick={() => runImport(h.url)}
+                              >
+                                {importBusy ? "Importing…" : "Import this result"}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 space-y-2 border-t border-border pt-4">
+                        <label className="text-xs font-medium text-muted-foreground" htmlFor="wb-paste-url">
+                          Paste WatchBase watch page URL
+                        </label>
+                        <Input
+                          id="wb-paste-url"
+                          className="font-mono text-xs"
+                          placeholder="https://watchbase.com/…"
+                          value={pastedUrl}
+                          onChange={(e) => setPastedUrl(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full"
+                          disabled={importBusy || !pastedUrl.trim()}
+                          onClick={() => runImport(pastedUrl)}
+                        >
+                          {importBusy ? "Importing…" : "Import from pasted URL"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border p-4">
                       <Button
                         type="button"
                         variant="outline"

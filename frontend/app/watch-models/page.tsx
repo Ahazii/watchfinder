@@ -13,10 +13,12 @@ import type {
 } from "@/lib/types";
 import { money } from "@/lib/format";
 import {
+  appendWatchModelListFilters,
   fetchAllWatchModels,
   isUnmatchedU3,
   lacksPricingP3,
   sortIdsForBatch,
+  type WatchModelListFilters,
 } from "@/lib/watch-models-batch";
 import { ListingThumb } from "@/components/listing-thumb";
 import { Button } from "@/components/ui/button";
@@ -33,7 +35,12 @@ const PAGE = 50;
 
 export default function WatchModelsPage() {
   const [q, setQ] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
+  const [referenceFilter, setReferenceFilter] = useState("");
+  const [modelFamilyFilter, setModelFamilyFilter] = useState("");
+  const [modelNameFilter, setModelNameFilter] = useState("");
+  const [caliberFilter, setCaliberFilter] = useState("");
+  const [debouncedListFilters, setDebouncedListFilters] = useState<WatchModelListFilters>({});
   const [skip, setSkip] = useState(0);
   const [rows, setRows] = useState<WatchModel[]>([]);
   const [total, setTotal] = useState(0);
@@ -53,13 +60,37 @@ export default function WatchModelsPage() {
   const rowOrderHint = useMemo(() => new Map(rows.map((r, i) => [r.id, i])), [rows]);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(q.trim()), 300);
+    const t = setTimeout(() => {
+      const next: WatchModelListFilters = {};
+      const qt = q.trim();
+      const bt = brandFilter.trim();
+      const rt = referenceFilter.trim();
+      const ft = modelFamilyFilter.trim();
+      const nt = modelNameFilter.trim();
+      const ct = caliberFilter.trim();
+      if (qt) next.q = qt;
+      if (bt) next.brand = bt;
+      if (rt) next.reference = rt;
+      if (ft) next.model_family = ft;
+      if (nt) next.model_name = nt;
+      if (ct) next.caliber = ct;
+      setDebouncedListFilters((prev) => {
+        const same =
+          (prev.q ?? "") === (next.q ?? "") &&
+          (prev.brand ?? "") === (next.brand ?? "") &&
+          (prev.reference ?? "") === (next.reference ?? "") &&
+          (prev.model_family ?? "") === (next.model_family ?? "") &&
+          (prev.model_name ?? "") === (next.model_name ?? "") &&
+          (prev.caliber ?? "") === (next.caliber ?? "");
+        return same ? prev : next;
+      });
+    }, 300);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, brandFilter, referenceFilter, modelFamilyFilter, modelNameFilter, caliberFilter]);
 
   useEffect(() => {
     setSkip(0);
-  }, [debounced]);
+  }, [debouncedListFilters]);
 
   const load = useCallback(() => {
     setErr(null);
@@ -67,14 +98,14 @@ export default function WatchModelsPage() {
       skip: String(skip),
       limit: String(PAGE),
     });
-    if (debounced) params.set("q", debounced);
+    appendWatchModelListFilters(params, debouncedListFilters);
     fetchJson<WatchModelListResponse>(`/api/watch-models?${params}`)
       .then((r) => {
         setRows(r.items);
         setTotal(r.total);
       })
       .catch((e: Error) => setErr(e.message));
-  }, [skip, debounced]);
+  }, [skip, debouncedListFilters]);
 
   useEffect(() => {
     load();
@@ -145,7 +176,7 @@ export default function WatchModelsPage() {
     setPresetErr(null);
     setPresetBusy(true);
     try {
-      const all = await fetchAllWatchModels(debounced);
+      const all = await fetchAllWatchModels(debouncedListFilters);
       const ids = new Set(all.filter(predicate).map((m) => m.id));
       setSelected(ids);
       shiftAnchorRef.current = null;
@@ -162,6 +193,19 @@ export default function WatchModelsPage() {
     setWizardOrderedIds(ordered);
     setWizardOpen(true);
   };
+
+  const onWizardDeleted = useCallback(
+    (id: string) => {
+      setWizardOrderedIds((prev) => prev.filter((x) => x !== id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      load();
+    },
+    [load],
+  );
 
   return (
     <div className="space-y-6">
@@ -185,7 +229,8 @@ export default function WatchModelsPage() {
           <CardTitle>Supervised WatchBase import (batch)</CardTitle>
           <CardDescription>
             Select rows with checkboxes (Shift+click to range-select on the <strong>current page</strong>).
-            Presets load the <strong>whole catalog</strong> matching your search box (same filter as the table),
+            Presets load the <strong>whole catalog</strong> matching your search and field filters (same as the
+            table),
             then replace the selection. Each watch runs a WatchBase search, shows large images side by side, and
             requires <strong>Yes</strong> on a match or <strong>No match</strong> to skip. Random 1–5 s delay
             between WatchBase requests. Open <strong>full detail</strong> in a new tab from the wizard when you
@@ -244,6 +289,7 @@ export default function WatchModelsPage() {
         onClose={() => setWizardOpen(false)}
         orderedIds={wizardOrderedIds}
         onImported={load}
+        onDeleted={onWizardDeleted}
       />
 
       <Card>
@@ -267,16 +313,79 @@ export default function WatchModelsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Search</CardTitle>
-          <CardDescription>Filter by brand, reference, family, or model name.</CardDescription>
+          <CardTitle>Search and filters</CardTitle>
+          <CardDescription>
+            <strong>Search</strong> matches brand, reference, family, or model name (OR). Field boxes narrow
+            further (contains, AND with each other and with search).
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Input
-            placeholder="Search…"
-            className="max-w-md"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="wm-search-q">
+              Search (any of brand / reference / family / model name)
+            </label>
+            <Input
+              id="wm-search-q"
+              placeholder="Search…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="wm-filter-brand">
+              Brand
+            </label>
+            <Input
+              id="wm-filter-brand"
+              placeholder="Contains…"
+              value={brandFilter}
+              onChange={(e) => setBrandFilter(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="wm-filter-ref">
+              Reference
+            </label>
+            <Input
+              id="wm-filter-ref"
+              placeholder="Contains…"
+              value={referenceFilter}
+              onChange={(e) => setReferenceFilter(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="wm-filter-family">
+              Model family
+            </label>
+            <Input
+              id="wm-filter-family"
+              placeholder="Contains…"
+              value={modelFamilyFilter}
+              onChange={(e) => setModelFamilyFilter(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="wm-filter-name">
+              Model name
+            </label>
+            <Input
+              id="wm-filter-name"
+              placeholder="Contains…"
+              value={modelNameFilter}
+              onChange={(e) => setModelNameFilter(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="wm-filter-caliber">
+              Caliber
+            </label>
+            <Input
+              id="wm-filter-caliber"
+              placeholder="Contains…"
+              value={caliberFilter}
+              onChange={(e) => setCaliberFilter(e.target.value)}
+            />
+          </div>
         </CardContent>
       </Card>
 
