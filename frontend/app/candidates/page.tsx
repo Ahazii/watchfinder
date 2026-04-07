@@ -82,8 +82,13 @@ export default function CandidatesPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Repair candidates</h1>
         <p className="mt-1 text-muted-foreground">
-          Listings where rule-based <strong>potential profit</strong> is positive. Prices and profit in the
-          table use each row’s eBay currency (see symbols in cells).
+          Listings where <strong>potential profit</strong> is positive after estimated repair. When a row is
+          linked to the <strong>watch database</strong> and that catalog entry has manual or observed{" "}
+          <strong>£</strong> bounds, resale is anchored to that <strong>working-market</strong> value (manual /
+          WatchBase import preferred over observed asks). The ask is converted with Frankfurter{" "}
+          <strong>→ GBP</strong> when needed, then profit is shown in the <strong>listing’s currency</strong>.
+          Otherwise the old <strong>list price × multiplier</strong> heuristic applies. Not professional
+          appraisal — see each listing’s score explanations.
         </p>
       </div>
 
@@ -275,8 +280,9 @@ function CandidatesTable({
             sortBy={sortBy}
             sortDir={sortDir}
             onSort={onSort}
-            title="Estimated potential profit in the listing’s currency."
+            title="Potential profit in the listing’s currency (catalog working value − rule repair − ask, or heuristic)."
           />
+          <TableHead className="text-muted-foreground w-28">Catalog</TableHead>
           <SortableTableHead
             label="Confidence"
             column="confidence"
@@ -323,6 +329,18 @@ function CandidatesTable({
               <Badge variant="success">
                 {money(r.score?.potential_profit, r.currency)}
               </Badge>
+            </TableCell>
+            <TableCell className="text-xs">
+              {r.watch_model_id ? (
+                <Link
+                  href={`/watch-models/detail/?id=${r.watch_model_id}`}
+                  className="text-primary underline-offset-2 hover:underline"
+                >
+                  Linked
+                </Link>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
             </TableCell>
             <TableCell>
               {r.score?.confidence != null

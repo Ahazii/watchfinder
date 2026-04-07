@@ -21,6 +21,7 @@ export type ListingSummary = {
   first_seen_at?: string | null;
   is_active?: boolean;
   image_urls?: string[] | null;
+  watch_model_id?: string | null;
   score?: OpportunityScore | null;
 };
 

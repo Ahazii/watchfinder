@@ -11,6 +11,7 @@ from watchfinder.models import (
     OpportunityScore,
     ParsedAttribute,
     RepairSignal,
+    WatchModel,
 )
 from watchfinder.services.parsing import build_listing_corpus, parse_watch_attributes
 from watchfinder.services.repair import extract_repair_signals
@@ -53,12 +54,19 @@ def analyze_listing(db: Session, listing: Listing) -> None:
         )
 
     edit = db.get(ListingEdit, listing.id)
+    ensure_watch_catalog_for_listing(db, listing, parsed, edit)
+    wm: WatchModel | None = None
+    if listing.watch_model_id is not None:
+        wm = db.get(WatchModel, listing.watch_model_id)
+
     score = compute_opportunity_score(
         listing,
         signals,
         parsed,
         repair_supplement=edit.repair_supplement if edit else None,
         donor_cost=edit.donor_cost if edit else None,
+        watch_model=wm,
+        settings=get_settings(),
     )
     if score:
         db.add(
@@ -74,7 +82,6 @@ def analyze_listing(db: Session, listing: Listing) -> None:
             )
         )
 
-    ensure_watch_catalog_for_listing(db, listing, parsed, edit)
     if listing.watch_model_id:
         refresh_watch_model_observed_bounds(db, listing.watch_model_id)
         enrich_watch_model_image_from_listing(db, listing, get_settings())

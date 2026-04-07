@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **7 April 2026**
+Last updated: **8 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -59,6 +59,7 @@ This document records what is implemented in the repository versus the phased pl
 ## Phase 2 (complete)
 
 - **Parsing**, **repair**, **scoring**, **pipeline**, **REST API** (includes **`POST .../refresh-from-ebay`**, dashboard **`ebay_browse_get_item_calls`**), **`api/query.py`** (**`title_q`**), **`listing_detail.py`**.
+- **Repair opportunity scoring (2026):** **`analyze_listing`** links the watch catalog **before** scoring so **`watch_models`** £ bounds can anchor resale. **`services/scoring/catalog_anchor.py`** (manual midpoint/high/low, then observed), **`listing_gbp.py`** (Frankfurter **→ GBP**, process cache). **`engine.py`**: catalog path vs list×multiplier fallback; **parts** categories scale anchor ×0.55; confidence +0.08 when catalog anchor used. **`ListingSummary.watch_model_id`** for list APIs; candidates UI **Catalog** column.
 
 OpenAPI: **`/docs`**.
 
@@ -124,6 +125,7 @@ OpenAPI: **`/docs`**.
 | `backend/watchfinder/api/` | Routes, **`listing_detail.py`**, **`listing_sort.py`**, deps, query |
 | `backend/watchfinder/services/ebay/` | OAuth, Browse (**search** + **getItem**), **`api_usage.py`** |
 | `backend/watchfinder/services/ingestion/` | **`job.py`**, **`mapper.py`**, **`live_refresh.py`** |
+| `backend/watchfinder/services/scoring/` | **`engine.py`**, **`catalog_anchor.py`** (watch DB £ anchor), **`listing_gbp.py`** (Frankfurter → GBP), **`constants.py`** |
 | `backend/watchfinder/services/stale_listing_refresh.py` | Stale **getItem** batch + scheduler sync |
 | `backend/watchfinder/stale_refresh_worker.py` | APScheduler job entry |
 | `backend/watchfinder/services/ingest_settings.py` | Ingest queries, interval, **`ingest_search_limit`**, **`ingest_max_pages`** |
@@ -137,7 +139,7 @@ OpenAPI: **`/docs`**.
 
 1. Expand **pytest** (refresh endpoint with mocked httpx, stale batch with test DB).
 2. **Reference-tight** comp bands when **`watch_model_id`** is set.
-3. Use **`watch_models`** in scoring when formula is defined.
+3. Tune repair scoring (parts factor, margin) now that **`watch_models`** anchors resale when linked.
 4. First-class **O** (ended / last sold) if you want beyond **getItem** + inactive.
 
 For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **007**).

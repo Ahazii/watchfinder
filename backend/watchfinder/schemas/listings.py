@@ -79,6 +79,7 @@ class ListingSummary(BaseModel):
     first_seen_at: datetime | None = None
     is_active: bool = True
     image_urls: list | None = None
+    watch_model_id: UUID | None = None
     score: OpportunityScoreOut | None = None
 
 
@@ -104,7 +105,6 @@ class ListingDetail(ListingSummary):
     comp_asking: CompBandOut = Field(default_factory=CompBandOut)
     source_legend: dict[str, str] = Field(default_factory=dict)
     field_guidance: dict[str, str] = Field(default_factory=dict)
-    watch_model_id: UUID | None = None
     watch_model: WatchModelBriefOut | None = None
     watch_link_review_pending: WatchLinkReviewBriefOut | None = Field(default=None)
 
