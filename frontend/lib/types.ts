@@ -262,10 +262,30 @@ export type AppSettings = {
   ingest_queries: IngestQueryDto[];
   env_fallback_query: string;
   watch_catalog_review_mode?: string;
+  /** Comma-separated; merged with server env WATCH_CATALOG_EXCLUDED_BRANDS */
+  watch_catalog_excluded_brands?: string;
+  everywatch_login_email?: string;
+  everywatch_password_configured?: boolean;
   stale_listing_refresh_enabled?: boolean;
   stale_listing_refresh_interval_minutes?: number;
   stale_listing_refresh_max_per_run?: number;
   stale_listing_refresh_min_age_hours?: number;
+};
+
+export type EverywatchDebugFetchRow = {
+  url: string;
+  status_code: number | null;
+  error: string | null;
+  html_received: boolean;
+  analysis: Record<string, unknown> | null;
+};
+
+export type EverywatchDebugResponse = {
+  watch_model_brief: Record<string, unknown> | null;
+  urls_attempted: string[];
+  collect_everywatch_snapshot: Record<string, unknown> | null;
+  fetches: EverywatchDebugFetchRow[];
+  login_attempt?: Record<string, unknown> | null;
 };
 
 /** Client-only row key + editable fields */

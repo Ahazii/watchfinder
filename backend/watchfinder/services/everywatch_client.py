@@ -6,6 +6,7 @@ import logging
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from bs4 import BeautifulSoup
@@ -30,6 +31,26 @@ def slugify_segment(s: str) -> str:
 
 def reference_alnum(ref: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]", "", (ref or "").strip())
+
+
+def guess_site_search_urls(search_query: str) -> list[str]:
+    """
+    Candidate GET URLs to probe how Everywatch exposes search (site may change; for debugging).
+    Home search input id is often ew-search-home — actual API may differ.
+    """
+    q = (search_query or "").strip()
+    if not q:
+        return []
+    enc = quote(q, safe="")
+    base = EVERYWATCH_ORIGIN.rstrip("/")
+    return [
+        f"{base}/search?q={enc}",
+        f"{base}/search?query={enc}",
+        f"{base}/for-sale?q={enc}",
+        f"{base}/for-sale?search={enc}",
+        f"{base}/?q={enc}",
+        f"{base}/watch-search?q={enc}",
+    ]
 
 
 def candidate_model_urls(brand: str, reference: str | None, model_family: str | None) -> list[str]:
@@ -124,8 +145,9 @@ def fetch_everywatch_page(
     url: str,
     settings: Settings | None = None,
     timeout: float = 28.0,
-) -> tuple[str | None, str | None]:
-    """GET page HTML or (None, error)."""
+    extra_headers: dict[str, str] | None = None,
+) -> tuple[str | None, str | None, int | None]:
+    """GET page HTML or (None, error, status_code). status_code set when a response was received."""
     settings = settings or get_settings()
     ua = settings.watchbase_import_user_agent or _DEFAULT_UA
     headers = {
@@ -133,18 +155,24 @@ def fetch_everywatch_page(
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
     }
+    if extra_headers:
+        headers.update({k: v for k, v in extra_headers.items() if v})
     try:
         with httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client:
             r = client.get(url)
+            code = r.status_code
             if r.status_code == 404:
-                return None, "404"
+                return None, "404", code
             r.raise_for_status()
-            return r.text, None
+            return r.text, None, code
+    except httpx.HTTPStatusError as e:
+        c = e.response.status_code if e.response is not None else None
+        return None, str(e), c
     except httpx.HTTPError as e:
         logger.warning("Everywatch fetch %s failed: %s", url, e)
-        return None, str(e)
+        return None, str(e), None
     except OSError as e:
-        return None, str(e)
+        return None, str(e), None
 
 
 def collect_everywatch_snapshot(
@@ -171,7 +199,7 @@ def collect_everywatch_snapshot(
 
     last_err: str | None = None
     for url in urls:
-        html, err = fetch_everywatch_page(url, settings=settings)
+        html, err, _code = fetch_everywatch_page(url, settings=settings)
         if not html:
             last_err = err or "empty"
             continue

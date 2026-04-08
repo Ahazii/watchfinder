@@ -195,7 +195,7 @@ def list_watch_models(
     ),
 ) -> WatchModelListResponse:
     settings = get_settings()
-    excluded = catalog_excluded_brands(settings)
+    excluded = catalog_excluded_brands(db, settings)
 
     count_stmt = _apply_watch_model_list_filters(
         select(func.count()).select_from(WatchModel),

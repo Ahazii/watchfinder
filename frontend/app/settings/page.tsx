@@ -62,6 +62,11 @@ export default function SettingsPage() {
   const [searchLimit, setSearchLimit] = useState(50);
   const [maxPages, setMaxPages] = useState(1);
   const [catalogReviewMode, setCatalogReviewMode] = useState<"auto" | "review">("auto");
+  const [catalogExcludedBrands, setCatalogExcludedBrands] = useState("");
+  const [ewLoginEmail, setEwLoginEmail] = useState("");
+  const [ewLoginPassword, setEwLoginPassword] = useState("");
+  const [ewPasswordConfigured, setEwPasswordConfigured] = useState(false);
+  const [ewCredBusy, setEwCredBusy] = useState(false);
   const [staleRefreshEnabled, setStaleRefreshEnabled] = useState(false);
   const [staleRefreshInterval, setStaleRefreshInterval] = useState(360);
   const [staleRefreshMax, setStaleRefreshMax] = useState(20);
@@ -81,6 +86,10 @@ export default function SettingsPage() {
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
+        setCatalogExcludedBrands(d.watch_catalog_excluded_brands ?? "");
+        setEwLoginEmail(d.everywatch_login_email ?? "");
+        setEwLoginPassword("");
+        setEwPasswordConfigured(Boolean(d.everywatch_password_configured));
         setStaleRefreshEnabled(Boolean(d.stale_listing_refresh_enabled));
         setStaleRefreshInterval(d.stale_listing_refresh_interval_minutes ?? 360);
         setStaleRefreshMax(d.stale_listing_refresh_max_per_run ?? 20);
@@ -105,23 +114,29 @@ export default function SettingsPage() {
 
     setSaving(true);
     setErr(null);
+    const patchBody: Record<string, unknown> = {
+      ingest_interval_minutes: intervalMin,
+      ebay_search_limit: searchLimit,
+      ingest_max_pages: maxPages,
+      ingest_queries: payloadQueries,
+      watch_catalog_review_mode: catalogReviewMode,
+      watch_catalog_excluded_brands: catalogExcludedBrands,
+      everywatch_login_email: ewLoginEmail.trim(),
+      stale_listing_refresh_enabled: staleRefreshEnabled,
+      stale_listing_refresh_interval_minutes: staleRefreshInterval,
+      stale_listing_refresh_max_per_run: staleRefreshMax,
+      stale_listing_refresh_min_age_hours: staleRefreshMinAge,
+    };
+    if (ewLoginPassword.trim()) {
+      patchBody.everywatch_login_password = ewLoginPassword;
+    }
     fetch(apiUrl("/api/settings"), {
       method: "PATCH",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        ingest_interval_minutes: intervalMin,
-        ebay_search_limit: searchLimit,
-        ingest_max_pages: maxPages,
-        ingest_queries: payloadQueries,
-        watch_catalog_review_mode: catalogReviewMode,
-        stale_listing_refresh_enabled: staleRefreshEnabled,
-        stale_listing_refresh_interval_minutes: staleRefreshInterval,
-        stale_listing_refresh_max_per_run: staleRefreshMax,
-        stale_listing_refresh_min_age_hours: staleRefreshMinAge,
-      }),
+      body: JSON.stringify(patchBody),
     })
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
@@ -135,14 +150,43 @@ export default function SettingsPage() {
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
+        setCatalogExcludedBrands(d.watch_catalog_excluded_brands ?? "");
+        setEwLoginEmail(d.everywatch_login_email ?? "");
+        setEwLoginPassword("");
+        setEwPasswordConfigured(Boolean(d.everywatch_password_configured));
         setStaleRefreshEnabled(Boolean(d.stale_listing_refresh_enabled));
         setStaleRefreshInterval(d.stale_listing_refresh_interval_minutes ?? 360);
         setStaleRefreshMax(d.stale_listing_refresh_max_per_run ?? 20);
         setStaleRefreshMinAge(d.stale_listing_refresh_min_age_hours ?? 12);
         setLines(linesFromSettings(d));
+        setEwLoginPassword("");
+        setEwPasswordConfigured(Boolean(d.everywatch_password_configured));
       })
       .catch((e: Error) => setErr(e.message))
       .finally(() => setSaving(false));
+  };
+
+  const clearEverywatchPassword = () => {
+    setEwCredBusy(true);
+    setErr(null);
+    fetch(apiUrl("/api/settings"), {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ everywatch_login_password: "" }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<AppSettings>;
+      })
+      .then((d) => {
+        setEwPasswordConfigured(Boolean(d.everywatch_password_configured));
+        setEwLoginPassword("");
+      })
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setEwCredBusy(false));
   };
 
   const ingestNow = () => {
@@ -267,6 +311,95 @@ export default function SettingsPage() {
             <option value="auto">Automatic — fuzzy match + create catalog rows without queue</option>
             <option value="review">Review queue — exact matches only; queue the rest</option>
           </select>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Watch catalog — excluded brands</CardTitle>
+          <CardDescription>
+            Comma-separated brand names (case-insensitive), e.g. <code className="rounded bg-muted px-1">Apple, Fitbit</code>.
+            Rows with these brands are hidden from the watch database list and listing link pickers, and ingest/backfill
+            will not link or create catalog entries for them. This field is <strong>merged</strong> with the server
+            environment variable <code className="rounded bg-muted px-1">WATCH_CATALOG_EXCLUDED_BRANDS</code> (both apply).
+            Clear this field to rely on env only for UI-saved exclusions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="wc-excl">
+            Excluded brands
+          </label>
+          <textarea
+            id="wc-excl"
+            className="min-h-[88px] w-full max-w-2xl rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            placeholder="Apple, Samsung"
+            value={catalogExcludedBrands}
+            onChange={(e) => setCatalogExcludedBrands(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Manual <strong>POST /api/watch-models</strong> and direct detail URLs still work for any brand.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Everywatch login (optional)</CardTitle>
+          <CardDescription>
+            Stored in your <strong>Postgres</strong> <code className="rounded bg-muted px-1">app_settings</code> as{" "}
+            <strong>plaintext</strong> (self-hosted / hobby use only). Used by{" "}
+            <strong>Everywatch import tester</strong> to call{" "}
+            <code className="rounded bg-muted px-1">POST https://api.everywatch.com/api/Auth/Login</code> and attach
+            session cookies to debug fetches. Comply with Everywatch terms; rotate credentials if the database is
+            exposed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Saved password:{" "}
+            <strong className="text-foreground">{ewPasswordConfigured ? "yes" : "no"}</strong>
+          </p>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="ew-email">
+              Email (userName)
+            </label>
+            <Input
+              id="ew-email"
+              type="email"
+              autoComplete="off"
+              value={ewLoginEmail}
+              onChange={(e) => setEwLoginEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" htmlFor="ew-pass">
+              Password
+            </label>
+            <Input
+              id="ew-pass"
+              type="password"
+              autoComplete="new-password"
+              placeholder={
+                ewPasswordConfigured ? "Leave blank to keep current password" : "Enter password to save"
+              }
+              value={ewLoginPassword}
+              onChange={(e) => setEwLoginPassword(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={ewCredBusy || !ewPasswordConfigured}
+              onClick={() => void clearEverywatchPassword()}
+            >
+              {ewCredBusy ? "…" : "Remove saved password"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Saving the main <strong>Save</strong> button below persists email and (if filled) password.
+          </p>
         </CardContent>
       </Card>
 

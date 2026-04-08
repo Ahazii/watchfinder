@@ -32,6 +32,11 @@ class SettingsOut(BaseModel):
     stale_listing_refresh_interval_minutes: int = 360
     stale_listing_refresh_max_per_run: int = 20
     stale_listing_refresh_min_age_hours: int = 12
+    watch_catalog_excluded_brands: str = ""
+    """Comma-separated brands from Settings UI; merged with env WATCH_CATALOG_EXCLUDED_BRANDS."""
+    everywatch_login_email: str = ""
+    everywatch_password_configured: bool = False
+    """Password is never returned; only whether one is stored."""
 
 
 class SettingsPatch(BaseModel):
@@ -61,6 +66,17 @@ class SettingsPatch(BaseModel):
         ge=0,
         le=720,
         description="0 = eligible if last_seen_at is null or strictly before now",
+    )
+    watch_catalog_excluded_brands: str | None = Field(
+        None,
+        max_length=4000,
+        description="Comma-separated brand names; merged with env WATCH_CATALOG_EXCLUDED_BRANDS",
+    )
+    everywatch_login_email: str | None = Field(None, max_length=320)
+    everywatch_login_password: str | None = Field(
+        None,
+        max_length=2000,
+        description="Set to update; empty string clears stored password",
     )
 
 

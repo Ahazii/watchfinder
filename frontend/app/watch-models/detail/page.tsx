@@ -755,6 +755,13 @@ function DetailBody() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" asChild>
+                <Link
+                  href={`/watch-models/everywatch-test/?id=${encodeURIComponent(id || "")}`}
+                >
+                  Everywatch import tester
+                </Link>
+              </Button>
               <Button
                 type="button"
                 variant="secondary"

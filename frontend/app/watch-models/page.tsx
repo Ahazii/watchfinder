@@ -417,9 +417,12 @@ export default function WatchModelsPage() {
           <CardTitle>Search and filters</CardTitle>
           <CardDescription>
             <strong>Search</strong> matches brand, reference, family, or model name (OR). Field boxes narrow
-            further (contains, AND with each other and with search). Brands listed in{" "}
-            <code className="rounded bg-muted px-1">WATCH_CATALOG_EXCLUDED_BRANDS</code> (server env) never appear
-            in this table or listing link pickers; backfill skips linking/creating them.
+            further (contains, AND with each other and with search). Excluded brands are set in{" "}
+            <Link href="/settings/" className="text-primary underline-offset-4 hover:underline">
+              Settings
+            </Link>{" "}
+            and/or <code className="rounded bg-muted px-1">WATCH_CATALOG_EXCLUDED_BRANDS</code> (both merged); those
+            rows never appear here or in listing link pickers, and backfill skips linking/creating them.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

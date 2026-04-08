@@ -34,8 +34,15 @@ from watchfinder.services.stale_listing_refresh import (
     set_stale_listing_refresh_min_age_hours,
     sync_stale_listing_refresh_schedule,
 )
+from watchfinder.services.everywatch_credentials_settings import (
+    everywatch_password_configured,
+    get_everywatch_login_email,
+    set_everywatch_login_credentials,
+)
 from watchfinder.services.watch_catalog_settings import (
+    get_watch_catalog_excluded_brands_text,
     get_watch_catalog_review_mode,
+    set_watch_catalog_excluded_brands_text,
     set_watch_catalog_review_mode,
 )
 from watchfinder.stale_refresh_worker import scheduled_stale_listing_refresh_job
@@ -67,6 +74,9 @@ def _settings_out(db: Session) -> SettingsOut:
         stale_listing_refresh_min_age_hours=get_stale_listing_refresh_min_age_hours(
             db, cfg
         ),
+        watch_catalog_excluded_brands=get_watch_catalog_excluded_brands_text(db),
+        everywatch_login_email=get_everywatch_login_email(db),
+        everywatch_password_configured=everywatch_password_configured(db),
     )
 
 
@@ -106,6 +116,14 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> Settin
     if body.stale_listing_refresh_min_age_hours is not None:
         set_stale_listing_refresh_min_age_hours(
             db, body.stale_listing_refresh_min_age_hours
+        )
+    if body.watch_catalog_excluded_brands is not None:
+        set_watch_catalog_excluded_brands_text(db, body.watch_catalog_excluded_brands)
+    if body.everywatch_login_email is not None or body.everywatch_login_password is not None:
+        set_everywatch_login_credentials(
+            db,
+            email=body.everywatch_login_email,
+            password=body.everywatch_login_password,
         )
     sch = runtime.ingest_scheduler
     if sch:

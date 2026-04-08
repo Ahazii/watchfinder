@@ -87,7 +87,7 @@ def _create_catalog_row_and_link_listing(
     brand = (parsed.get("brand") or "").strip() or None
     if not brand:
         return CatalogLinkOutcome.SKIPPED_NO_IDENTITY
-    excluded = catalog_excluded_brands(get_settings())
+    excluded = catalog_excluded_brands(db)
     if brand_is_catalog_excluded(brand, excluded):
         return CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND
     ref, _ = effective_reference(parsed, edit)
@@ -151,7 +151,7 @@ def ensure_watch_catalog_for_listing(
         return CatalogLinkOutcome.ALREADY_LINKED
 
     brand_check = (parsed.get("brand") or "").strip() or None
-    excluded = catalog_excluded_brands(get_settings())
+    excluded = catalog_excluded_brands(db)
     if brand_is_catalog_excluded(brand_check, excluded):
         delete_pending_reviews_for_listing(db, listing.id)
         return CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND

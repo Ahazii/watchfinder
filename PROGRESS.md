@@ -40,7 +40,8 @@ This document records what is implemented in the repository versus the phased pl
 - **Listings / candidates API**: **`listing_active`** (**active** / **inactive** / **all**) and **`exclude_quartz`** query filters; UI status column and filters.
 - **Schema** migrations **005**–**008**: **`ebay_item_id`** width **128**; **`watch_models`** spec columns + **`reference_url`**; **`external_price_history`** (JSONB) + **`watchbase_imported_at`**; **`008`** **`market_source_snapshots`** (Everywatch/Chrono24 JSON).
 - **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing), **`tests/test_everywatch_client.py`** (Everywatch URL helpers); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
-- **Watch catalog filtering**: **`GET /api/watch-models`** — **`pricing`** (`has_signal` / `missing_signal` / strict P3 gap), **`import_status`** (WatchBase unmatched vs matched), and env **`WATCH_CATALOG_EXCLUDED_BRANDS`** (comma-separated; omitted from lists + skipped in **`ensure_watch_catalog_for_listing`** / backfill). UI: **Price data** and **WatchBase** dropdowns on **`/watch-models/`**; batch presets call the same query params.
+- **Watch catalog filtering**: **`GET /api/watch-models`** — **`pricing`** (`has_signal` / `missing_signal` / strict P3 gap), **`import_status`** (WatchBase unmatched vs matched), and excluded brands (**`WATCH_CATALOG_EXCLUDED_BRANDS`** env **merged** with **`watch_catalog_excluded_brands`** in **Settings** / **`app_settings`**). UI: **Price data** and **WatchBase** dropdowns on **`/watch-models/`**; batch presets call the same query params.
+- **Everywatch debug**: **`POST /api/everywatch/debug`** + UI **`/watch-models/everywatch-test/`** (linked from model detail); optional **`cookie_header`** or saved **`everywatch_login_*`** in Settings (plaintext in **`app_settings`**) → API **`POST https://api.everywatch.com/api/Auth/Login`** for session headers; structured **`analysis`** JSON for import mapping experiments.
 
 ---
 
@@ -124,10 +125,13 @@ OpenAPI: **`/docs`**.
 |------|------|
 | `frontend/` | Next.js UI (static export) |
 | `backend/watchfinder/main.py` | Entry, scheduler, routers, static mount |
-| `backend/watchfinder/api/` | Routes, **`listing_detail.py`**, **`listing_sort.py`**, **`market.py`** (**`/api/market/search`**), deps, query |
+| `backend/watchfinder/api/` | Routes, **`listing_detail.py`**, **`listing_sort.py`**, **`market.py`**, **`everywatch_debug.py`** (**`/api/everywatch/debug`**), deps, query |
 | `backend/watchfinder/services/ebay/` | OAuth, Browse (**search** + **getItem**), **`api_usage.py`** |
 | `backend/watchfinder/services/ingestion/` | **`job.py`**, **`mapper.py`**, **`live_refresh.py`** |
 | `backend/watchfinder/services/everywatch_client.py` | Everywatch model-page fetch + HTML hit/price parse |
+| `backend/watchfinder/services/everywatch_login.py` | **`POST /api/Auth/Login`** (api.everywatch.com) → session headers |
+| `backend/watchfinder/services/everywatch_credentials_settings.py` | Persist **`everywatch_login_*`** in **`app_settings`** |
+| `backend/watchfinder/services/everywatch_debug.py` | Debug HTML analysis for import tester |
 | `backend/watchfinder/services/chrono24_client.py` | Chrono24 search URL + optional fetch / **`__NEXT_DATA__`** parse |
 | `backend/watchfinder/services/market_snapshots.py` | **`market_source_snapshots`** refresh; analyze/backfill hook |
 | `backend/watchfinder/services/market_unified_search.py` | Aggregates WatchBase + Everywatch + Chrono24 for UI |
