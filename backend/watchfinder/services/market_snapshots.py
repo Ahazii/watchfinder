@@ -103,7 +103,13 @@ def refresh_market_snapshots_for_model(
         return {"ok": True, "skipped": "cooldown"}
 
     q = _market_search_query(wm)
-    ew = collect_everywatch_snapshot(wm.brand, wm.reference, wm.model_family, settings=settings)
+    ew = collect_everywatch_snapshot(
+        wm.brand,
+        wm.reference,
+        wm.model_family,
+        settings=settings,
+        everywatch_url=wm.everywatch_url,
+    )
     c24_hits, c24_err = try_fetch_chrono24_search(q, settings=settings)
     now = datetime.now(UTC).isoformat()
 

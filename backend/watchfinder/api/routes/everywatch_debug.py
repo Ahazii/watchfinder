@@ -82,6 +82,7 @@ def post_everywatch_debug(
             wm.reference,
             wm.model_family,
             settings=settings,
+            everywatch_url=wm.everywatch_url,
         )
 
     for q in body.search_queries:

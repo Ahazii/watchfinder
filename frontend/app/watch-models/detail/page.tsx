@@ -67,6 +67,7 @@ function DetailBody() {
   const [observedLow, setObservedLow] = useState<string | number | null>(null);
   const [observedHigh, setObservedHigh] = useState<string | number | null>(null);
   const [referenceUrl, setReferenceUrl] = useState("");
+  const [everywatchUrl, setEverywatchUrl] = useState("");
   const [specCaseMaterial, setSpecCaseMaterial] = useState("");
   const [specBezel, setSpecBezel] = useState("");
   const [specCrystal, setSpecCrystal] = useState("");
@@ -158,6 +159,7 @@ function DetailBody() {
     setObservedLow(m.observed_price_low ?? null);
     setObservedHigh(m.observed_price_high ?? null);
     setReferenceUrl(m.reference_url ?? "");
+    setEverywatchUrl(m.everywatch_url ?? "");
     setSpecCaseMaterial(m.spec_case_material ?? "");
     setSpecBezel(m.spec_bezel ?? "");
     setSpecCrystal(m.spec_crystal ?? "");
@@ -196,6 +198,7 @@ function DetailBody() {
         observed_price_low: null,
         observed_price_high: null,
         reference_url: null,
+        everywatch_url: null,
         spec_case_material: null,
         spec_bezel: null,
         spec_crystal: null,
@@ -251,6 +254,7 @@ function DetailBody() {
       manual_price_low: num(manualLow),
       manual_price_high: num(manualHigh),
       reference_url: referenceUrl.trim() || null,
+      everywatch_url: everywatchUrl.trim() || null,
       spec_case_material: specCaseMaterial.trim() || null,
       spec_bezel: specBezel.trim() || null,
       spec_crystal: specCrystal.trim() || null,
@@ -366,6 +370,7 @@ function DetailBody() {
     if (brand.trim()) p.set("brand", brand.trim());
     if (reference.trim()) p.set("reference", reference.trim());
     if (modelFamily.trim()) p.set("model_family", modelFamily.trim());
+    if (everywatchUrl.trim()) p.set("everywatch_url", everywatchUrl.trim());
     fetchJson<UnifiedMarketSearchResponse>(`/api/market/search?${p.toString()}`)
       .then((res) => {
         setFindUnified(res);
@@ -942,6 +947,30 @@ function DetailBody() {
               value={referenceUrl}
               onChange={(e) => setReferenceUrl(e.target.value)}
             />
+          </div>
+          <div>
+            <label className="text-sm font-medium" htmlFor="ewurl">
+              Everywatch watch URL (optional)
+            </label>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Exact listing page (e.g. <span className="font-mono">…/omega/watch-1234567</span>). Used first for{" "}
+              <strong>Refresh market snapshots</strong> and passed to <strong>Find on markets</strong> so Everywatch
+              does not rely only on guessed <span className="font-mono">/brand/reference</span> paths.
+            </p>
+            <Input
+              id="ewurl"
+              className="mt-1 font-mono text-xs"
+              placeholder="https://everywatch.com/…/watch-…"
+              value={everywatchUrl}
+              onChange={(e) => setEverywatchUrl(e.target.value)}
+            />
+            {everywatchUrl.trim() ? (
+              <Button variant="ghost" size="sm" className="mt-2 h-8 px-2 text-xs" asChild>
+                <a href={everywatchUrl.trim()} target="_blank" rel="noopener noreferrer">
+                  Open saved Everywatch URL
+                </a>
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>

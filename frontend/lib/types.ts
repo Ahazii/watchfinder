@@ -95,6 +95,8 @@ export type WatchModel = WatchModelBrief & {
   production_end?: string | null;
   description?: string | null;
   reference_url?: string | null;
+  /** Exact Everywatch listing page; used first for snapshots and market search. */
+  everywatch_url?: string | null;
   spec_case_material?: string | null;
   spec_bezel?: string | null;
   spec_crystal?: string | null;

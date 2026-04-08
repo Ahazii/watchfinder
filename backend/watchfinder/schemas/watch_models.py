@@ -30,6 +30,7 @@ class WatchModelOut(WatchModelBriefOut):
     production_end: date | None = None
     description: str | None = None
     reference_url: str | None = None
+    everywatch_url: str | None = None
     spec_case_material: str | None = None
     spec_bezel: str | None = None
     spec_crystal: str | None = None
@@ -61,6 +62,7 @@ class WatchModelCreate(BaseModel):
     manual_price_low: Decimal | None = None
     manual_price_high: Decimal | None = None
     reference_url: str | None = None
+    everywatch_url: str | None = None
     spec_case_material: str | None = None
     spec_bezel: str | None = None
     spec_crystal: str | None = None
@@ -87,6 +89,7 @@ class WatchModelPatch(BaseModel):
     manual_price_low: Decimal | None = None
     manual_price_high: Decimal | None = None
     reference_url: str | None = None
+    everywatch_url: str | None = None
     spec_case_material: str | None = None
     spec_bezel: str | None = None
     spec_crystal: str | None = None

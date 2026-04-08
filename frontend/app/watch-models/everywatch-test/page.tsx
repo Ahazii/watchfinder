@@ -109,6 +109,40 @@ function EverywatchTestBody() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Reading your server logs</CardTitle>
+          <CardDescription className="space-y-2 text-sm leading-relaxed">
+            <p>
+              <strong>POST …/api/Auth/Login 200</strong> — credentials were accepted; the app then adds session cookies
+              (and a bearer token if present) to the following GETs.
+            </p>
+            <p>
+              <strong>GET …/omega/1931 404</strong> — Everywatch has no public page at that guessed path (reference{" "}
+              <code className="rounded bg-muted px-1">1931</code> is often a year, not their internal slug). Vintage
+              pieces rarely match <code className="rounded bg-muted px-1">/brand/&lt;alnum-ref&gt;</code>.
+            </p>
+            <p>
+              <strong>GET …/search, /for-sale, /watch-search → 404</strong> — those URLs are not real server routes on
+              everywatch.com (the site is a Next.js app; search runs in the browser). Our list is only a probe; 404 here
+              is expected, not a failure of login.
+            </p>
+            <p>
+              <strong>GET …/?q=… 200</strong> — you get the <em>homepage HTML shell</em>. Listing cards usually load via
+              JavaScript / internal APIs after page load, so <code className="rounded bg-muted px-1">parsed_listing_hits</code>{" "}
+              may stay empty until we call the same JSON endpoints the site uses (use DevTools → Network on a manual search
+              to find them, then paste those URLs under <strong>Extra absolute URLs</strong>).
+            </p>
+            <p>
+              When a direct <code className="rounded bg-muted px-1">…/watch-1234567</code> URL returns <strong>200</strong>, save
+              it on the watch model under <strong>Everywatch watch URL</strong> (detail page) so{" "}
+              <strong>Refresh market snapshots</strong> and <strong>Find on markets</strong> use it in production without
+              re-pasting.
+            </p>
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Request</CardTitle>
           <CardDescription>
             With a <strong>watch model id</strong>, the server builds the same <code className="rounded bg-muted px-1">/brand/ref</code> URLs

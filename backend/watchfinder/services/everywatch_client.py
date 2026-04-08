@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -22,6 +23,116 @@ _PRICE_RE = re.compile(
     r"([\d][\d,]*(?:\.\d+)?)\s*(USD|EUR|GBP)\b",
     re.IGNORECASE,
 )
+
+_EW_HOST = re.compile(r"^(?:www\.)?everywatch\.com$", re.I)
+
+
+def normalize_everywatch_watch_url(raw: str | None) -> str | None:
+    """
+    Accept a full Everywatch watch detail URL (…/brand/watch-123).
+    Returns canonical https URL without query string, or None if not a watch page URL.
+    """
+    if not raw or not str(raw).strip():
+        return None
+    s = str(raw).strip().split("?", 1)[0].strip()
+    if not s.lower().startswith("http"):
+        return None
+    try:
+        p = urlparse(s)
+    except ValueError:
+        return None
+    if p.scheme not in ("http", "https") or not p.netloc:
+        return None
+    if not _EW_HOST.match(p.netloc.split("@")[-1]):
+        return None
+    path = (p.path or "").rstrip("/")
+    if "/watch-" not in path.lower():
+        return None
+    return f"https://{p.netloc.split('@')[-1]}{path}"
+
+
+def is_everywatch_watch_detail_url(url: str) -> bool:
+    u = (url or "").split("?", 1)[0].rstrip("/")
+    if not u.lower().startswith("http") or "everywatch.com" not in u.lower():
+        return False
+    return re.search(r"/watch-\d+$", u, re.I) is not None
+
+
+def _ld_find_price_currency(obj: Any) -> tuple[str | None, str | None]:
+    if isinstance(obj, dict):
+        p = obj.get("price")
+        c = obj.get("priceCurrency")
+        if p is not None and c:
+            return str(p).replace(",", ""), str(c).upper()
+        offers = obj.get("offers")
+        if isinstance(offers, dict):
+            r = _ld_find_price_currency(offers)
+            if r[0]:
+                return r
+        if isinstance(offers, list):
+            for o in offers:
+                r = _ld_find_price_currency(o)
+                if r[0]:
+                    return r
+        g = obj.get("@graph")
+        if isinstance(g, list):
+            for item in g:
+                r = _ld_find_price_currency(item)
+                if r[0]:
+                    return r
+        for v in obj.values():
+            if isinstance(v, (dict, list)):
+                r = _ld_find_price_currency(v)
+                if r[0]:
+                    return r
+    elif isinstance(obj, list):
+        for item in obj:
+            r = _ld_find_price_currency(item)
+            if r[0]:
+                return r
+    return None, None
+
+
+def parse_watch_detail_hit(html: str, *, page_url: str) -> dict[str, Any] | None:
+    """Single listing row from a watch detail page (title + optional price from HTML / JSON-LD)."""
+    soup = BeautifulSoup(html, "html.parser")
+    base = page_url.split("?", 1)[0].rstrip("/")
+    h1 = soup.find("h1")
+    title_el = soup.find("title")
+    title = (h1.get_text(" ", strip=True) if h1 else "") or (
+        title_el.get_text(strip=True) if title_el else ""
+    )
+    label = (title[:500] if len(title) >= 3 else base) or base
+
+    amount: str | None = None
+    currency: str | None = None
+    for s in soup.find_all("script", type=lambda t: bool(t and "ld+json" in str(t).lower())):
+        raw = (s.string or s.get_text() or "").strip()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        a, c = _ld_find_price_currency(data)
+        if a and c:
+            amount, currency = a, c
+            break
+
+    if not amount:
+        for blob in (title, soup.get_text(" ", strip=True)[:12000]):
+            m = _PRICE_RE.search(blob)
+            if m:
+                amount = m.group(1).replace(",", "")
+                currency = m.group(2).upper()
+                break
+
+    return {
+        "url": base,
+        "label": label[:500],
+        "amount": amount,
+        "currency": currency,
+    }
 
 
 def slugify_segment(s: str) -> str:
@@ -180,19 +291,28 @@ def collect_everywatch_snapshot(
     reference: str | None,
     model_family: str | None,
     settings: Settings | None = None,
+    *,
+    everywatch_url: str | None = None,
 ) -> dict[str, Any]:
     """
-    Try model URLs; return snapshot dict for JSONB (hits, median, errors).
+    Try saved watch detail URL first (if valid), then guessed model listing URLs.
+    Returns snapshot dict for JSONB (hits, median, errors).
     """
     settings = settings or get_settings()
     from datetime import UTC, datetime
 
     now = datetime.now(UTC).isoformat()
-    urls = candidate_model_urls(brand, reference, model_family)
+    urls: list[str] = []
+    nu = normalize_everywatch_watch_url(everywatch_url)
+    if nu:
+        urls.append(nu)
+    for u in candidate_model_urls(brand, reference, model_family):
+        if u not in urls:
+            urls.append(u)
     if not urls:
         return {
             "fetched_at": now,
-            "error": "Need brand and reference or model family for Everywatch URL.",
+            "error": "Need a saved Everywatch watch URL, or brand plus reference or model family.",
             "source_urls_tried": [],
             "hits": [],
         }
@@ -203,9 +323,14 @@ def collect_everywatch_snapshot(
         if not html:
             last_err = err or "empty"
             continue
-        hits = parse_watch_hits_from_html(html, page_url=url)
+        is_detail = is_everywatch_watch_detail_url(url)
+        if is_detail:
+            one = parse_watch_detail_hit(html, page_url=url)
+            hits = [one] if one and one.get("url") else []
+        else:
+            hits = parse_watch_hits_from_html(html, page_url=url)
         if not hits:
-            last_err = "no watch links parsed"
+            last_err = "detail page produced no row" if is_detail else "no watch links parsed"
             continue
         med = _median_amounts(hits)
         snap: dict[str, Any] = {
@@ -214,6 +339,8 @@ def collect_everywatch_snapshot(
             "source_urls_tried": urls,
             "hits": hits[:40],
             "error": None,
+            "page_kind": "watch_detail" if is_detail else "listing",
+            "saved_watch_url_used": bool(nu and url == nu),
         }
         if med:
             snap["median_amount"] = str(med[0])

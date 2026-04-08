@@ -50,14 +50,17 @@ def everywatch_search_hits(
     reference: str | None,
     model_family: str | None,
     settings: Settings,
+    *,
+    everywatch_url: str | None = None,
 ) -> list[dict[str, Any]]:
-    if not (brand or "").strip():
+    if not (brand or "").strip() and not (everywatch_url or "").strip():
         return []
     snap = collect_everywatch_snapshot(
-        (brand or "").strip(),
+        (brand or "").strip() or "",
         (reference or None),
         (model_family or None),
         settings=settings,
+        everywatch_url=everywatch_url,
     )
     hits = snap.get("hits") or []
     out: list[dict[str, Any]] = []
@@ -83,6 +86,7 @@ def unified_market_search(
     brand: str | None = None,
     reference: str | None = None,
     model_family: str | None = None,
+    everywatch_url: str | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
@@ -93,7 +97,13 @@ def unified_market_search(
         for x in wb_raw[:24]
     ]
 
-    ew_items = everywatch_search_hits(brand, reference, model_family, settings)
+    ew_items = everywatch_search_hits(
+        brand,
+        reference,
+        model_family,
+        settings,
+        everywatch_url=everywatch_url,
+    )
 
     c24_q = qn or " ".join(
         p for p in [(brand or "").strip(), (reference or "").strip(), (model_family or "").strip()] if p

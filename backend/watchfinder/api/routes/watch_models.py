@@ -317,6 +317,7 @@ def create_watch_model(body: WatchModelCreate, db: Session = Depends(get_db)) ->
         description=body.description,
         manual_price_low=body.manual_price_low,
         manual_price_high=body.manual_price_high,
+        everywatch_url=(body.everywatch_url.strip() if body.everywatch_url else None) or None,
     )
     db.add(wm)
     try:
@@ -346,6 +347,9 @@ def patch_watch_model(
     if "reference" in data:
         r = data["reference"]
         data["reference"] = (r.strip() if r else None) or None
+    if "everywatch_url" in data:
+        ev = data["everywatch_url"]
+        data["everywatch_url"] = (None if ev is None else str(ev).strip()) or None
     for k, v in data.items():
         setattr(wm, k, v)
     try:

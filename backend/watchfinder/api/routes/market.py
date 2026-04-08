@@ -17,6 +17,11 @@ def get_market_search(
     brand: str | None = Query(None, max_length=255, description="Improves Everywatch URL guess"),
     reference: str | None = Query(None, max_length=128),
     model_family: str | None = Query(None, max_length=512),
+    everywatch_url: str | None = Query(
+        None,
+        max_length=2048,
+        description="Optional saved Everywatch watch page URL (same as watch_models.everywatch_url)",
+    ),
 ) -> UnifiedMarketSearchResponse:
     settings = get_settings()
     data = unified_market_search(
@@ -24,6 +29,7 @@ def get_market_search(
         brand=brand,
         reference=reference,
         model_family=model_family,
+        everywatch_url=everywatch_url,
         settings=settings,
     )
     return UnifiedMarketSearchResponse.model_validate(data)

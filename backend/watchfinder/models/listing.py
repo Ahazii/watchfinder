@@ -44,6 +44,7 @@ class WatchModel(Base):
     observed_price_low: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     observed_price_high: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     reference_url: Mapped[str | None] = mapped_column(Text)
+    everywatch_url: Mapped[str | None] = mapped_column(Text)
     spec_case_material: Mapped[str | None] = mapped_column(Text)
     spec_bezel: Mapped[str | None] = mapped_column(Text)
     spec_crystal: Mapped[str | None] = mapped_column(Text)
