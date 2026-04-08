@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/api";
-import type { EverywatchDebugResponse } from "@/lib/types";
+import type { EverywatchDebugFetchRow, EverywatchDebugResponse } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,6 +14,155 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+type EwListingHit = {
+  url?: string;
+  label?: string;
+  amount?: string | null;
+  currency?: string | null;
+};
+
+type EwDetailPreview = {
+  url?: string;
+  label?: string;
+  amount?: string | null;
+  currency?: string | null;
+  image_url?: string | null;
+  specs?: Record<string, string>;
+  price_analysis?: { title?: string; raw_text?: string; gbp_amounts?: string[] }[];
+};
+
+function EverywatchFetchBlock({ f }: { f: EverywatchDebugFetchRow }) {
+  const analysis = f.analysis;
+  const hits = (analysis?.parsed_listing_hits_sample as EwListingHit[] | undefined) ?? [];
+  const detail = analysis?.detail_import_preview as EwDetailPreview | null | undefined;
+  const hasSpecs = detail?.specs && Object.keys(detail.specs).length > 0;
+  const copyUrl = (u: string) => {
+    void navigator.clipboard?.writeText(u);
+  };
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <p className="break-all font-mono text-xs text-muted-foreground">{f.url}</p>
+      <p className="mt-1 text-sm">
+        HTTP {f.status_code ?? "—"} · html: {f.html_received ? "yes" : "no"}
+        {f.error ? <span className="ml-2 text-red-400">· {f.error}</span> : null}
+      </p>
+
+      {hits.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-sm font-medium">Parsed watch links ({hits.length} sample)</p>
+          <p className="text-xs text-muted-foreground">
+            Open a row to confirm the match, then paste that URL into <strong>Extra absolute URLs</strong> or save it as{" "}
+            <strong>Everywatch watch URL</strong> on the model detail page.
+          </p>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full min-w-[520px] text-left text-xs">
+              <thead className="border-b border-border bg-muted/30 text-muted-foreground">
+                <tr>
+                  <th className="p-2 font-medium">Label</th>
+                  <th className="p-2 font-medium">Price hint</th>
+                  <th className="p-2 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hits.map((h, j) => {
+                  const u = (h.url || "").trim();
+                  const hint =
+                    h.amount && h.currency ? `${h.amount} ${h.currency}` : "—";
+                  return (
+                    <tr key={`${u}-${j}`} className="border-b border-border/60 last:border-0">
+                      <td className="max-w-[280px] p-2 align-top">{(h.label || "").slice(0, 200)}</td>
+                      <td className="whitespace-nowrap p-2 align-top">{hint}</td>
+                      <td className="p-2 align-top">
+                        <div className="flex flex-wrap gap-1">
+                          {u ? (
+                            <>
+                              <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" asChild>
+                                <a href={u} target="_blank" rel="noreferrer">
+                                  Open
+                                </a>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() => copyUrl(u)}
+                              >
+                                Copy URL
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {detail && (detail.url || detail.image_url || hasSpecs || (detail.price_analysis?.length ?? 0) > 0) ? (
+        <div className="mt-4 space-y-2 rounded-md border border-emerald-900/40 bg-emerald-950/15 p-3">
+          <p className="text-sm font-medium text-emerald-200/90">Detail page import preview</p>
+          {detail.image_url ? (
+            <div className="flex max-w-xs flex-col gap-1">
+              <span className="text-[11px] text-muted-foreground">Hero image (parsed)</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={detail.image_url}
+                alt={detail.label || "Everywatch"}
+                className="max-h-48 rounded border border-border object-contain"
+              />
+            </div>
+          ) : null}
+          {hasSpecs ? (
+            <dl className="grid max-h-56 grid-cols-1 gap-x-4 gap-y-1 overflow-y-auto text-xs sm:grid-cols-2">
+              {Object.entries(detail.specs!).map(([k, v]) => (
+                <div key={k} className="flex gap-2">
+                  <dt className="shrink-0 font-medium text-muted-foreground">{k}</dt>
+                  <dd className="break-words">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {(detail.price_analysis?.length ?? 0) > 0 ? (
+            <ul className="space-y-1 text-xs">
+              {detail.price_analysis!.map((row, idx) => (
+                <li key={idx}>
+                  <span className="font-medium">{row.title || "—"}</span>
+                  {row.gbp_amounts?.length ? (
+                    <span className="ml-2 text-muted-foreground">
+                      GBP: {row.gbp_amounts.join(", ")}
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-muted-foreground">{row.raw_text}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {detail.url ? (
+            <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+              <a href={detail.url} target="_blank" rel="noreferrer">
+                Open detail page
+              </a>
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {analysis ? (
+        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/15 p-2 font-mono text-[11px]">
+          {JSON.stringify(analysis, null, 2)}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
 
 export default function EverywatchTestPage() {
   return (
@@ -121,9 +270,9 @@ function EverywatchTestBody() {
               pieces rarely match <code className="rounded bg-muted px-1">/brand/&lt;alnum-ref&gt;</code>.
             </p>
             <p>
-              <strong>GET …/search, /for-sale, /watch-search → 404</strong> — those URLs are not real server routes on
-              everywatch.com (the site is a Next.js app; search runs in the browser). Our list is only a probe; 404 here
-              is expected, not a failure of login.
+              <strong>GET …/watch-listing?query=…</strong> — real HTML search results (server-rendered). Extra search lines
+              now try this <em>first</em>, then legacy <code className="rounded bg-muted px-1">/search</code> probes that
+              often <strong>404</strong>.
             </p>
             <p>
               <strong>GET …/?q=… 200</strong> — you get the <em>homepage HTML shell</em>. Listing cards usually load via
@@ -210,7 +359,7 @@ function EverywatchTestBody() {
             <textarea
               id="ew-sq"
               className="min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              placeholder="Rolex Submariner 126610"
+              placeholder={'e.g. Omega 166.085 → /watch-listing?query=…'}
               value={searchQueries}
               onChange={(e) => setSearchQueries(e.target.value)}
             />
@@ -222,7 +371,7 @@ function EverywatchTestBody() {
             <textarea
               id="ew-url"
               className="min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              placeholder="https://everywatch.com/..."
+              placeholder="https://everywatch.com/watch-listing?… or …/omega/de-ville/watch-123"
               value={extraUrls}
               onChange={(e) => setExtraUrls(e.target.value)}
             />
@@ -299,27 +448,15 @@ function EverywatchTestBody() {
             <CardHeader>
               <CardTitle>Per-URL results</CardTitle>
               <CardDescription>
-                <strong>analysis</strong> includes <code className="rounded bg-muted px-1">og_tags</code>,{" "}
-                <code className="rounded bg-muted px-1">json_ld_previews</code>,{" "}
-                <code className="rounded bg-muted px-1">parsed_listing_hits_sample</code> (current importer), etc.
+                Listing pages expose <code className="rounded bg-muted px-1">parsed_listing_hits_sample</code> as a table;
+                watch detail pages add <code className="rounded bg-muted px-1">detail_import_preview</code> (specs,
+                hero image, GBP price rows). Raw <code className="rounded bg-muted px-1">analysis</code> JSON is below
+                each block.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {result.fetches.map((f, i) => (
-                <div key={`${f.url}-${i}`} className="rounded-lg border border-border p-3">
-                  <p className="break-all font-mono text-xs text-muted-foreground">{f.url}</p>
-                  <p className="mt-1 text-sm">
-                    HTTP {f.status_code ?? "—"} · html: {f.html_received ? "yes" : "no"}
-                    {f.error ? (
-                      <span className="ml-2 text-red-400">· {f.error}</span>
-                    ) : null}
-                  </p>
-                  {f.analysis ? (
-                    <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/15 p-2 font-mono text-[11px]">
-                      {JSON.stringify(f.analysis, null, 2)}
-                    </pre>
-                  ) : null}
-                </div>
+                <EverywatchFetchBlock key={`${f.url}-${i}`} f={f} />
               ))}
             </CardContent>
           </Card>

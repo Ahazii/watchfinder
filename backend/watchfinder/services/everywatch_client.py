@@ -23,6 +23,11 @@ _PRICE_RE = re.compile(
     r"([\d][\d,]*(?:\.\d+)?)\s*(USD|EUR|GBP)\b",
     re.IGNORECASE,
 )
+# Detail page "price analysis" block (often GBP).
+_GBP_BLOCK_RE = re.compile(
+    r"([\d][\d.,]*)\s*K\s*GBP|([\d][\d,]*(?:\.\d+)?)\s*GBP\b",
+    re.IGNORECASE,
+)
 
 _EW_HOST = re.compile(r"^(?:www\.)?everywatch\.com$", re.I)
 
@@ -93,8 +98,84 @@ def _ld_find_price_currency(obj: Any) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _parse_gbp_tokens_from_text(text: str) -> list[tuple[str, str]]:
+    """Return [(amount_str, 'GBP'), ...] from snippets like '547 GBP' or '1.48K GBP'."""
+    out: list[tuple[str, str]] = []
+    for m in _GBP_BLOCK_RE.finditer(text or ""):
+        k_part, plain_part = m.group(1), m.group(2)
+        if k_part:
+            try:
+                v = Decimal(k_part.replace(",", "")) * 1000
+                out.append((str(v.quantize(Decimal("0.01"))), "GBP"))
+            except InvalidOperation:
+                pass
+        elif plain_part:
+            try:
+                v = Decimal(plain_part.replace(",", ""))
+                out.append((str(v), "GBP"))
+            except InvalidOperation:
+                pass
+    return out
+
+
+def parse_awd_spec_map(html: str) -> dict[str, str]:
+    """Everywatch watch detail: li.awd-desc-items with .awd-title / .awd-detail."""
+    soup = BeautifulSoup(html, "html.parser")
+    specs: dict[str, str] = {}
+    for li in soup.select("li.awd-desc-items"):
+        t_el = li.select_one(".awd-title")
+        d_el = li.select_one(".awd-detail")
+        if not t_el or not d_el:
+            continue
+        key = t_el.get_text(" ", strip=True).rstrip(": ").strip()
+        val = d_el.get_text(" ", strip=True)
+        if key and val and key not in specs:
+            specs[key] = val[:500]
+    return specs
+
+
+def parse_price_container_rows(html: str) -> list[dict[str, Any]]:
+    """Everywatch detail: .price-container h3.price-analysis-item (Auction / Dealers / Range)."""
+    soup = BeautifulSoup(html, "html.parser")
+    root = soup.select_one(".price-container")
+    if not root:
+        return []
+    rows: list[dict[str, Any]] = []
+    for h3 in root.select("h3.price-analysis-item"):
+        title_el = h3.select_one(".p-title")
+        title = title_el.get_text(" ", strip=True) if title_el else ""
+        price_el = h3.select_one(".price")
+        raw_text = price_el.get_text(" ", strip=True) if price_el else ""
+        gbp = _parse_gbp_tokens_from_text(raw_text)
+        rows.append(
+            {
+                "title": title[:120],
+                "raw_text": raw_text[:400],
+                "gbp_amounts": [a for a, _ in gbp],
+            }
+        )
+    return rows
+
+
+def parse_detail_hero_image_url(html: str) -> str | None:
+    """Prefer img.everywatch.com with eager / high priority, else first cdn image."""
+    soup = BeautifulSoup(html, "html.parser")
+    best: str | None = None
+    for img in soup.find_all("img", src=True):
+        src = (img.get("src") or "").strip()
+        if "img.everywatch.com" not in src.lower():
+            continue
+        loading = (img.get("loading") or "").lower()
+        fetch_pri = (img.get("fetchpriority") or "").lower()
+        if loading == "eager" or fetch_pri == "high":
+            return src.split(" ", 1)[0]
+        if best is None:
+            best = src.split(" ", 1)[0]
+    return best
+
+
 def parse_watch_detail_hit(html: str, *, page_url: str) -> dict[str, Any] | None:
-    """Single listing row from a watch detail page (title + optional price from HTML / JSON-LD)."""
+    """Single listing row from a watch detail page (title + specs + image + prices)."""
     soup = BeautifulSoup(html, "html.parser")
     base = page_url.split("?", 1)[0].rstrip("/")
     h1 = soup.find("h1")
@@ -127,11 +208,25 @@ def parse_watch_detail_hit(html: str, *, page_url: str) -> dict[str, Any] | None
                 currency = m.group(2).upper()
                 break
 
+    price_rows = parse_price_container_rows(html)
+    if not amount and price_rows:
+        for row in price_rows:
+            amts = row.get("gbp_amounts") or []
+            if amts:
+                amount, currency = amts[0], "GBP"
+                break
+
+    specs = parse_awd_spec_map(html)
+    image_url = parse_detail_hero_image_url(html)
+
     return {
         "url": base,
         "label": label[:500],
         "amount": amount,
         "currency": currency,
+        "specs": specs,
+        "image_url": image_url,
+        "price_analysis": price_rows[:12],
     }
 
 
@@ -144,17 +239,41 @@ def reference_alnum(ref: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]", "", (ref or "").strip())
 
 
-def guess_site_search_urls(search_query: str) -> list[str]:
+def guess_watch_listing_urls(search_query: str) -> list[str]:
     """
-    Candidate GET URLs to probe how Everywatch exposes search (site may change; for debugging).
-    Home search input id is often ew-search-home — actual API may differ.
+    Real Everywatch search results live under /watch-listing?query=… (see everywatch.com UI).
+    Optional keyword= mirrors their filter when the last token looks like a reference (e.g. 166085).
     """
     q = (search_query or "").strip()
     if not q:
         return []
     enc = quote(q, safe="")
     base = EVERYWATCH_ORIGIN.rstrip("/")
-    return [
+    out: list[str] = [
+        f"{base}/watch-listing?query={enc}&sortColumn=relevance&sortType=asc",
+    ]
+    parts = q.split()
+    if parts:
+        tail = reference_alnum(parts[-1])
+        if tail and any(ch.isdigit() for ch in tail) and len(tail) >= 4:
+            out.append(
+                f"{base}/watch-listing?keyword={quote(tail, safe='')}&query={enc}"
+                "&sortColumn=relevance&sortType=asc"
+            )
+    return out
+
+
+def guess_site_search_urls(search_query: str) -> list[str]:
+    """
+    Prefer /watch-listing (works server-side); keep legacy paths as low-priority probes for debug.
+    """
+    q = (search_query or "").strip()
+    if not q:
+        return []
+    enc = quote(q, safe="")
+    base = EVERYWATCH_ORIGIN.rstrip("/")
+    primary = guess_watch_listing_urls(q)
+    legacy = [
         f"{base}/search?q={enc}",
         f"{base}/search?query={enc}",
         f"{base}/for-sale?q={enc}",
@@ -162,6 +281,13 @@ def guess_site_search_urls(search_query: str) -> list[str]:
         f"{base}/?q={enc}",
         f"{base}/watch-search?q={enc}",
     ]
+    seen = set(primary)
+    out = list(primary)
+    for u in legacy:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
 
 
 def candidate_model_urls(brand: str, reference: str | None, model_family: str | None) -> list[str]:
@@ -194,20 +320,24 @@ def _abs_url(href: str) -> str | None:
 
 
 def parse_watch_hits_from_html(html: str, *, page_url: str) -> list[dict[str, Any]]:
-    """Parse listing cards: url, label, amount, currency (if found in anchor text)."""
+    """Parse listing cards: relative or absolute links to …/watch-<id> (e.g. /omega/de-ville/watch-1)."""
     soup = BeautifulSoup(html, "html.parser")
     seen: set[str] = set()
     hits: list[dict[str, Any]] = []
-    for a in soup.select('a[href*="everywatch.com"]'):
-        href = a.get("href")
-        full = _abs_url(href or "")
-        if not full or "/watch-" not in full:
+    for a in soup.select('a[href*="watch-"]'):
+        href = (a.get("href") or "").strip()
+        if not href or href.startswith("#"):
+            continue
+        full = _abs_url(href)
+        if not full or "/watch-" not in full.lower():
             continue
         if full in seen:
             continue
         seen.add(full)
         label = " ".join((a.get_text() or "").split())
-        if len(label) < 6:
+        if len(label) < 4:
+            label = (a.get("title") or "").strip() or full.rsplit("/watch-", 1)[-1]
+        if len(label) < 3:
             continue
         m = _PRICE_RE.search(label)
         amount: str | None = None
@@ -306,6 +436,18 @@ def collect_everywatch_snapshot(
     nu = normalize_everywatch_watch_url(everywatch_url)
     if nu:
         urls.append(nu)
+    q_model = " ".join(
+        p
+        for p in [
+            (brand or "").strip(),
+            ((reference or "") or "").strip(),
+            ((model_family or "") or "").strip(),
+        ]
+        if p
+    )
+    for u in guess_watch_listing_urls(q_model):
+        if u not in urls:
+            urls.append(u)
     for u in candidate_model_urls(brand, reference, model_family):
         if u not in urls:
             urls.append(u)

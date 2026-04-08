@@ -48,6 +48,10 @@ def post_everywatch_debug(
     urls: list[str] = []
     snap: dict | None = None
 
+    for u in body.extra_urls:
+        if (u or "").strip():
+            urls.append(u.strip())
+
     if body.watch_model_id is not None:
         wm = db.get(WatchModel, body.watch_model_id)
         if not wm:
@@ -87,10 +91,6 @@ def post_everywatch_debug(
 
     for q in body.search_queries:
         urls.extend(guess_site_search_urls(q))
-
-    for u in body.extra_urls:
-        if (u or "").strip():
-            urls.append(u.strip())
 
     urls = _dedupe_urls(urls)
     if not urls:

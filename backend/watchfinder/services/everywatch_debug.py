@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 from watchfinder.config import Settings, get_settings
 from watchfinder.services.everywatch_client import (
     fetch_everywatch_page,
+    is_everywatch_watch_detail_url,
+    parse_watch_detail_hit,
     parse_watch_hits_from_html,
 )
 
@@ -52,6 +54,9 @@ def analyze_everywatch_html(html: str, page_url: str) -> dict[str, Any]:
         if keys:
             data_attrs_sample.append(f"{el.name}: " + " ".join(keys[:4]))
     parsed_hits = parse_watch_hits_from_html(html, page_url=page_url)
+    detail_import_preview: dict[str, Any] | None = None
+    if is_everywatch_watch_detail_url(page_url):
+        detail_import_preview = parse_watch_detail_hit(html, page_url=page_url)
     return {
         "page_url": page_url,
         "html_length": len(html),
@@ -65,6 +70,7 @@ def analyze_everywatch_html(html: str, page_url: str) -> dict[str, Any]:
         "data_attribute_samples": data_attrs_sample[:20],
         "parsed_listing_hits_count": len(parsed_hits),
         "parsed_listing_hits_sample": parsed_hits[:15],
+        "detail_import_preview": detail_import_preview,
     }
 
 
