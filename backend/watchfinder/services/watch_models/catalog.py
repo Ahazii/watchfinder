@@ -181,6 +181,7 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
     from sqlalchemy.orm import selectinload
 
     from watchfinder.models import Listing, ListingEdit
+    from watchfinder.services.market_snapshots import maybe_refresh_market_snapshots_for_model
     from watchfinder.services.watch_models import refresh_watch_model_observed_bounds
 
     stats = {
@@ -215,6 +216,7 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
         if listing.watch_model_id is not None:
             refresh_watch_model_observed_bounds(db, listing.watch_model_id)
             enrich_watch_model_image_from_listing(db, listing, get_settings())
+            maybe_refresh_market_snapshots_for_model(db, listing.watch_model_id, get_settings())
     return stats
 
 

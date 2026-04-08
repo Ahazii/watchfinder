@@ -12,6 +12,7 @@ from watchfinder.config import get_settings
 from watchfinder.models import Listing, WatchModel
 from watchfinder.schemas.watch_models import (
     BackfillWatchCatalogResponse,
+    MarketSnapshotsRefreshResponse,
     WatchBaseImportRequest,
     WatchBaseImportResponse,
     WatchModelCreate,
@@ -19,6 +20,7 @@ from watchfinder.schemas.watch_models import (
     WatchModelOut,
     WatchModelPatch,
 )
+from watchfinder.services.market_snapshots import refresh_market_snapshots_for_model
 from watchfinder.services.watch_models import backfill_watch_catalog, refresh_watch_model_observed_bounds
 from watchfinder.services.watchbase_import import WatchBaseImportError, import_watchbase_for_model
 
@@ -164,6 +166,41 @@ def post_import_watchbase(
     except WatchBaseImportError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e)) from e
     return WatchBaseImportResponse(**data)
+
+
+@router.post(
+    "/{model_id}/refresh-market-snapshots",
+    response_model=MarketSnapshotsRefreshResponse,
+    summary="Refresh Everywatch + Chrono24 snapshot JSON (optional manual £ seed)",
+)
+def post_refresh_market_snapshots(
+    model_id: UUID,
+    db: Session = Depends(get_db),
+) -> MarketSnapshotsRefreshResponse:
+    out = refresh_market_snapshots_for_model(
+        db, model_id, get_settings(), force=True
+    )
+    if not out.get("ok") and out.get("error") == "model not found":
+        db.rollback()
+        raise HTTPException(status_code=404, detail="Watch model not found")
+    if out.get("skipped") == "EXTRA_MARKET_IMPORT_ENABLED=false":
+        db.rollback()
+        raise HTTPException(
+            status_code=403,
+            detail="Extra market import disabled (EXTRA_MARKET_IMPORT_ENABLED=false).",
+        )
+    if out.get("ok"):
+        db.commit()
+    else:
+        db.rollback()
+    return MarketSnapshotsRefreshResponse(
+        ok=bool(out.get("ok")),
+        skipped=out.get("skipped"),
+        error=out.get("error"),
+        everywatch_hits=int(out.get("everywatch_hits") or 0),
+        chrono24_hits=int(out.get("chrono24_hits") or 0),
+        merged_manual_bounds=bool(out.get("merged_manual_bounds")),
+    )
 
 
 @router.get("/{model_id}", response_model=WatchModelOut)

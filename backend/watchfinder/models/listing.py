@@ -56,6 +56,7 @@ class WatchModel(Base):
     spec_dial_material: Mapped[str | None] = mapped_column(Text)
     spec_indexes_hands: Mapped[str | None] = mapped_column(Text)
     external_price_history: Mapped[dict | None] = mapped_column(JSONB)
+    market_source_snapshots: Mapped[dict | None] = mapped_column(JSONB)
     watchbase_imported_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )

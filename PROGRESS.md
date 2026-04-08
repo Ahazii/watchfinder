@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **8 April 2026**
+Last updated: **9 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -38,8 +38,8 @@ This document records what is implemented in the repository versus the phased pl
 - **Live item** (`browse.py` **`get_item`**, `live_refresh.py`): **`POST /api/listings/{id}/refresh-from-ebay`**; increments **`browse_get_item`** usage counter; listing detail UI **Refresh from eBay**; **`404`** → **`is_active=false`**.
 - **Stale batch refresh**: APScheduler job **`stale_listing_refresh`** (`services/stale_listing_refresh.py`, **`stale_refresh_worker.py`**) — active listings with **`last_seen_at`** older than configurable **min age** (or null; **0** = any past timestamp), up to **max per run**, **~0.35s** between **getItem** calls. One shared **`EbayBrowseClient`** + **`EbayAuthClient`** per batch (single OAuth token while cached). Toggle + limits in **Settings** (persisted **`app_settings`**); env **`STALE_LISTING_REFRESH_*`** defaults. **`POST /api/ingest/stale-refresh-run`** for a manual batch; logs explain **attempted: 0** when no rows match the age filter.
 - **Listings / candidates API**: **`listing_active`** (**active** / **inactive** / **all**) and **`exclude_quartz`** query filters; UI status column and filters.
-- **Schema** migrations **005**–**007**: **`ebay_item_id`** width **128**; **`watch_models`** spec columns + **`reference_url`**; **`external_price_history`** (JSONB) + **`watchbase_imported_at`** for on-demand WatchBase import.
-- **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
+- **Schema** migrations **005**–**008**: **`ebay_item_id`** width **128**; **`watch_models`** spec columns + **`reference_url`**; **`external_price_history`** (JSONB) + **`watchbase_imported_at`**; **`008`** **`market_source_snapshots`** (Everywatch/Chrono24 JSON).
+- **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing), **`tests/test_everywatch_client.py`** (Everywatch URL helpers); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
 
 ---
 
@@ -49,7 +49,7 @@ This document records what is implemented in the repository versus the phased pl
 - **Settings** via `pydantic-settings` (`watchfinder/config.py`): `DATABASE_URL`, eBay credentials, marketplace, search query/limit, **`ingest_max_pages`**, etc.
 - **PostgreSQL** via SQLAlchemy 2 + **psycopg** (`watchfinder/db.py`).
 - **Models** (`watchfinder/models/listing.py`): `listings`, `listing_snapshots`, `parsed_attributes`, `repair_signals`, `opportunity_scores`, `saved_searches`, `app_settings`, **`listing_edits`**, **`watch_sale_records`**, **`watch_models`** (listing **`watch_model_id`** FK **SET NULL**).
-- **Alembic**: **001**–**007** (latest: **`external_price_history`** + **`watchbase_imported_at`**; **006** specs + **`reference_url`**).
+- **Alembic**: **001**–**008** (latest: **`market_source_snapshots`**; **007** WatchBase import columns; **006** specs + **`reference_url`**).
 - **eBay**: client-credentials OAuth (`services/ebay/auth.py`), **Browse** search + **getItem** (`browse.py`), **Taxonomy** client stub (`taxonomy.py`).
 - **Ingestion**: `mapper.py`, `job.py`, `live_refresh.py`; multi-query cycle from **`saved_searches`** or env fallback; shared **`EbayBrowseClient`** per cycle.
 - **Docker** / **CI** / **Kickoff docs** as before.
@@ -69,7 +69,8 @@ OpenAPI: **`/docs`**.
 
 - **Pages**: dashboard (extra counter card), listings, listing detail (**Refresh from eBay**, active/inactive badge), candidates, settings (**pages per search line**, **stale listing refresh**), watch-models, watch-review.
 - **UI (2026):** **`money()`** in **`frontend/lib/format.ts`** formats with **Intl** currency (default **GBP** when code missing); **`currencyInputLabelSuffix`** for numeric field labels. Explanatory **CardDescription** / intro copy on listing detail, watch detail/list, listings/candidates tables (**SortableTableHead** `title`), dashboard, match queue, and **Settings** (**Prices & currencies**, **Save & manual jobs**). Watch detail: **Refresh data from WatchBase** (same as import).
-- **Watch database / WatchBase (2026):** **`/watch-models/`** — **Search and filters**: **`q`** (OR on brand / reference / family / model name) plus **`brand`**, **`reference`**, **`model_family`**, **`model_name`**, **`caliber`** query params (contains, AND); same filters drive the table and catalog presets (**`appendWatchModelListFilters`**, **`fetchAllWatchModels`**). **Rows per page** UI: **25 / 50 / 100 / 200 / 500 / all** (all = full filtered list via **`fetchAllWatchModels`**); persisted **`watchfinder-watch-models-page-size`**. **Delete selected (N)** on the batch card: multi-row **`DELETE`** with confirm. Checkbox selection (Shift+range on current page), **Select all on page** / **none**, presets **Select unmatched (catalog)** (U3) and **Select without pricing (catalog)** (P3). **Supervised WatchBase import** draggable modeless wizard: side-by-side large images, auto hits + saved Reference URL, **Delete this catalog entry** (**`DELETE /api/watch-models/{id}`**, queue/selection updated), **Fix match — manual WatchBase search** (editable query, **`GET /api/watchbase/search`**, Google site link, paste watch URL), **No match — skip**; random **1–5 s** delay; **Open full detail** in new tab. Backend list filters in **`watch_models.py`** (**`_apply_watch_model_list_filters`**). Helpers **`frontend/lib/watch-models-batch.ts`**, **`WatchbaseBatchWizard`**.
+- **Watch database / WatchBase / markets (2026):** **`GET /api/market/search`** aggregates WatchBase + **Everywatch** (HTML parse, price hints) + **Chrono24** (search/Google links; server fetch often **403**). **`market_source_snapshots`** on **`watch_models`**; auto refresh on **`analyze_listing`** and **backfill** when **`EXTRA_MARKET_IMPORT_ENABLED`** (cooldown **`MARKET_SNAPSHOT_COOLDOWN_HOURS`**); optional seed **manual £** ±10% from Everywatch median if bounds empty. **`POST /api/watch-models/{id}/refresh-market-snapshots`**. UI: detail **Find on markets…** modal, **Everywatch & Chrono24 snapshots** card; batch wizard shows EW/C24 alongside WatchBase.
+- **Watch database / WatchBase (2026):** **`/watch-models/`** — **Search and filters**: **`q`** (OR on brand / reference / family / model name) plus **`brand`**, **`reference`**, **`model_family`**, **`model_name`**, **`caliber`** query params (contains, AND); same filters drive the table and catalog presets (**`appendWatchModelListFilters`**, **`fetchAllWatchModels`**). **Rows per page** UI: **25 / 50 / 100 / 200 / 500 / all** (all = full filtered list via **`fetchAllWatchModels`**); persisted **`watchfinder-watch-models-page-size`**. **Delete selected (N)** on the batch card: multi-row **`DELETE`** with confirm. Checkbox selection (Shift+range on current page), **Select all on page** / **none**, presets **Select unmatched (catalog)** (U3) and **Select without pricing (catalog)** (P3). **Supervised WatchBase import** draggable modeless wizard: side-by-side large images, auto + manual **`/api/market/search`** (WatchBase + Everywatch links + Chrono24 buttons), saved Reference URL, **Delete this catalog entry**, paste WatchBase URL, **No match — skip**; random **1–5 s** delay; **Open full detail** in new tab. Backend list filters **`watch_models.py`**. Helpers **`frontend/lib/watch-models-batch.ts`**, **`WatchbaseBatchWizard`**.
 
 ---
 
@@ -122,15 +123,19 @@ OpenAPI: **`/docs`**.
 |------|------|
 | `frontend/` | Next.js UI (static export) |
 | `backend/watchfinder/main.py` | Entry, scheduler, routers, static mount |
-| `backend/watchfinder/api/` | Routes, **`listing_detail.py`**, **`listing_sort.py`**, deps, query |
+| `backend/watchfinder/api/` | Routes, **`listing_detail.py`**, **`listing_sort.py`**, **`market.py`** (**`/api/market/search`**), deps, query |
 | `backend/watchfinder/services/ebay/` | OAuth, Browse (**search** + **getItem**), **`api_usage.py`** |
 | `backend/watchfinder/services/ingestion/` | **`job.py`**, **`mapper.py`**, **`live_refresh.py`** |
+| `backend/watchfinder/services/everywatch_client.py` | Everywatch model-page fetch + HTML hit/price parse |
+| `backend/watchfinder/services/chrono24_client.py` | Chrono24 search URL + optional fetch / **`__NEXT_DATA__`** parse |
+| `backend/watchfinder/services/market_snapshots.py` | **`market_source_snapshots`** refresh; analyze/backfill hook |
+| `backend/watchfinder/services/market_unified_search.py` | Aggregates WatchBase + Everywatch + Chrono24 for UI |
 | `backend/watchfinder/services/scoring/` | **`engine.py`**, **`catalog_anchor.py`** (watch DB £ anchor), **`listing_gbp.py`** (Frankfurter → GBP), **`constants.py`** |
 | `backend/watchfinder/services/stale_listing_refresh.py` | Stale **getItem** batch + scheduler sync |
 | `backend/watchfinder/stale_refresh_worker.py` | APScheduler job entry |
 | `backend/watchfinder/services/ingest_settings.py` | Ingest queries, interval, **`ingest_search_limit`**, **`ingest_max_pages`** |
 | `tests/` | **`pytest`** targets |
-| `alembic/versions/` | **001**–**007** |
+| `alembic/versions/` | **001**–**008** |
 | `pytest.ini` | `pythonpath = backend` |
 
 ---
@@ -142,4 +147,4 @@ OpenAPI: **`/docs`**.
 3. Tune repair scoring (parts factor, margin) now that **`watch_models`** anchors resale when linked.
 4. First-class **O** (ended / last sold) if you want beyond **getItem** + inactive.
 
-For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **007**).
+For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **008**).

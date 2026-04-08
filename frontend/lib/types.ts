@@ -107,6 +107,8 @@ export type WatchModel = WatchModelBrief & {
   spec_dial_material?: string | null;
   spec_indexes_hands?: string | null;
   external_price_history?: WatchBasePriceHistory | null;
+  /** Everywatch + Chrono24 snapshot JSON (server-filled). */
+  market_source_snapshots?: Record<string, unknown> | null;
   watchbase_imported_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -122,6 +124,34 @@ export type WatchModelListResponse = {
 export type PromoteWatchCatalogResponse = {
   outcome: string;
   watch_model: WatchModel | null;
+};
+
+export type UnifiedMarketHit = {
+  url: string;
+  label: string;
+  image_url?: string | null;
+  price_hint?: string | null;
+};
+
+export type UnifiedMarketSearchResponse = {
+  query: string;
+  watchbase: { items: UnifiedMarketHit[]; total: number };
+  everywatch: { items: UnifiedMarketHit[] };
+  chrono24: {
+    items: UnifiedMarketHit[];
+    search_url: string;
+    google_site_url: string;
+    error?: string | null;
+  };
+};
+
+export type MarketSnapshotsRefreshResponse = {
+  ok: boolean;
+  skipped?: string | null;
+  error?: string | null;
+  everywatch_hits: number;
+  chrono24_hits: number;
+  merged_manual_bounds: boolean;
 };
 
 export type BackfillWatchCatalogResponse = {

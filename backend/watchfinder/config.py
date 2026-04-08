@@ -94,6 +94,19 @@ class Settings(BaseSettings):
         alias="WATCHBASE_HTTP_USER_AGENT",
         description="Optional override User-Agent for WatchBase HTTP requests",
     )
+    extra_market_import_enabled: bool = Field(
+        True,
+        alias="EXTRA_MARKET_IMPORT_ENABLED",
+        description="When true, fetch Everywatch (and attempt Chrono24) market snapshots on analyze/backfill; "
+        "respects per-model cooldown",
+    )
+    market_snapshot_cooldown_hours: int = Field(
+        24,
+        alias="MARKET_SNAPSHOT_COOLDOWN_HOURS",
+        ge=1,
+        le=168,
+        description="Skip automatic market snapshot refresh if last fetch newer than this many hours",
+    )
     local_media_root: str = Field(
         "./data/media",
         alias="LOCAL_MEDIA_ROOT",

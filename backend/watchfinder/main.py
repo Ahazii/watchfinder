@@ -18,6 +18,7 @@ from watchfinder.api.routes import (
     dashboard,
     ingest_admin,
     listings,
+    market,
     watch_link_reviews,
     watch_models,
     watchbase_search,
@@ -73,6 +74,7 @@ app.include_router(candidates.router, prefix="/api")
 app.include_router(settings_routes.router, prefix="/api")
 app.include_router(ingest_admin.router, prefix="/api")
 app.include_router(watchbase_search.router, prefix="/api")
+app.include_router(market.router, prefix="/api")
 
 _media_root = Path(get_settings().local_media_root).expanduser().resolve()
 _media_root.mkdir(parents=True, exist_ok=True)

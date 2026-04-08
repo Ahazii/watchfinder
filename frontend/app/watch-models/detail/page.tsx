@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson, mediaUrl } from "@/lib/api";
 import type {
+  MarketSnapshotsRefreshResponse,
+  UnifiedMarketSearchResponse,
   WatchBaseImportResult,
   WatchBasePriceHistory,
   WatchModel,
-  WatchbaseSearchResponse,
 } from "@/lib/types";
 import { currencyInputLabelSuffix, money } from "@/lib/format";
 import {
@@ -92,9 +93,11 @@ function DetailBody() {
   } | null>(null);
   const [findSearchDetail, setFindSearchDetail] = useState("");
   const [findPastedUrl, setFindPastedUrl] = useState("");
-  const [findWbSearchBusy, setFindWbSearchBusy] = useState(false);
-  const [findWbSearchErr, setFindWbSearchErr] = useState<string | null>(null);
-  const [findWbHits, setFindWbHits] = useState<WatchbaseSearchResponse["items"] | null>(null);
+  const [findMarketBusy, setFindMarketBusy] = useState(false);
+  const [findMarketErr, setFindMarketErr] = useState<string | null>(null);
+  const [findUnified, setFindUnified] = useState<UnifiedMarketSearchResponse | null>(null);
+  const [marketSnap, setMarketSnap] = useState<Record<string, unknown> | null>(null);
+  const [marketRefreshBusy, setMarketRefreshBusy] = useState(false);
 
   const {
     sizeId: wbFindThumbId,
@@ -106,8 +109,8 @@ function DetailBody() {
   const closeFindModal = useCallback(() => {
     setFindModalOpen(false);
     setFindPastedUrl("");
-    setFindWbHits(null);
-    setFindWbSearchErr(null);
+    setFindUnified(null);
+    setFindMarketErr(null);
   }, []);
 
   useEffect(() => {
@@ -171,6 +174,7 @@ function DetailBody() {
     setSpecDialMat(m.spec_dial_material ?? "");
     setSpecIdxHands(m.spec_indexes_hands ?? "");
     setExtPrices(m.external_price_history ?? null);
+    setMarketSnap((m.market_source_snapshots as Record<string, unknown>) ?? null);
     setLinkedEbayUrls(m.linked_ebay_urls ?? []);
   }, []);
 
@@ -204,6 +208,7 @@ function DetailBody() {
         spec_dial_material: null,
         spec_indexes_hands: null,
         external_price_history: null,
+        market_source_snapshots: null,
         watchbase_imported_at: null,
         linked_ebay_urls: [],
       });
@@ -334,8 +339,8 @@ function DetailBody() {
     const seed = reference.trim() || brand.trim() || "";
     setFindSearchDetail(seed);
     setFindPastedUrl("");
-    setFindWbHits(null);
-    setFindWbSearchErr(null);
+    setFindUnified(null);
+    setFindMarketErr(null);
     setImportMsg(null);
     if (typeof window !== "undefined") {
       const panelW = Math.min(512, window.innerWidth - 32);
@@ -349,22 +354,26 @@ function DetailBody() {
 
   const findGoogleUrl = watchbaseGoogleSiteSearchUrl(findSearchDetail);
 
-  const searchWatchbaseOnSite = () => {
+  const searchAllMarkets = () => {
     const q = findSearchDetail.trim();
     if (!q) return;
-    setFindWbSearchBusy(true);
-    setFindWbSearchErr(null);
-    setFindWbHits(null);
+    setFindMarketBusy(true);
+    setFindMarketErr(null);
+    setFindUnified(null);
     setFindPastedUrl("");
-    fetchJson<WatchbaseSearchResponse>(`/api/watchbase/search?q=${encodeURIComponent(q)}`)
+    const p = new URLSearchParams();
+    p.set("q", q);
+    if (brand.trim()) p.set("brand", brand.trim());
+    if (reference.trim()) p.set("reference", reference.trim());
+    if (modelFamily.trim()) p.set("model_family", modelFamily.trim());
+    fetchJson<UnifiedMarketSearchResponse>(`/api/market/search?${p.toString()}`)
       .then((res) => {
-        setFindWbHits(res.items);
-        if (res.items.length === 1) {
-          setFindPastedUrl(res.items[0].url);
-        }
+        setFindUnified(res);
+        const wb = res.watchbase?.items ?? [];
+        if (wb.length === 1) setFindPastedUrl(wb[0].url);
       })
-      .catch((e: Error) => setFindWbSearchErr(e.message))
-      .finally(() => setFindWbSearchBusy(false));
+      .catch((e: Error) => setFindMarketErr(e.message))
+      .finally(() => setFindMarketBusy(false));
   };
 
   const save = () => {
@@ -445,7 +454,8 @@ function DetailBody() {
 
   const wbGuess = watchbaseGuessUrl(brand, modelFamily, reference);
   const wbGoogle = watchbaseGoogleSearchUrl(brand, reference);
-  const selectedWbHit = findWbHits?.find((h) => h.url === findPastedUrl);
+  const wbHits = findUnified?.watchbase?.items ?? [];
+  const selectedWbHit = wbHits.find((h) => h.url === findPastedUrl);
 
   return (
     <div className="space-y-6">
@@ -459,8 +469,8 @@ function DetailBody() {
           <div
             role="dialog"
             aria-modal="false"
-            aria-labelledby="find-watchbase-title"
-            className="fixed z-50 w-[calc(100%-2rem)] max-w-xl overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-xl"
+            aria-labelledby="find-market-title"
+            className="fixed z-50 w-[calc(100%-2rem)] max-w-3xl overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-xl"
             style={{ left: modalPos.x, top: modalPos.y }}
           >
             <div
@@ -468,20 +478,21 @@ function DetailBody() {
               onMouseDown={onFindModalDragMouseDown}
             >
               <div className="min-w-0 flex-1">
-                <h2 id="find-watchbase-title" className="text-lg font-semibold leading-tight">
-                  Find watch on WatchBase
+                <h2 id="find-market-title" className="text-lg font-semibold leading-tight">
+                  Find watch (WatchBase, Everywatch, Chrono24)
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Drag this bar to move. Click the page behind to edit the form — this panel stays open. Escape
-                  or Cancel closes it.
+                  Drag this bar to move. Search calls the app API (WatchBase filter + Everywatch HTML + Chrono24
+                  attempt). Chrono24 often blocks server requests — use the <strong>Open Chrono24</strong> / Google
+                  links when needed. Only WatchBase URLs can run <strong>Confirm import</strong>.
                 </p>
               </div>
             </div>
             <div className="max-h-[min(78vh,640px)] overflow-y-auto p-6 pt-4">
               <p className="text-sm text-muted-foreground">
-                Search uses WatchBase’s filter API. Pick a result (thumbnail below when selected), then confirm
-                import — same as <strong>Import from WatchBase</strong>. Or use <strong>Open Google</strong> /
-                paste a URL.
+                Pick a <strong>WatchBase</strong> row for import, or use Everywatch/Chrono24 for price context
+                (manual bounds also update from Everywatch when you use <strong>Refresh market snapshots</strong>{" "}
+                on the model page).
               </p>
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-b border-border pb-3">
                 <TableThumbSizeSelect
@@ -504,7 +515,7 @@ function DetailBody() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      searchWatchbaseOnSite();
+                      searchAllMarkets();
                     }
                   }}
                 />
@@ -514,10 +525,10 @@ function DetailBody() {
                   type="button"
                   variant="default"
                   size="sm"
-                  disabled={findWbSearchBusy || !findSearchDetail.trim()}
-                  onClick={searchWatchbaseOnSite}
+                  disabled={findMarketBusy || !findSearchDetail.trim()}
+                  onClick={searchAllMarkets}
                 >
-                  {findWbSearchBusy ? "Searching…" : "Search WatchBase"}
+                  {findMarketBusy ? "Searching…" : "Search markets"}
                 </Button>
                 {findGoogleUrl ? (
                   <Button variant="outline" size="sm" asChild>
@@ -531,14 +542,14 @@ function DetailBody() {
                   </Button>
                 )}
               </div>
-              {findWbSearchErr ? (
-                <p className="mt-3 text-sm text-red-400">{findWbSearchErr}</p>
+              {findMarketErr ? (
+                <p className="mt-3 text-sm text-red-400">{findMarketErr}</p>
               ) : null}
-              {findWbHits && findWbHits.length > 0 ? (
+              {wbHits.length > 0 ? (
                 <div className="mt-4">
-                  <p className="mb-2 text-sm font-medium">Results — click one to select</p>
-                  <ul className="max-h-[min(50vh,22rem)] space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
-                    {findWbHits.map((h) => (
+                  <p className="mb-2 text-sm font-medium">WatchBase — click one to select for import</p>
+                  <ul className="max-h-[min(40vh,18rem)] space-y-1 overflow-y-auto rounded-md border border-border p-2 text-sm">
+                    {wbHits.map((h) => (
                       <li key={h.url}>
                         <button
                           type="button"
@@ -562,9 +573,70 @@ function DetailBody() {
                   </ul>
                 </div>
               ) : null}
-              {findWbHits && findWbHits.length === 0 && !findWbSearchBusy ? (
+              {(findUnified?.everywatch?.items?.length ?? 0) > 0 ? (
+                <div className="mt-4">
+                  <p className="mb-2 text-sm font-medium">Everywatch (links)</p>
+                  <ul className="max-h-[min(32vh,14rem)] space-y-1 overflow-y-auto rounded-md border border-border p-2 text-xs">
+                    {(findUnified?.everywatch?.items ?? []).map((h) => (
+                      <li key={h.url}>
+                        <a
+                          href={h.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline-offset-2 hover:underline break-all"
+                        >
+                          {h.price_hint ? `${h.price_hint} · ` : ""}
+                          {h.label.slice(0, 120)}
+                          {h.label.length > 120 ? "…" : ""}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {findUnified?.chrono24 ? (
+                <div className="mt-4 rounded-md border border-border bg-muted/10 p-3 text-sm">
+                  <p className="font-medium">Chrono24</p>
+                  {findUnified.chrono24.error ? (
+                    <p className="mt-1 text-xs text-amber-200/90">{findUnified.chrono24.error}</p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {findUnified.chrono24.search_url ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={findUnified.chrono24.search_url} target="_blank" rel="noopener noreferrer">
+                          Open Chrono24 search
+                        </a>
+                      </Button>
+                    ) : null}
+                    {findUnified.chrono24.google_site_url ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={findUnified.chrono24.google_site_url} target="_blank" rel="noopener noreferrer">
+                          Google site:chrono24.co.uk
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                  {(findUnified.chrono24.items?.length ?? 0) > 0 ? (
+                    <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs">
+                      {findUnified.chrono24.items.map((h) => (
+                        <li key={h.url}>
+                          <a
+                            href={h.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline-offset-2 hover:underline break-all"
+                          >
+                            {h.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+              {findUnified && wbHits.length === 0 && !findMarketBusy ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  No watches found on WatchBase for that query.
+                  No WatchBase filter hits for that query (Everywatch/Chrono24 may still show above).
                 </p>
               ) : null}
               <div className="mt-4 space-y-2">
@@ -669,6 +741,63 @@ function DetailBody() {
         </Card>
       ) : null}
 
+      {!isNew ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Everywatch &amp; Chrono24 snapshots</CardTitle>
+            <CardDescription>
+              Server-fetched market context (not WatchBase). Runs automatically on listing <strong>analyze</strong>{" "}
+              and <strong>backfill</strong> when <code className="rounded bg-muted px-1">EXTRA_MARKET_IMPORT_ENABLED</code>{" "}
+              is true, with a cooldown. If <strong>manual £ low/high</strong> are empty and Everywatch returns a
+              median price, the app may seed a ±10% band (GBP via Frankfurter). Chrono24 usually returns{" "}
+              <strong>403</strong> to the server — use the stored search / Google links.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={marketRefreshBusy}
+                onClick={() => {
+                  if (!id) return;
+                  setMarketRefreshBusy(true);
+                  fetch(apiUrl(`/api/watch-models/${id}/refresh-market-snapshots`), { method: "POST" })
+                    .then(async (res) => {
+                      const j = (await res.json()) as MarketSnapshotsRefreshResponse & { detail?: string };
+                      if (!res.ok) throw new Error(j.detail || j.error || JSON.stringify(j));
+                      return j;
+                    })
+                    .then((j) => {
+                      setImportMsg(
+                        j.merged_manual_bounds
+                          ? "Market snapshots refreshed; manual £ bounds were empty and were filled from Everywatch median."
+                          : `Market snapshots refreshed (Everywatch hits: ${j.everywatch_hits}, Chrono24 parsed: ${j.chrono24_hits}).`,
+                      );
+                      return fetchJson<WatchModel>(`/api/watch-models/${id}`);
+                    })
+                    .then(applyModel)
+                    .catch((e: Error) => setImportMsg(e.message))
+                    .finally(() => setMarketRefreshBusy(false));
+                }}
+              >
+                {marketRefreshBusy ? "Refreshing…" : "Refresh market snapshots"}
+              </Button>
+            </div>
+            {marketSnap && Object.keys(marketSnap).length > 0 ? (
+              <div className="rounded-md border border-border bg-muted/15 p-3 font-mono text-xs text-muted-foreground">
+                <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all">
+                  {JSON.stringify(marketSnap, null, 2)}
+                </pre>
+              </div>
+            ) : (
+              <p className="text-muted-foreground">No snapshot yet — save the model, ingest/analyze, or refresh.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Core identity</CardTitle>
@@ -740,7 +869,7 @@ function DetailBody() {
                 disabled={importBusy}
                 onClick={openFindWatchbaseWizard}
               >
-                Find on WatchBase…
+                Find on markets…
               </Button>
               {importDetail ? (
                 <span className="text-xs text-muted-foreground">

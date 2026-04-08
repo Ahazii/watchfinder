@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiUrl, fetchJson, mediaUrl } from "@/lib/api";
 import type {
+  UnifiedMarketHit,
+  UnifiedMarketSearchResponse,
   WatchBaseImportResult,
   WatchModel,
-  WatchbaseSearchResponse,
 } from "@/lib/types";
 import {
   buildWatchbaseSearchQuery,
@@ -44,7 +45,8 @@ export function WatchbaseBatchWizard({
 
   const [phaseBusy, setPhaseBusy] = useState(false);
   const [currentModel, setCurrentModel] = useState<WatchModel | null>(null);
-  const [hits, setHits] = useState<WatchbaseSearchResponse["items"] | null>(null);
+  const [hits, setHits] = useState<UnifiedMarketHit[] | null>(null);
+  const [autoUnified, setAutoUnified] = useState<UnifiedMarketSearchResponse | null>(null);
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const [importErr, setImportErr] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -52,7 +54,8 @@ export function WatchbaseBatchWizard({
   const [lastOk, setLastOk] = useState<WatchBaseImportResult | null>(null);
 
   const [manualQuery, setManualQuery] = useState("");
-  const [manualHits, setManualHits] = useState<WatchbaseSearchResponse["items"] | null>(null);
+  const [manualHits, setManualHits] = useState<UnifiedMarketHit[] | null>(null);
+  const [manualUnified, setManualUnified] = useState<UnifiedMarketSearchResponse | null>(null);
   const [manualBusy, setManualBusy] = useState(false);
   const [manualErr, setManualErr] = useState<string | null>(null);
   const [pastedUrl, setPastedUrl] = useState("");
@@ -73,6 +76,8 @@ export function WatchbaseBatchWizard({
       setManualErr(null);
       setManualQuery("");
       setPastedUrl("");
+      setAutoUnified(null);
+      setManualUnified(null);
       return;
     }
     if (typeof window !== "undefined") {
@@ -98,6 +103,8 @@ export function WatchbaseBatchWizard({
       setManualHits(null);
       setManualErr(null);
       setPastedUrl("");
+      setAutoUnified(null);
+      setManualUnified(null);
       try {
         await sleep(randomWatchbaseDelayMs());
         if (cancelled) return;
@@ -109,16 +116,23 @@ export function WatchbaseBatchWizard({
         const q = buildWatchbaseSearchQuery(m);
         if (!q) {
           setHits([]);
+          setAutoUnified(null);
           setSearchErr(null);
           setPhaseBusy(false);
           return;
         }
         await sleep(randomWatchbaseDelayMs());
         if (cancelled) return;
-        const res = await fetchJson<WatchbaseSearchResponse>(
-          `/api/watchbase/search?q=${encodeURIComponent(q)}`,
-        );
-        if (!cancelled) setHits(res.items);
+        const p = new URLSearchParams();
+        p.set("q", q);
+        p.set("brand", m.brand);
+        if (m.reference?.trim()) p.set("reference", m.reference.trim());
+        if (m.model_family?.trim()) p.set("model_family", m.model_family.trim());
+        const u = await fetchJson<UnifiedMarketSearchResponse>(`/api/market/search?${p.toString()}`);
+        if (!cancelled) {
+          setHits(u.watchbase.items);
+          setAutoUnified(u);
+        }
       } catch (e) {
         if (!cancelled) {
           setSearchErr((e as Error).message);
@@ -228,19 +242,26 @@ export function WatchbaseBatchWizard({
     setManualBusy(true);
     setManualErr(null);
     setManualHits(null);
+    setManualUnified(null);
     try {
       await sleep(randomWatchbaseDelayMs());
-      const res = await fetchJson<WatchbaseSearchResponse>(
-        `/api/watchbase/search?q=${encodeURIComponent(q)}`,
-      );
-      setManualHits(res.items);
+      const p = new URLSearchParams();
+      p.set("q", q);
+      if (currentModel) {
+        p.set("brand", currentModel.brand);
+        if (currentModel.reference?.trim()) p.set("reference", currentModel.reference.trim());
+        if (currentModel.model_family?.trim()) p.set("model_family", currentModel.model_family.trim());
+      }
+      const u = await fetchJson<UnifiedMarketSearchResponse>(`/api/market/search?${p.toString()}`);
+      setManualHits(u.watchbase.items);
+      setManualUnified(u);
     } catch (e) {
       setManualErr((e as Error).message);
       setManualHits([]);
     } finally {
       setManualBusy(false);
     }
-  }, [manualQuery]);
+  }, [manualQuery, currentModel]);
 
   const deleteCurrent = useCallback(async () => {
     if (!currentModel || !onDeleted) return;
@@ -416,6 +437,55 @@ export function WatchbaseBatchWizard({
                           <p className="text-sm text-muted-foreground">No WatchBase search results.</p>
                         ) : null}
 
+                        {autoUnified && (autoUnified.everywatch?.items?.length ?? 0) > 0 ? (
+                          <div className="rounded-md border border-amber-900/30 bg-amber-950/10 p-3 text-xs">
+                            <p className="font-medium text-foreground">Everywatch (links)</p>
+                            <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                              {autoUnified.everywatch.items.slice(0, 12).map((h) => (
+                                <li key={h.url}>
+                                  <a
+                                    href={h.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline-offset-2 hover:underline break-all"
+                                  >
+                                    {h.price_hint ? `${h.price_hint} · ` : ""}
+                                    {h.label.slice(0, 80)}
+                                    {h.label.length > 80 ? "…" : ""}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {autoUnified?.chrono24 ? (
+                          <div className="rounded-md border border-border bg-muted/10 p-3 text-xs">
+                            <p className="font-medium">Chrono24</p>
+                            {autoUnified.chrono24.error ? (
+                              <p className="mt-1 text-amber-200/80">{autoUnified.chrono24.error}</p>
+                            ) : null}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {autoUnified.chrono24.search_url ? (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={autoUnified.chrono24.search_url} target="_blank" rel="noopener noreferrer">
+                                    Open Chrono24
+                                  </a>
+                                </Button>
+                              ) : null}
+                              {autoUnified.chrono24.google_site_url ? (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a
+                                    href={autoUnified.chrono24.google_site_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Google Chrono24
+                                  </a>
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
                         {hits?.map((h) => (
                           <div
                             key={h.url}
@@ -454,9 +524,9 @@ export function WatchbaseBatchWizard({
                     </div>
 
                     <div className="rounded-lg border border-amber-900/40 bg-amber-950/15 p-4">
-                      <p className="text-sm font-semibold text-foreground">Fix match — manual WatchBase search</p>
+                      <p className="text-sm font-semibold text-foreground">Fix match — manual market search</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Edit the query, run search, then import from a result — or paste a watch page URL below.
+                        WatchBase rows can be imported; Everywatch/Chrono24 are for context (same API as detail page).
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Input
@@ -472,7 +542,7 @@ export function WatchbaseBatchWizard({
                           placeholder="e.g. Cartier W7100046"
                         />
                         <Button type="button" disabled={manualBusy || importBusy} onClick={() => void runManualSearch()}>
-                          {manualBusy ? "Searching…" : "Search WatchBase"}
+                          {manualBusy ? "Searching…" : "Search markets"}
                         </Button>
                         {googleUrl ? (
                           <Button variant="outline" size="sm" asChild>
@@ -518,6 +588,54 @@ export function WatchbaseBatchWizard({
                             </div>
                           </div>
                         ))}
+                        {manualUnified && (manualUnified.everywatch?.items?.length ?? 0) > 0 ? (
+                          <div className="rounded-md border border-amber-900/30 bg-amber-950/10 p-3 text-xs">
+                            <p className="font-medium">Everywatch</p>
+                            <ul className="mt-1 max-h-28 space-y-1 overflow-y-auto">
+                              {manualUnified.everywatch.items.slice(0, 10).map((h) => (
+                                <li key={h.url}>
+                                  <a
+                                    href={h.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary underline-offset-2 hover:underline break-all"
+                                  >
+                                    {h.price_hint ? `${h.price_hint} · ` : ""}
+                                    {h.label.slice(0, 72)}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {manualUnified?.chrono24 ? (
+                          <div className="rounded-md border border-border bg-muted/10 p-3 text-xs">
+                            <p className="font-medium">Chrono24</p>
+                            {manualUnified.chrono24.error ? (
+                              <p className="mt-1 text-amber-200/80">{manualUnified.chrono24.error}</p>
+                            ) : null}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {manualUnified.chrono24.search_url ? (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={manualUnified.chrono24.search_url} target="_blank" rel="noopener noreferrer">
+                                    Open Chrono24
+                                  </a>
+                                </Button>
+                              ) : null}
+                              {manualUnified.chrono24.google_site_url ? (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a
+                                    href={manualUnified.chrono24.google_site_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Google Chrono24
+                                  </a>
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="mt-4 space-y-2 border-t border-border pt-4">
                         <label className="text-xs font-medium text-muted-foreground" htmlFor="wb-paste-url">

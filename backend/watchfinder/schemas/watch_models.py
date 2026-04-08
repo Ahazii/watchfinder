@@ -42,6 +42,7 @@ class WatchModelOut(WatchModelBriefOut):
     spec_dial_material: str | None = None
     spec_indexes_hands: str | None = None
     external_price_history: dict[str, Any] | None = None
+    market_source_snapshots: dict[str, Any] | None = None
     watchbase_imported_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -142,6 +143,35 @@ class WatchBaseImportResponse(BaseModel):
     prices_url: str
     fields_updated: list[str]
     price_points: int
+
+
+class UnifiedMarketHit(BaseModel):
+    """One row in unified market search (WatchBase / Everywatch / Chrono24)."""
+
+    url: str
+    label: str
+    image_url: str | None = None
+    price_hint: str | None = None
+
+
+class UnifiedMarketSearchResponse(BaseModel):
+    """GET /api/market/search — combined hits + Chrono24 browser links."""
+
+    query: str
+    watchbase: dict[str, Any]
+    everywatch: dict[str, Any]
+    chrono24: dict[str, Any]
+
+
+class MarketSnapshotsRefreshResponse(BaseModel):
+    """POST /api/watch-models/{id}/refresh-market-snapshots."""
+
+    ok: bool
+    skipped: str | None = None
+    error: str | None = None
+    everywatch_hits: int = 0
+    chrono24_hits: int = 0
+    merged_manual_bounds: bool = False
 
 
 class BackfillWatchCatalogResponse(BaseModel):
