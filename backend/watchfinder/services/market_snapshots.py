@@ -18,7 +18,7 @@ from watchfinder.services.chrono24_client import (
     try_fetch_chrono24_search,
 )
 from watchfinder.services.everywatch_client import collect_everywatch_snapshot
-from watchfinder.services.listing_gbp import gbp_per_unit_of
+from watchfinder.services.scoring.listing_gbp import gbp_per_unit_of
 from watchfinder.services.watch_models import refresh_watch_model_observed_bounds
 
 logger = logging.getLogger(__name__)
