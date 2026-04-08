@@ -32,4 +32,5 @@
   <Config Name="APP_PORT" Target="APP_PORT" Default="8080" Mode="" Description="Must match mapped container port (uvicorn listen port)" Type="Variable" Display="advanced" Required="false" Mask="false">8080</Config>
   <Config Name="LOG_LEVEL" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Python logging level (DEBUG, INFO, WARNING, …)" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
   <Config Name="TZ" Target="TZ" Default="Europe/London" Mode="" Description="Container timezone" Type="Variable" Display="always" Required="true" Mask="false">Europe/London</Config>
+  <Config Name="WATCH_CATALOG_EXCLUDED_BRANDS" Target="WATCH_CATALOG_EXCLUDED_BRANDS" Default="" Mode="" Description="Optional comma-separated brands to hide from watch catalog lists and skip auto link/create (e.g. Apple)" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
 </Container>

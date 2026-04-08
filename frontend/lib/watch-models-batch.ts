@@ -9,6 +9,10 @@ export type WatchModelListFilters = {
   model_family?: string;
   model_name?: string;
   caliber?: string;
+  /** See OpenAPI `pricing` on GET /api/watch-models */
+  pricing?: "all" | "has_signal" | "missing_signal" | "strict_needs" | "strict_ok";
+  /** See OpenAPI `import_status` */
+  import_status?: "all" | "unmatched" | "matched";
 };
 
 export function appendWatchModelListFilters(params: URLSearchParams, f: WatchModelListFilters): void {
@@ -18,6 +22,8 @@ export function appendWatchModelListFilters(params: URLSearchParams, f: WatchMod
   if (f.model_family?.trim()) params.set("model_family", f.model_family.trim());
   if (f.model_name?.trim()) params.set("model_name", f.model_name.trim());
   if (f.caliber?.trim()) params.set("caliber", f.caliber.trim());
+  if (f.pricing && f.pricing !== "all") params.set("pricing", f.pricing);
+  if (f.import_status && f.import_status !== "all") params.set("import_status", f.import_status);
 }
 
 /** U3: no reference URL or never WatchBase-imported. */

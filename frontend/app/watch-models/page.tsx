@@ -15,8 +15,6 @@ import { money } from "@/lib/format";
 import {
   appendWatchModelListFilters,
   fetchAllWatchModels,
-  isUnmatchedU3,
-  lacksPricingP3,
   sortIdsForBatch,
   type WatchModelListFilters,
 } from "@/lib/watch-models-batch";
@@ -51,6 +49,9 @@ export default function WatchModelsPage() {
   const [modelFamilyFilter, setModelFamilyFilter] = useState("");
   const [modelNameFilter, setModelNameFilter] = useState("");
   const [caliberFilter, setCaliberFilter] = useState("");
+  const [pricingFilter, setPricingFilter] = useState<NonNullable<WatchModelListFilters["pricing"]>>("all");
+  const [importStatusFilter, setImportStatusFilter] =
+    useState<NonNullable<WatchModelListFilters["import_status"]>>("all");
   const [debouncedListFilters, setDebouncedListFilters] = useState<WatchModelListFilters>({});
   const [pageSize, setPageSizeState] = useState<WatchModelsPageSize>(() =>
     typeof window === "undefined" ? 50 : parseWatchModelsPageSize(localStorage.getItem(WM_PAGE_SIZE_KEY)),
@@ -99,6 +100,8 @@ export default function WatchModelsPage() {
       if (ft) next.model_family = ft;
       if (nt) next.model_name = nt;
       if (ct) next.caliber = ct;
+      if (pricingFilter !== "all") next.pricing = pricingFilter;
+      if (importStatusFilter !== "all") next.import_status = importStatusFilter;
       setDebouncedListFilters((prev) => {
         const same =
           (prev.q ?? "") === (next.q ?? "") &&
@@ -106,12 +109,23 @@ export default function WatchModelsPage() {
           (prev.reference ?? "") === (next.reference ?? "") &&
           (prev.model_family ?? "") === (next.model_family ?? "") &&
           (prev.model_name ?? "") === (next.model_name ?? "") &&
-          (prev.caliber ?? "") === (next.caliber ?? "");
+          (prev.caliber ?? "") === (next.caliber ?? "") &&
+          (prev.pricing ?? "all") === (next.pricing ?? "all") &&
+          (prev.import_status ?? "all") === (next.import_status ?? "all");
         return same ? prev : next;
       });
     }, 300);
     return () => clearTimeout(t);
-  }, [q, brandFilter, referenceFilter, modelFamilyFilter, modelNameFilter, caliberFilter]);
+  }, [
+    q,
+    brandFilter,
+    referenceFilter,
+    modelFamilyFilter,
+    modelNameFilter,
+    caliberFilter,
+    pricingFilter,
+    importStatusFilter,
+  ]);
 
   useEffect(() => {
     setSkip(0);
@@ -170,7 +184,7 @@ export default function WatchModelsPage() {
       })
       .then((r) => {
         setBackfillMsg(
-          `Scanned ${r.scanned}: ${r.created_new} new catalog rows, ${r.linked_existing} linked to existing rows, ${r.already_linked} already linked, ${r.queued_for_review ?? 0} queued for review, ${r.skipped_no_identity} skipped (missing brand and reference/family).`,
+          `Scanned ${r.scanned}: ${r.created_new} new catalog rows, ${r.linked_existing} linked to existing rows, ${r.already_linked} already linked, ${r.queued_for_review ?? 0} queued for review, ${r.skipped_no_identity} skipped (missing brand and reference/family), ${r.skipped_excluded_brand ?? 0} skipped (excluded brand — see WATCH_CATALOG_EXCLUDED_BRANDS).`,
         );
         load();
       })
@@ -213,12 +227,12 @@ export default function WatchModelsPage() {
     shiftAnchorRef.current = null;
   };
 
-  const runPreset = async (predicate: (m: WatchModel) => boolean) => {
+  const runPreset = async (extraFilters: Partial<WatchModelListFilters>) => {
     setPresetErr(null);
     setPresetBusy(true);
     try {
-      const all = await fetchAllWatchModels(debouncedListFilters);
-      const ids = new Set(all.filter(predicate).map((m) => m.id));
+      const all = await fetchAllWatchModels({ ...debouncedListFilters, ...extraFilters });
+      const ids = new Set(all.map((m) => m.id));
       setSelected(ids);
       shiftAnchorRef.current = null;
     } catch (e) {
@@ -337,7 +351,7 @@ export default function WatchModelsPage() {
             variant="secondary"
             size="sm"
             disabled={presetBusy}
-            onClick={() => runPreset(isUnmatchedU3)}
+            onClick={() => runPreset({ import_status: "unmatched" })}
           >
             {presetBusy ? "Loading…" : "Select unmatched (catalog)"}
           </Button>
@@ -346,7 +360,7 @@ export default function WatchModelsPage() {
             variant="secondary"
             size="sm"
             disabled={presetBusy}
-            onClick={() => runPreset(lacksPricingP3)}
+            onClick={() => runPreset({ pricing: "strict_needs" })}
           >
             {presetBusy ? "Loading…" : "Select without pricing (catalog)"}
           </Button>
@@ -365,9 +379,9 @@ export default function WatchModelsPage() {
         </CardContent>
         {presetErr ? <p className="mt-2 text-sm text-red-400">{presetErr}</p> : null}
         <CardContent className="border-t border-border pt-4 text-xs text-muted-foreground">
-          <strong>Unmatched:</strong> no Reference URL <em>or</em> never WatchBase-imported.{" "}
-          <strong>Without pricing:</strong> no imported price history points <em>or</em> both manual low/high
-          empty.
+          <strong>Unmatched:</strong> no Reference URL <em>or</em> never WatchBase-imported (same as{" "}
+          <strong>WatchBase</strong> filter below). <strong>Without pricing:</strong> no WatchBase price points{" "}
+          <em>or</em> both manual £ low/high empty (strict rule). Presets merge with your search/field filters.
         </CardContent>
       </Card>
 
@@ -403,7 +417,9 @@ export default function WatchModelsPage() {
           <CardTitle>Search and filters</CardTitle>
           <CardDescription>
             <strong>Search</strong> matches brand, reference, family, or model name (OR). Field boxes narrow
-            further (contains, AND with each other and with search).
+            further (contains, AND with each other and with search). Brands listed in{" "}
+            <code className="rounded bg-muted px-1">WATCH_CATALOG_EXCLUDED_BRANDS</code> (server env) never appear
+            in this table or listing link pickers; backfill skips linking/creating them.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -472,6 +488,45 @@ export default function WatchModelsPage() {
               value={caliberFilter}
               onChange={(e) => setCaliberFilter(e.target.value)}
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="wm-filter-pricing">
+              Price data
+            </label>
+            <select
+              id="wm-filter-pricing"
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={pricingFilter}
+              onChange={(e) =>
+                setPricingFilter(e.target.value as NonNullable<WatchModelListFilters["pricing"]>)
+              }
+            >
+              <option value="all">All</option>
+              <option value="has_signal">Has signal (manual, observed, or WatchBase points)</option>
+              <option value="missing_signal">Missing all of the above</option>
+              <option value="strict_needs">Strict: needs work (no points or no manual £)</option>
+              <option value="strict_ok">Strict: has points and manual £</option>
+            </select>
+          </div>
+          <div>
+            <label
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+              htmlFor="wm-filter-import"
+            >
+              WatchBase
+            </label>
+            <select
+              id="wm-filter-import"
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={importStatusFilter}
+              onChange={(e) =>
+                setImportStatusFilter(e.target.value as NonNullable<WatchModelListFilters["import_status"]>)
+              }
+            >
+              <option value="all">All</option>
+              <option value="unmatched">Unmatched (no ref URL or never imported)</option>
+              <option value="matched">Matched (URL + imported)</option>
+            </select>
           </div>
         </CardContent>
       </Card>

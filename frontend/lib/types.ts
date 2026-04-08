@@ -161,6 +161,7 @@ export type BackfillWatchCatalogResponse = {
   created_new: number;
   skipped_no_identity: number;
   queued_for_review?: number;
+  skipped_excluded_brand?: number;
 };
 
 export type WatchLinkReviewBrief = {

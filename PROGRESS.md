@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **9 April 2026**
+Last updated: **10 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -40,6 +40,7 @@ This document records what is implemented in the repository versus the phased pl
 - **Listings / candidates API**: **`listing_active`** (**active** / **inactive** / **all**) and **`exclude_quartz`** query filters; UI status column and filters.
 - **Schema** migrations **005**–**008**: **`ebay_item_id`** width **128**; **`watch_models`** spec columns + **`reference_url`**; **`external_price_history`** (JSONB) + **`watchbase_imported_at`**; **`008`** **`market_source_snapshots`** (Everywatch/Chrono24 JSON).
 - **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing), **`tests/test_everywatch_client.py`** (Everywatch URL helpers); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
+- **Watch catalog filtering**: **`GET /api/watch-models`** — **`pricing`** (`has_signal` / `missing_signal` / strict P3 gap), **`import_status`** (WatchBase unmatched vs matched), and env **`WATCH_CATALOG_EXCLUDED_BRANDS`** (comma-separated; omitted from lists + skipped in **`ensure_watch_catalog_for_listing`** / backfill). UI: **Price data** and **WatchBase** dropdowns on **`/watch-models/`**; batch presets call the same query params.
 
 ---
 
@@ -130,6 +131,7 @@ OpenAPI: **`/docs`**.
 | `backend/watchfinder/services/chrono24_client.py` | Chrono24 search URL + optional fetch / **`__NEXT_DATA__`** parse |
 | `backend/watchfinder/services/market_snapshots.py` | **`market_source_snapshots`** refresh; analyze/backfill hook |
 | `backend/watchfinder/services/market_unified_search.py` | Aggregates WatchBase + Everywatch + Chrono24 for UI |
+| `backend/watchfinder/services/watch_models/exclusions.py` | Parse **`WATCH_CATALOG_EXCLUDED_BRANDS`** for list + catalog skip |
 | `backend/watchfinder/services/scoring/` | **`engine.py`**, **`catalog_anchor.py`** (watch DB £ anchor), **`listing_gbp.py`** (Frankfurter → GBP), **`constants.py`** |
 | `backend/watchfinder/services/stale_listing_refresh.py` | Stale **getItem** batch + scheduler sync |
 | `backend/watchfinder/stale_refresh_worker.py` | APScheduler job entry |

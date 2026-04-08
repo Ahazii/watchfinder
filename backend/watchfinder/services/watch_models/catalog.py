@@ -21,6 +21,10 @@ from watchfinder.services.watch_models.link_review import (
     delete_pending_reviews_for_listing,
     upsert_pending_watch_link_review,
 )
+from watchfinder.services.watch_models.exclusions import (
+    brand_is_catalog_excluded,
+    catalog_excluded_brands,
+)
 from watchfinder.services.watch_models.match import (
     _find_by_brand_family,
     _find_by_brand_ref,
@@ -35,6 +39,7 @@ class CatalogLinkOutcome(str, Enum):
     CREATED_NEW = "created_new"
     SKIPPED_NO_IDENTITY = "skipped_no_identity"
     QUEUED_FOR_REVIEW = "queued_for_review"
+    SKIPPED_EXCLUDED_BRAND = "skipped_excluded_brand"
 
 
 def _title_snippet(title: str | None, max_len: int = 200) -> str | None:
@@ -82,6 +87,9 @@ def _create_catalog_row_and_link_listing(
     brand = (parsed.get("brand") or "").strip() or None
     if not brand:
         return CatalogLinkOutcome.SKIPPED_NO_IDENTITY
+    excluded = catalog_excluded_brands(get_settings())
+    if brand_is_catalog_excluded(brand, excluded):
+        return CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND
     ref, _ = effective_reference(parsed, edit)
     mf, _ = effective_model_family(parsed, edit)
     cal, _ = effective_caliber(parsed, edit)
@@ -142,6 +150,12 @@ def ensure_watch_catalog_for_listing(
         delete_pending_reviews_for_listing(db, listing.id)
         return CatalogLinkOutcome.ALREADY_LINKED
 
+    brand_check = (parsed.get("brand") or "").strip() or None
+    excluded = catalog_excluded_brands(get_settings())
+    if brand_is_catalog_excluded(brand_check, excluded):
+        delete_pending_reviews_for_listing(db, listing.id)
+        return CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND
+
     if review_on:
         try_exact_catalog_link(db, listing, parsed, edit)
     else:
@@ -191,6 +205,7 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
         "created_new": 0,
         "skipped_no_identity": 0,
         "queued_for_review": 0,
+        "skipped_excluded_brand": 0,
     }
     stmt = (
         select(Listing)
@@ -211,6 +226,8 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
             stats["created_new"] += 1
         elif out == CatalogLinkOutcome.QUEUED_FOR_REVIEW:
             stats["queued_for_review"] += 1
+        elif out == CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND:
+            stats["skipped_excluded_brand"] += 1
         else:
             stats["skipped_no_identity"] += 1
         if listing.watch_model_id is not None:

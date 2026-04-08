@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlalchemy import func, nulls_last, select
+from sqlalchemy import and_, case, func, literal, nulls_last, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,11 @@ from watchfinder.schemas.watch_models import (
 )
 from watchfinder.services.market_snapshots import refresh_market_snapshots_for_model
 from watchfinder.services.watch_models import backfill_watch_catalog, refresh_watch_model_observed_bounds
+from watchfinder.services.watch_models.exclusions import catalog_excluded_brands
 from watchfinder.services.watchbase_import import WatchBaseImportError, import_watchbase_for_model
+
+PricingListFilter = Literal["all", "has_signal", "missing_signal", "strict_needs", "strict_ok"]
+ImportStatusFilter = Literal["all", "unmatched", "matched"]
 
 router = APIRouter(prefix="/watch-models", tags=["watch-models"])
 
@@ -101,6 +106,73 @@ def _apply_watch_model_list_filters(
     return _apply_search(stmt, q)
 
 
+def _watchbase_points_len_expr():
+    pts = WatchModel.external_price_history["points"]
+    return case(
+        (func.jsonb_typeof(pts) == literal("array"), func.jsonb_array_length(pts)),
+        else_=0,
+    )
+
+
+def _has_pricing_signal_clause():
+    plen = _watchbase_points_len_expr()
+    return or_(
+        WatchModel.manual_price_low.isnot(None),
+        WatchModel.manual_price_high.isnot(None),
+        WatchModel.observed_price_low.isnot(None),
+        WatchModel.observed_price_high.isnot(None),
+        plen > 0,
+    )
+
+
+def _strict_p3_lacks_clause():
+    """Match frontend lacksPricingP3: no WatchBase points OR no manual low/high."""
+    plen = _watchbase_points_len_expr()
+    no_points = plen == 0
+    no_manual = and_(
+        WatchModel.manual_price_low.is_(None),
+        WatchModel.manual_price_high.is_(None),
+    )
+    return or_(no_points, no_manual)
+
+
+def _import_unmatched_clause():
+    ref_trim = func.coalesce(func.trim(WatchModel.reference_url), "")
+    no_url = ref_trim == ""
+    never_imported = WatchModel.watchbase_imported_at.is_(None)
+    return or_(no_url, never_imported)
+
+
+def _apply_excluded_brands(stmt, excluded: frozenset[str]):
+    if not excluded:
+        return stmt
+    lowered = sorted(excluded)
+    return stmt.where(~func.lower(WatchModel.brand).in_(lowered))
+
+
+def _apply_catalog_list_filters(
+    stmt,
+    *,
+    pricing: PricingListFilter,
+    import_status: ImportStatusFilter,
+):
+    if pricing == "has_signal":
+        stmt = stmt.where(_has_pricing_signal_clause())
+    elif pricing == "missing_signal":
+        stmt = stmt.where(~_has_pricing_signal_clause())
+    elif pricing == "strict_needs":
+        stmt = stmt.where(_strict_p3_lacks_clause())
+    elif pricing == "strict_ok":
+        stmt = stmt.where(~_strict_p3_lacks_clause())
+
+    if import_status == "unmatched":
+        stmt = stmt.where(_import_unmatched_clause())
+    elif import_status == "matched":
+        stmt = stmt.where(~_import_unmatched_clause())
+
+    return stmt
+
+
 @router.get("", response_model=WatchModelListResponse)
 def list_watch_models(
     db: Session = Depends(get_db),
@@ -112,7 +184,19 @@ def list_watch_models(
     model_family: str | None = Query(None, description="Contains match on model family"),
     model_name: str | None = Query(None, description="Contains match on model name"),
     caliber: str | None = Query(None, description="Contains match on caliber"),
+    pricing: PricingListFilter = Query(
+        "all",
+        description="Price data: all | has_signal (any manual/observed/WatchBase points) | "
+        "missing_signal | strict_needs (no points OR no manual, batch-wizard rule) | strict_ok",
+    ),
+    import_status: ImportStatusFilter = Query(
+        "all",
+        description="WatchBase: all | unmatched (no ref URL or never imported) | matched",
+    ),
 ) -> WatchModelListResponse:
+    settings = get_settings()
+    excluded = catalog_excluded_brands(settings)
+
     count_stmt = _apply_watch_model_list_filters(
         select(func.count()).select_from(WatchModel),
         q,
@@ -121,6 +205,10 @@ def list_watch_models(
         model_family,
         model_name,
         caliber,
+    )
+    count_stmt = _apply_excluded_brands(count_stmt, excluded)
+    count_stmt = _apply_catalog_list_filters(
+        count_stmt, pricing=pricing, import_status=import_status
     )
     total = db.scalar(count_stmt) or 0
 
@@ -133,13 +221,17 @@ def list_watch_models(
         model_name,
         caliber,
     )
+    list_stmt = _apply_excluded_brands(list_stmt, excluded)
+    list_stmt = _apply_catalog_list_filters(
+        list_stmt, pricing=pricing, import_status=import_status
+    )
     rows = db.scalars(
         list_stmt.order_by(WatchModel.brand, nulls_last(WatchModel.reference))
         .offset(skip)
         .limit(limit)
     ).all()
     return WatchModelListResponse(
-        items=[WatchModelOut.model_validate(r) for r in rows],
+        items=[_watch_model_out(db, r) for r in rows],
         total=total,
         skip=skip,
         limit=limit,

@@ -127,6 +127,12 @@ class Settings(BaseSettings):
         alias="EUR_GBP_RATE_FALLBACK",
         description="Optional GBP-per-EUR rate if Frankfurter API is unreachable (e.g. 0.85)",
     )
+    watch_catalog_excluded_brands: str | None = Field(
+        None,
+        alias="WATCH_CATALOG_EXCLUDED_BRANDS",
+        description="Comma-separated brand names to hide from GET /watch-models and skip in catalog "
+        "link/create/backfill (case-insensitive), e.g. Apple,Fitbit",
+    )
 
 
 @lru_cache

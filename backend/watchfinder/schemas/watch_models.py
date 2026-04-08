@@ -183,3 +183,4 @@ class BackfillWatchCatalogResponse(BaseModel):
     created_new: int
     skipped_no_identity: int
     queued_for_review: int = 0
+    skipped_excluded_brand: int = 0

@@ -132,6 +132,11 @@ def promote_listing_to_watch_catalog(
                 "or model family (edit this listing and save, or fix the title/parsing)."
             ),
         )
+    if out == CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND:
+        raise HTTPException(
+            status_code=400,
+            detail="This brand is listed in WATCH_CATALOG_EXCLUDED_BRANDS (server env).",
+        )
 
     if listing.watch_model_id:
         refresh_watch_model_observed_bounds(db, listing.watch_model_id)

@@ -172,6 +172,11 @@ def resolve_watch_link_review(
             status_code=400,
             detail="Cannot create catalog row: add brand plus reference or model family on the listing.",
         )
+    if out == CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND:
+        raise HTTPException(
+            status_code=400,
+            detail="This brand is listed in WATCH_CATALOG_EXCLUDED_BRANDS (server env).",
+        )
     rev.status = "resolved_create"
     rev.resolved_at = now
     if listing.watch_model_id:
