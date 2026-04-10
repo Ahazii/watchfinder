@@ -69,6 +69,31 @@ def _median_gbp_from_everywatch(
     return (val * rate).quantize(Decimal("0.01"))
 
 
+def _everywatch_gbp_samples(ew: dict[str, Any]) -> list[Decimal]:
+    """
+    Extract GBP samples from Everywatch snapshot hits.
+    Prefers detail-page price_analysis GBP rows when available.
+    """
+    out: list[Decimal] = []
+    for h in (ew.get("hits") or []):
+        if not isinstance(h, dict):
+            continue
+        if str(h.get("currency") or "").upper() == "GBP" and h.get("amount") is not None:
+            try:
+                out.append(Decimal(str(h.get("amount"))).quantize(Decimal("0.01")))
+            except Exception:
+                pass
+        for row in (h.get("price_analysis") or []):
+            if not isinstance(row, dict):
+                continue
+            for raw in (row.get("gbp_amounts") or []):
+                try:
+                    out.append(Decimal(str(raw)).quantize(Decimal("0.01")))
+                except Exception:
+                    continue
+    return [x for x in out if x > 0]
+
+
 def _merge_manual_from_median_gbp(wm: WatchModel, median_gbp: Decimal) -> bool:
     """If manual bounds empty, set a ±10% band around median."""
     if wm.manual_price_low is not None or wm.manual_price_high is not None:
@@ -78,6 +103,26 @@ def _merge_manual_from_median_gbp(wm: WatchModel, median_gbp: Decimal) -> bool:
     wm.manual_price_low = low
     wm.manual_price_high = high
     return True
+
+
+def _merge_manual_from_gbp_range(wm: WatchModel, vals: list[Decimal]) -> bool:
+    """
+    Seed missing manual bounds from direct Everywatch GBP values.
+    - If both missing: set min/max.
+    - If one side missing: fill that side only.
+    """
+    if not vals:
+        return False
+    lo = min(vals).quantize(Decimal("0.01"))
+    hi = max(vals).quantize(Decimal("0.01"))
+    changed = False
+    if wm.manual_price_low is None:
+        wm.manual_price_low = lo
+        changed = True
+    if wm.manual_price_high is None:
+        wm.manual_price_high = hi
+        changed = True
+    return changed
 
 
 def refresh_market_snapshots_for_model(
@@ -128,9 +173,13 @@ def refresh_market_snapshots_for_model(
 
     wm.market_source_snapshots = snap
     merged = False
-    mg = _median_gbp_from_everywatch(ew, settings)
-    if mg is not None:
-        merged = _merge_manual_from_median_gbp(wm, mg)
+    gbp_vals = _everywatch_gbp_samples(ew)
+    if gbp_vals:
+        merged = _merge_manual_from_gbp_range(wm, gbp_vals)
+    if not merged:
+        mg = _median_gbp_from_everywatch(ew, settings)
+        if mg is not None:
+            merged = _merge_manual_from_median_gbp(wm, mg)
 
     db.flush()
     refresh_watch_model_observed_bounds(db, wm.id)
