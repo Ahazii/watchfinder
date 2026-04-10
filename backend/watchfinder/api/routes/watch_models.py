@@ -292,6 +292,7 @@ def post_refresh_market_snapshots(
         everywatch_hits=int(out.get("everywatch_hits") or 0),
         chrono24_hits=int(out.get("chrono24_hits") or 0),
         merged_manual_bounds=bool(out.get("merged_manual_bounds")),
+        everywatch_specs_applied=bool(out.get("everywatch_specs_applied")),
     )
 
 

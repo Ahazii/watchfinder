@@ -154,6 +154,7 @@ export type MarketSnapshotsRefreshResponse = {
   everywatch_hits: number;
   chrono24_hits: number;
   merged_manual_bounds: boolean;
+  everywatch_specs_applied?: boolean;
 };
 
 export type BackfillWatchCatalogResponse = {

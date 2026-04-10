@@ -162,6 +162,40 @@ def parse_awd_spec_map(html: str) -> dict[str, str]:
         val = d_el.get_text(" ", strip=True)
         if key and val and key not in specs:
             specs[key] = val[:500]
+    # Fallback: plain bullet lines "Label: value" (markup varies by page revision).
+    if len(specs) < 3:
+        hint = (
+            "case",
+            "dial",
+            "bezel",
+            "crystal",
+            "movement",
+            "bracelet",
+            "strap",
+            "water",
+            "year",
+            "condition",
+            "material",
+            "size",
+            "box",
+            "papers",
+            "location",
+            "source",
+        )
+        for li in soup.find_all("li"):
+            raw = " ".join((li.get_text() or "").split())
+            if ":" not in raw or len(raw) < 6:
+                continue
+            key, val = raw.split(":", 1)
+            key = key.strip().lstrip("*• ").strip()
+            val = val.strip()
+            if not key or not val or len(key) > 96:
+                continue
+            lk = key.lower()
+            if not any(h in lk for h in hint):
+                continue
+            if key not in specs:
+                specs[key] = val[:500]
     return specs
 
 

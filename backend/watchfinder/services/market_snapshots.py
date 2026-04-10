@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -22,6 +23,9 @@ from watchfinder.services.scoring.listing_gbp import gbp_per_unit_of
 from watchfinder.services.watch_models import refresh_watch_model_observed_bounds
 
 logger = logging.getLogger(__name__)
+
+_EW_CASE_MM = re.compile(r"([\d.]+)\s*mm\b", re.IGNORECASE)
+_EW_WATER_M = re.compile(r"([\d]+)\s*m\b", re.IGNORECASE)
 
 
 def _market_search_query(wm: WatchModel) -> str:
@@ -125,6 +129,79 @@ def _merge_manual_from_gbp_range(wm: WatchModel, vals: list[Decimal]) -> bool:
     return changed
 
 
+def _apply_everywatch_detail_to_watch_model(wm: WatchModel, ew: dict[str, Any]) -> bool:
+    """
+    Copy Everywatch **detail** parse into empty catalog fields (does not overwrite WatchBase fills).
+    Uses first hit when ``page_kind == watch_detail``.
+    """
+    if ew.get("page_kind") != "watch_detail":
+        return False
+    hits = ew.get("hits") or []
+    if not hits or not isinstance(hits[0], dict):
+        return False
+    hit: dict[str, Any] = hits[0]
+    specs = hit.get("specs")
+    if not isinstance(specs, dict):
+        specs = {}
+    changed = False
+    for key, val in specs.items():
+        if not isinstance(val, str):
+            continue
+        v = val.strip()
+        if not v:
+            continue
+        lk = str(key).lower().strip().rstrip(":").strip()
+        v500 = v[:500]
+        if wm.spec_case_material is None and (
+            "case material" in lk or lk.endswith(" material")
+        ):
+            wm.spec_case_material = v500
+            changed = True
+        elif wm.spec_case_diameter_mm is None and "case size" in lk:
+            m = _EW_CASE_MM.search(v)
+            if m:
+                try:
+                    wm.spec_case_diameter_mm = Decimal(str(m.group(1))).quantize(
+                        Decimal("0.01")
+                    )
+                    changed = True
+                except Exception:
+                    pass
+        elif wm.spec_dial_color is None and "dial color" in lk:
+            wm.spec_dial_color = v500
+            changed = True
+        elif wm.spec_dial_material is None and "dial material" in lk:
+            wm.spec_dial_material = v500
+            changed = True
+        elif wm.spec_crystal is None and "crystal" in lk:
+            wm.spec_crystal = v500
+            changed = True
+        elif wm.spec_bezel is None and "bezel" in lk:
+            wm.spec_bezel = v500
+            changed = True
+        elif wm.spec_water_resistance_m is None and (
+            "water" in lk and "resistance" in lk
+        ):
+            m = _EW_WATER_M.search(v.replace(",", ""))
+            if m:
+                try:
+                    wm.spec_water_resistance_m = Decimal(m.group(1))
+                    changed = True
+                except Exception:
+                    pass
+        elif wm.caliber is None and "movement" in lk:
+            wm.caliber = v500
+            changed = True
+    img = str(hit.get("image_url") or "").strip()
+    if img:
+        cur = wm.image_urls
+        urls: list[str] = list(cur) if isinstance(cur, list) else []
+        if img not in urls:
+            wm.image_urls = urls + [img]
+            changed = True
+    return changed
+
+
 def refresh_market_snapshots_for_model(
     db: Session,
     watch_model_id: UUID,
@@ -172,6 +249,7 @@ def refresh_market_snapshots_for_model(
     }
 
     wm.market_source_snapshots = snap
+    ew_specs = _apply_everywatch_detail_to_watch_model(wm, ew)
     merged = False
     gbp_vals = _everywatch_gbp_samples(ew)
     if gbp_vals:
@@ -185,17 +263,19 @@ def refresh_market_snapshots_for_model(
     refresh_watch_model_observed_bounds(db, wm.id)
 
     logger.info(
-        "market_snapshots model_id=%s ew_hits=%s c24_hits=%s merged_manual=%s",
+        "market_snapshots model_id=%s ew_hits=%s c24_hits=%s merged_manual=%s ew_specs=%s",
         watch_model_id,
         len(ew.get("hits") or []),
         len(c24_hits),
         merged,
+        ew_specs,
     )
     return {
         "ok": True,
         "everywatch_hits": len(ew.get("hits") or []),
         "chrono24_hits": len(c24_hits),
         "merged_manual_bounds": merged,
+        "everywatch_specs_applied": ew_specs,
     }
 
 

@@ -9,6 +9,7 @@ from watchfinder.services.everywatch_client import (
     guess_watch_listing_urls,
     is_everywatch_watch_detail_url,
     normalize_everywatch_watch_url,
+    parse_awd_spec_map,
     parse_price_container_rows,
     parse_watch_detail_hit,
     parse_watch_hits_from_html,
@@ -69,6 +70,17 @@ def test_parse_watch_hits_finds_thumbnail() -> None:
     hits = parse_watch_hits_from_html(html, page_url="https://everywatch.com/watch-listing?q=1")
     assert len(hits) == 1
     assert hits[0].get("image_url", "").startswith("https://img.everywatch.com/")
+
+
+def test_parse_awd_spec_map_fallback_bullets() -> None:
+    html = """<html><body><ul>
+    <li>Case Size: 39mm</li>
+    <li>Case Material: Stainless steel</li>
+    <li>Dial Color: Burgundy</li>
+    </ul></body></html>"""
+    m = parse_awd_spec_map(html)
+    assert m.get("Case Size") == "39mm"
+    assert "Stainless" in (m.get("Case Material") or "")
 
 
 def test_parse_price_container_gbp_k() -> None:

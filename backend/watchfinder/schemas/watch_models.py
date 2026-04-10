@@ -175,6 +175,7 @@ class MarketSnapshotsRefreshResponse(BaseModel):
     everywatch_hits: int = 0
     chrono24_hits: int = 0
     merged_manual_bounds: bool = False
+    everywatch_specs_applied: bool = False
 
 
 class BackfillWatchCatalogResponse(BaseModel):

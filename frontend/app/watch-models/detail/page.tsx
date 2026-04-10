@@ -776,10 +776,14 @@ function DetailBody() {
                       return j;
                     })
                     .then((j) => {
+                      const specNote =
+                        j.everywatch_specs_applied === true
+                          ? " Empty spec fields were filled from the Everywatch detail page where possible."
+                          : "";
                       setImportMsg(
                         j.merged_manual_bounds
-                          ? "Market snapshots refreshed; manual £ bounds were empty and were filled from Everywatch median."
-                          : `Market snapshots refreshed (Everywatch hits: ${j.everywatch_hits}, Chrono24 parsed: ${j.chrono24_hits}).`,
+                          ? `Market snapshots refreshed; manual £ bounds were filled from Everywatch pricing where possible.${specNote}`
+                          : `Market snapshots refreshed (Everywatch hits: ${j.everywatch_hits}, Chrono24 parsed: ${j.chrono24_hits}).${specNote}`,
                       );
                       return fetchJson<WatchModel>(`/api/watch-models/${id}`);
                     })
