@@ -128,7 +128,6 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
         comp_asking=_band_out(asking),
         source_legend=SOURCE_LEGEND,
         field_guidance=FIELD_GUIDANCE,
-        watch_model_id=listing.watch_model_id,
         watch_model=watch_brief,
         watch_link_review_pending=pending_brief,
     )
