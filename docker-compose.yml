@@ -49,6 +49,8 @@ services:
       APP_PORT: "8080"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       INGEST_INTERVAL_MINUTES: ${INGEST_INTERVAL_MINUTES:-30}
+      # 0 = disable scheduled match-queue pass; UI can persist app_settings.match_queue_sync_interval_minutes
+      MATCH_QUEUE_SYNC_INTERVAL_MINUTES: ${MATCH_QUEUE_SYNC_INTERVAL_MINUTES:-60}
       LOCAL_MEDIA_ROOT: /data/media
     volumes:
       - watchfinder_media:/data/media

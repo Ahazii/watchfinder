@@ -273,6 +273,8 @@ export type AppSettings = {
   stale_listing_refresh_interval_minutes?: number;
   stale_listing_refresh_max_per_run?: number;
   stale_listing_refresh_min_age_hours?: number;
+  /** 0 = no scheduled job; otherwise minutes between re-processing unmatched listings for the match queue */
+  match_queue_sync_interval_minutes?: number;
 };
 
 export type EverywatchDebugFetchRow = {

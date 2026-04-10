@@ -28,7 +28,9 @@ from watchfinder.api.routes import settings as settings_routes
 from watchfinder.config import get_settings
 from watchfinder.ingest_worker import scheduled_ingest_job
 from watchfinder.services.ingest_schedule import sync_ingest_schedule
+from watchfinder.services.match_queue_sync_schedule import sync_match_queue_sync_schedule
 from watchfinder.services.stale_listing_refresh import sync_stale_listing_refresh_schedule
+from watchfinder.match_queue_sync_worker import scheduled_match_queue_sync_job
 from watchfinder.stale_refresh_worker import scheduled_stale_listing_refresh_job
 
 logger = logging.getLogger(__name__)
@@ -47,12 +49,19 @@ async def lifespan(app: FastAPI):
     stale_every = sync_stale_listing_refresh_schedule(
         scheduler, scheduled_stale_listing_refresh_job, settings
     )
+    mq_every = sync_match_queue_sync_schedule(
+        scheduler, scheduled_match_queue_sync_job, settings
+    )
     scheduler.start()
     logger.info("Scheduler started: Browse ingest every %s minutes", minutes)
     if stale_every:
         logger.info("Stale listing refresh every %s minutes", stale_every)
     else:
         logger.info("Stale listing refresh: off (enable in Settings)")
+    if mq_every:
+        logger.info("Match queue sync every %s minutes", mq_every)
+    else:
+        logger.info("Match queue sync: off (set interval in Settings)")
     yield
     scheduler.shutdown()
 

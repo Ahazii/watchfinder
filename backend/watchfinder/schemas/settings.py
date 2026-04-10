@@ -32,6 +32,8 @@ class SettingsOut(BaseModel):
     stale_listing_refresh_interval_minutes: int = 360
     stale_listing_refresh_max_per_run: int = 20
     stale_listing_refresh_min_age_hours: int = 12
+    match_queue_sync_interval_minutes: int = 60
+    """0 = do not run scheduled sync; otherwise minutes between unmatched-listing → queue passes."""
     watch_catalog_excluded_brands: str = ""
     """Comma-separated brands from Settings UI; merged with env WATCH_CATALOG_EXCLUDED_BRANDS."""
     everywatch_login_email: str = ""
@@ -66,6 +68,12 @@ class SettingsPatch(BaseModel):
         ge=0,
         le=720,
         description="0 = eligible if last_seen_at is null or strictly before now",
+    )
+    match_queue_sync_interval_minutes: int | None = Field(
+        None,
+        ge=0,
+        le=1440,
+        description="0 = disable scheduled job; 15–1440 = minutes between runs",
     )
     watch_catalog_excluded_brands: str | None = Field(
         None,

@@ -47,7 +47,7 @@ This document records what is implemented in the repository versus the phased pl
 
 ## Phase 1 (complete)
 
-- **FastAPI** app in `backend/watchfinder/main.py` with lifespan, **`GET /health`**, and **APScheduler** running Browse ingest plus optional stale-listing **getItem** sweep (interval from DB **`app_settings`** or env).
+- **FastAPI** app in `backend/watchfinder/main.py` with lifespan, **`GET /health`**, and **APScheduler** running Browse ingest, optional stale-listing **getItem** sweep, and optional **match queue sync** (interval from DB **`app_settings`** or env).
 - **Settings** via `pydantic-settings` (`watchfinder/config.py`): `DATABASE_URL`, eBay credentials, marketplace, search query/limit, **`ingest_max_pages`**, etc.
 - **PostgreSQL** via SQLAlchemy 2 + **psycopg** (`watchfinder/db.py`).
 - **Models** (`watchfinder/models/listing.py`): `listings`, `listing_snapshots`, `parsed_attributes`, `repair_signals`, `opportunity_scores`, `saved_searches`, `app_settings`, **`listing_edits`**, **`watch_sale_records`**, **`watch_models`** (listing **`watch_model_id`** FK **SET NULL**).
@@ -102,6 +102,7 @@ OpenAPI: **`/docs`**.
 ## Phase 5c — Match queue (complete)
 
 - Migration **004**; **`/watch-review/`** UI; candidate scoring and settings **`watch_catalog_review_mode`**.
+- **Match queue sync (2026):** APScheduler job **`match_queue_sync`** — re-runs **`analyze_listing`** on every **active** listing with **`watch_model_id` IS NULL** so the queue stays populated after ingest gaps or mode changes. Interval from **`app_settings.match_queue_sync_interval_minutes`** or env **`MATCH_QUEUE_SYNC_INTERVAL_MINUTES`** (**0** = disabled). **`POST /api/watch-link-reviews/sync-from-unmatched`** and the Match queue **Sync unmatched listings** button run the same pass. **`analyze_listing`** returns **`CatalogLinkOutcome`** for stats.
 
 ---
 

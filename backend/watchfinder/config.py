@@ -84,6 +84,13 @@ class Settings(BaseSettings):
         le=720,
         description="Only refresh active listings with last_seen_at null or older than this many hours (0 = any past timestamp)",
     )
+    match_queue_sync_interval_minutes: int = Field(
+        60,
+        alias="MATCH_QUEUE_SYNC_INTERVAL_MINUTES",
+        ge=0,
+        le=1440,
+        description="APScheduler: re-analyze active listings without a watch_model_id (0 = off)",
+    )
     watchbase_import_enabled: bool = Field(
         True,
         alias="WATCHBASE_IMPORT_ENABLED",

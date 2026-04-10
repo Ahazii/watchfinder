@@ -23,9 +23,10 @@ from watchfinder.services.watch_models import (
     ensure_watch_catalog_for_listing,
     refresh_watch_model_observed_bounds,
 )
+from watchfinder.services.watch_models.catalog import CatalogLinkOutcome
 
 
-def analyze_listing(db: Session, listing: Listing) -> None:
+def analyze_listing(db: Session, listing: Listing) -> CatalogLinkOutcome:
     corpus = build_listing_corpus(listing)
     parsed = parse_watch_attributes(listing.title, corpus)
     signals = extract_repair_signals(corpus)
@@ -55,7 +56,7 @@ def analyze_listing(db: Session, listing: Listing) -> None:
         )
 
     edit = db.get(ListingEdit, listing.id)
-    ensure_watch_catalog_for_listing(db, listing, parsed, edit)
+    catalog_out = ensure_watch_catalog_for_listing(db, listing, parsed, edit)
     wm: WatchModel | None = None
     if listing.watch_model_id is not None:
         wm = db.get(WatchModel, listing.watch_model_id)
@@ -87,3 +88,4 @@ def analyze_listing(db: Session, listing: Listing) -> None:
         refresh_watch_model_observed_bounds(db, listing.watch_model_id)
         enrich_watch_model_image_from_listing(db, listing, get_settings())
         maybe_refresh_market_snapshots_for_model(db, listing.watch_model_id, get_settings())
+    return catalog_out

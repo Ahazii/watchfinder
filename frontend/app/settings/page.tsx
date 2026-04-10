@@ -71,6 +71,7 @@ export default function SettingsPage() {
   const [staleRefreshInterval, setStaleRefreshInterval] = useState(360);
   const [staleRefreshMax, setStaleRefreshMax] = useState(20);
   const [staleRefreshMinAge, setStaleRefreshMinAge] = useState(12);
+  const [matchQueueSyncInterval, setMatchQueueSyncInterval] = useState(60);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
@@ -94,6 +95,7 @@ export default function SettingsPage() {
         setStaleRefreshInterval(d.stale_listing_refresh_interval_minutes ?? 360);
         setStaleRefreshMax(d.stale_listing_refresh_max_per_run ?? 20);
         setStaleRefreshMinAge(d.stale_listing_refresh_min_age_hours ?? 12);
+        setMatchQueueSyncInterval(d.match_queue_sync_interval_minutes ?? 60);
         setLines(linesFromSettings(d));
       })
       .catch((e: Error) => setErr(e.message));
@@ -126,6 +128,7 @@ export default function SettingsPage() {
       stale_listing_refresh_interval_minutes: staleRefreshInterval,
       stale_listing_refresh_max_per_run: staleRefreshMax,
       stale_listing_refresh_min_age_hours: staleRefreshMinAge,
+      match_queue_sync_interval_minutes: matchQueueSyncInterval,
     };
     if (ewLoginPassword.trim()) {
       patchBody.everywatch_login_password = ewLoginPassword;
@@ -158,6 +161,7 @@ export default function SettingsPage() {
         setStaleRefreshInterval(d.stale_listing_refresh_interval_minutes ?? 360);
         setStaleRefreshMax(d.stale_listing_refresh_max_per_run ?? 20);
         setStaleRefreshMinAge(d.stale_listing_refresh_min_age_hours ?? 12);
+        setMatchQueueSyncInterval(d.match_queue_sync_interval_minutes ?? 60);
         setLines(linesFromSettings(d));
         setEwLoginPassword("");
         setEwPasswordConfigured(Boolean(d.everywatch_password_configured));
@@ -294,6 +298,13 @@ export default function SettingsPage() {
             goes to the <strong>Match queue</strong> for you to confirm. Candidate rows on the queue
             show <strong>catalog observed</strong> ranges in <strong>£ GBP</strong> (aggregated from
             linked listings and recorded sales for that watch model — not the listing’s own currency).
+            <span className="mt-2 block text-xs">
+              <strong className="text-foreground">Hints:</strong> Use <strong>Match queue sync</strong> so
+              active listings without a catalog link are re-analyzed on a timer — same logic as ingest, without
+              waiting for the next Browse search. Set <strong>0</strong> minutes to rely only on ingest +
+              manual <strong>Sync unmatched</strong> on the Match queue page. In <strong>Automatic</strong>{" "}
+              mode, that job links or creates catalog rows instead of enqueueing.
+            </span>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -311,6 +322,28 @@ export default function SettingsPage() {
             <option value="auto">Automatic — fuzzy match + create catalog rows without queue</option>
             <option value="review">Review queue — exact matches only; queue the rest</option>
           </select>
+          <div className="pt-2">
+            <label className="text-sm font-medium" htmlFor="mq-sync">
+              Match queue — sync from unmatched listings (minutes)
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Periodically re-analyze <strong>active</strong> listings that still have <strong>no</strong> watch
+              database link so they appear in the match queue (review mode) or get auto-linked (automatic mode).{" "}
+              <strong>0</strong> disables the background job; use the button on the Match queue page to run it
+              anytime. Typical values: <strong>30–120</strong> minutes if you ingest often; lower if you only
+              run ingest occasionally and want the queue to catch up between runs.
+            </p>
+            <Input
+              id="mq-sync"
+              type="number"
+              min={0}
+              max={1440}
+              className="mt-2 max-w-[120px]"
+              value={matchQueueSyncInterval}
+              onChange={(e) => setMatchQueueSyncInterval(Number(e.target.value))}
+              title="Minutes between scheduler runs. 0 = off. Persisted in app_settings; env MATCH_QUEUE_SYNC_INTERVAL_MINUTES is the default before first save."
+            />
+          </div>
         </CardContent>
       </Card>
 

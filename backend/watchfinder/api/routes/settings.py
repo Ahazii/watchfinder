@@ -23,6 +23,11 @@ from watchfinder.services.ingest_settings import (
     set_ingest_max_pages,
     set_ingest_search_limit,
 )
+from watchfinder.services.match_queue_sync_schedule import (
+    get_match_queue_sync_interval_minutes,
+    set_match_queue_sync_interval_minutes,
+    sync_match_queue_sync_schedule,
+)
 from watchfinder.services.stale_listing_refresh import (
     get_stale_listing_refresh_enabled,
     get_stale_listing_refresh_interval_minutes,
@@ -45,6 +50,7 @@ from watchfinder.services.watch_catalog_settings import (
     set_watch_catalog_excluded_brands_text,
     set_watch_catalog_review_mode,
 )
+from watchfinder.match_queue_sync_worker import scheduled_match_queue_sync_job
 from watchfinder.stale_refresh_worker import scheduled_stale_listing_refresh_job
 from watchfinder import runtime
 
@@ -74,6 +80,7 @@ def _settings_out(db: Session) -> SettingsOut:
         stale_listing_refresh_min_age_hours=get_stale_listing_refresh_min_age_hours(
             db, cfg
         ),
+        match_queue_sync_interval_minutes=get_match_queue_sync_interval_minutes(db, cfg),
         watch_catalog_excluded_brands=get_watch_catalog_excluded_brands_text(db),
         everywatch_login_email=get_everywatch_login_email(db),
         everywatch_password_configured=everywatch_password_configured(db),
@@ -117,6 +124,8 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> Settin
         set_stale_listing_refresh_min_age_hours(
             db, body.stale_listing_refresh_min_age_hours
         )
+    if body.match_queue_sync_interval_minutes is not None:
+        set_match_queue_sync_interval_minutes(db, body.match_queue_sync_interval_minutes)
     if body.watch_catalog_excluded_brands is not None:
         set_watch_catalog_excluded_brands_text(db, body.watch_catalog_excluded_brands)
     if body.everywatch_login_email is not None or body.everywatch_login_password is not None:
@@ -139,4 +148,8 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> Settin
             )
         except Exception:
             logger.exception("Could not reschedule stale refresh after settings change")
+        try:
+            sync_match_queue_sync_schedule(sch, scheduled_match_queue_sync_job)
+        except Exception:
+            logger.exception("Could not reschedule match queue sync after settings change")
     return _settings_out(db)

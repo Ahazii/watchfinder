@@ -16,14 +16,26 @@ from watchfinder.schemas.watch_link_reviews import (
     WatchLinkReviewListItem,
     WatchLinkReviewListResponse,
 )
-from watchfinder.schemas.watch_models import WatchModelOut
+from watchfinder.schemas.watch_models import BackfillWatchCatalogResponse, WatchModelOut
 from watchfinder.services.watch_models import refresh_watch_model_observed_bounds
 from watchfinder.services.watch_models.catalog import (
     CatalogLinkOutcome,
     create_catalog_from_listing_identity,
+    sync_unmatched_listings_watch_catalog,
 )
 
 router = APIRouter(prefix="/watch-link-reviews", tags=["watch-link-reviews"])
+
+
+@router.post(
+    "/sync-from-unmatched",
+    response_model=BackfillWatchCatalogResponse,
+    summary="Re-analyze listings without a catalog link (match queue / auto-link)",
+)
+def sync_unmatched_to_match_queue(db: Session = Depends(get_db)) -> BackfillWatchCatalogResponse:
+    stats = sync_unmatched_listings_watch_catalog(db)
+    db.commit()
+    return BackfillWatchCatalogResponse(**stats)
 
 
 def _candidate_models(

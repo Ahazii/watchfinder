@@ -189,6 +189,50 @@ def ensure_watch_catalog_for_listing(
     return _create_catalog_row_and_link_listing(db, listing, parsed, edit)
 
 
+def sync_unmatched_listings_watch_catalog(db: Session) -> dict[str, int]:
+    """
+    Re-analyze every active listing with no watch_model_id so catalog linking / match queue
+    stays in sync (review mode enqueues; auto mode links or creates).
+    """
+    from sqlalchemy import select
+
+    from watchfinder.services.pipeline.analyze import analyze_listing
+
+    stats = {
+        "scanned": 0,
+        "already_linked": 0,
+        "linked_existing": 0,
+        "created_new": 0,
+        "skipped_no_identity": 0,
+        "queued_for_review": 0,
+        "skipped_excluded_brand": 0,
+    }
+    stmt = (
+        select(Listing.id)
+        .where(Listing.is_active.is_(True), Listing.watch_model_id.is_(None))
+        .order_by(Listing.last_seen_at.desc())
+    )
+    for lid in db.scalars(stmt).all():
+        listing = db.get(Listing, lid)
+        if not listing or listing.watch_model_id is not None:
+            continue
+        stats["scanned"] += 1
+        out = analyze_listing(db, listing)
+        if out == CatalogLinkOutcome.ALREADY_LINKED:
+            stats["already_linked"] += 1
+        elif out == CatalogLinkOutcome.LINKED_EXISTING:
+            stats["linked_existing"] += 1
+        elif out == CatalogLinkOutcome.CREATED_NEW:
+            stats["created_new"] += 1
+        elif out == CatalogLinkOutcome.QUEUED_FOR_REVIEW:
+            stats["queued_for_review"] += 1
+        elif out == CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND:
+            stats["skipped_excluded_brand"] += 1
+        else:
+            stats["skipped_no_identity"] += 1
+    return stats
+
+
 def backfill_watch_catalog(db: Session) -> dict[str, int]:
     """Scan active listings; link or create catalog rows. Caller should commit."""
     from sqlalchemy import select
