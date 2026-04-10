@@ -71,12 +71,20 @@ def build_listing_detail(db: Session, listing: Listing) -> ListingDetail:
     wm = listing.watch_model
     watch_brief = WatchModelBriefOut.model_validate(wm) if wm else None
 
-    pr = db.execute(
-        select(WatchModelLinkReview).where(
-            WatchModelLinkReview.listing_id == listing.id,
-            WatchModelLinkReview.status == "pending",
+    # Multiple pending rows can exist (no DB uniqueness); take newest only — scalar_one_or_none() would 500.
+    pr = (
+        db.execute(
+            select(WatchModelLinkReview)
+            .where(
+                WatchModelLinkReview.listing_id == listing.id,
+                WatchModelLinkReview.status == "pending",
+            )
+            .order_by(WatchModelLinkReview.created_at.desc())
+            .limit(1)
         )
-    ).scalar_one_or_none()
+        .scalars()
+        .first()
+    )
     pending_brief: WatchLinkReviewBriefOut | None = None
     if pr:
         pending_brief = WatchLinkReviewBriefOut(

@@ -8,6 +8,8 @@ type Props = {
   imageUrl?: string | null;
   priceHint?: string | null;
   openLabel?: string;
+  /** Thumbnail box size (default: extra large). */
+  imageSize?: "lg" | "xl";
   className?: string;
 };
 
@@ -17,28 +19,38 @@ export function MarketMatchRow({
   imageUrl,
   priceHint,
   openLabel = "Open page",
+  imageSize = "xl",
   className,
 }: Props) {
   const label = plainTextFromMaybeHtml(title) || "Listing";
+  const thumbBox =
+    imageSize === "xl"
+      ? "h-52 w-52 min-h-[13rem] min-w-[13rem] sm:h-60 sm:w-60 sm:min-h-[15rem] sm:min-w-[15rem]"
+      : "h-44 w-44 min-h-[11rem] min-w-[11rem] sm:h-52 sm:w-52 sm:min-h-[13rem] sm:min-w-[13rem]";
 
   return (
     <div
       className={cn(
-        "flex gap-3 rounded-md border border-border bg-muted/10 p-2 text-left",
+        "flex flex-col gap-3 rounded-md border border-border bg-muted/10 p-3 text-left sm:flex-row sm:items-start",
         className,
       )}
     >
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-muted/40">
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40",
+          thumbBox,
+        )}
+      >
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- remote market CDN
           <img
             src={imageUrl}
             alt=""
-            className="max-h-full max-w-full object-contain"
+            className="h-full w-full object-contain p-1"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <span className="px-1 text-center text-[10px] leading-tight text-muted-foreground">
+          <span className="px-2 text-center text-xs leading-tight text-muted-foreground">
             No image
           </span>
         )}

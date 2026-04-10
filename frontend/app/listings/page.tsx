@@ -406,7 +406,10 @@ function ListingsTable({
             sortDir={sortDir}
             onSort={onSort}
           />
-          <TableHead className="w-[1%] whitespace-nowrap text-right text-muted-foreground">
+          <TableHead
+            className="w-[1%] whitespace-nowrap text-right text-muted-foreground"
+            title="Linked to a row in the watch database (catalog), or add one from this listing."
+          >
             Watch DB
           </TableHead>
         </TableRow>
@@ -456,17 +459,27 @@ function ListingsTable({
             <TableCell className="text-xs text-muted-foreground">
               {dateShort(r.last_seen_at)}
             </TableCell>
-            <TableCell className="text-right">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={promoteBusyId === r.id}
-                title="Save to watch database — create or link a catalog row from this listing"
-                onClick={() => onPromoteToCatalog(r.id)}
-              >
-                {promoteBusyId === r.id ? "…" : "Add"}
-              </Button>
+            <TableCell className="text-right align-top">
+              {r.watch_model_id ? (
+                <Link
+                  href={`/watch-models/detail/?id=${r.watch_model_id}`}
+                  className="inline-block text-sm font-medium text-primary hover:underline"
+                  title="Open linked watch database entry"
+                >
+                  In watch DB
+                </Link>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={promoteBusyId === r.id}
+                  title="Save to watch database — create or link a catalog row from this listing"
+                  onClick={() => onPromoteToCatalog(r.id)}
+                >
+                  {promoteBusyId === r.id ? "…" : "Add to DB"}
+                </Button>
+              )}
             </TableCell>
           </TableRow>
         ))}
