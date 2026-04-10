@@ -46,6 +46,7 @@ export default function CandidatesPage() {
   const limit = 30;
   const [data, setData] = useState<ListingListResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -66,9 +67,19 @@ export default function CandidatesPage() {
     if (f.exclude_quartz) q.set("exclude_quartz", "true");
     q.set("sort_by", sortBy);
     q.set("sort_dir", sortDir);
+    const qs = q.toString();
 
-    fetchJson<ListingListResponse>(`/api/candidates?${q.toString()}`)
+    setWarn(null);
+    fetchJson<ListingListResponse>(`/api/candidates?${qs}`)
       .then(setData)
+      .catch(async () => {
+        // Compatibility fallback: if /api/candidates is unavailable, use /api/listings with profit floor.
+        const q2 = new URLSearchParams(qs);
+        if (!q2.get("profit_min")) q2.set("profit_min", "0.01");
+        const fallback = await fetchJson<ListingListResponse>(`/api/listings?${q2.toString()}`);
+        setWarn("Using fallback query via /api/listings (candidate endpoint unavailable).");
+        setData(fallback);
+      })
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
   }, [skip, limit, sortBy, sortDir]);
@@ -189,6 +200,11 @@ export default function CandidatesPage() {
       {err && (
         <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4 text-sm text-red-200">
           {err}
+        </div>
+      )}
+      {warn && !err && (
+        <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 p-4 text-sm text-amber-100">
+          {warn}
         </div>
       )}
 

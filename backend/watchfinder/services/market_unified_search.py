@@ -73,7 +73,7 @@ def everywatch_search_hits(
             {
                 "url": h.get("url"),
                 "label": label[:400],
-                "image_url": None,
+                "image_url": h.get("image_url"),
                 "price_hint": price_hint,
             }
         )

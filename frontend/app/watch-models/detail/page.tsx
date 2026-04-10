@@ -18,6 +18,7 @@ import {
   watchbaseGuessUrl,
 } from "@/lib/watchbase";
 import { ListingThumb } from "@/components/listing-thumb";
+import { MarketMatchRow } from "@/components/market-match-row";
 import { TableThumbSizeSelect } from "@/components/table-thumb-size-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -580,20 +581,16 @@ function DetailBody() {
               ) : null}
               {(findUnified?.everywatch?.items?.length ?? 0) > 0 ? (
                 <div className="mt-4">
-                  <p className="mb-2 text-sm font-medium">Everywatch (links)</p>
-                  <ul className="max-h-[min(32vh,14rem)] space-y-1 overflow-y-auto rounded-md border border-border p-2 text-xs">
+                  <p className="mb-2 text-sm font-medium">Everywatch</p>
+                  <ul className="max-h-[min(40vh,20rem)] space-y-2 overflow-y-auto rounded-md border border-border p-2">
                     {(findUnified?.everywatch?.items ?? []).map((h) => (
                       <li key={h.url}>
-                        <a
+                        <MarketMatchRow
                           href={h.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary underline-offset-2 hover:underline break-all"
-                        >
-                          {h.price_hint ? `${h.price_hint} · ` : ""}
-                          {h.label.slice(0, 120)}
-                          {h.label.length > 120 ? "…" : ""}
-                        </a>
+                          title={h.label}
+                          imageUrl={h.image_url}
+                          priceHint={h.price_hint}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -622,17 +619,14 @@ function DetailBody() {
                     ) : null}
                   </div>
                   {(findUnified.chrono24.items?.length ?? 0) > 0 ? (
-                    <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs">
+                    <ul className="mt-2 max-h-[min(40vh,16rem)] space-y-2 overflow-y-auto">
                       {findUnified.chrono24.items.map((h) => (
                         <li key={h.url}>
-                          <a
+                          <MarketMatchRow
                             href={h.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary underline-offset-2 hover:underline break-all"
-                          >
-                            {h.label}
-                          </a>
+                            title={h.label}
+                            imageUrl={h.image_url}
+                          />
                         </li>
                       ))}
                     </ul>

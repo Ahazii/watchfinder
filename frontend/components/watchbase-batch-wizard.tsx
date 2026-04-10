@@ -17,6 +17,7 @@ import {
 import { watchbaseGoogleSiteSearchUrl } from "@/lib/watchbase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MarketMatchRow } from "@/components/market-match-row";
 
 type Props = {
   open: boolean;
@@ -439,20 +440,16 @@ export function WatchbaseBatchWizard({
 
                         {autoUnified && (autoUnified.everywatch?.items?.length ?? 0) > 0 ? (
                           <div className="rounded-md border border-amber-900/30 bg-amber-950/10 p-3 text-xs">
-                            <p className="font-medium text-foreground">Everywatch (links)</p>
-                            <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                            <p className="font-medium text-foreground">Everywatch</p>
+                            <ul className="mt-2 max-h-[min(36vh,14rem)] space-y-2 overflow-y-auto">
                               {autoUnified.everywatch.items.slice(0, 12).map((h) => (
                                 <li key={h.url}>
-                                  <a
+                                  <MarketMatchRow
                                     href={h.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-primary underline-offset-2 hover:underline break-all"
-                                  >
-                                    {h.price_hint ? `${h.price_hint} · ` : ""}
-                                    {h.label.slice(0, 80)}
-                                    {h.label.length > 80 ? "…" : ""}
-                                  </a>
+                                    title={h.label}
+                                    imageUrl={h.image_url}
+                                    priceHint={h.price_hint}
+                                  />
                                 </li>
                               ))}
                             </ul>

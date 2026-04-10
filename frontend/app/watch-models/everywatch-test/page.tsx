@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { apiUrl } from "@/lib/api";
 import type { EverywatchDebugFetchRow, EverywatchDebugResponse } from "@/lib/types";
+import { MarketMatchRow } from "@/components/market-match-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,6 +21,7 @@ type EwListingHit = {
   label?: string;
   amount?: string | null;
   currency?: string | null;
+  image_url?: string | null;
 };
 
 type EwDetailPreview = {
@@ -32,7 +34,14 @@ type EwDetailPreview = {
   price_analysis?: { title?: string; raw_text?: string; gbp_amounts?: string[] }[];
 };
 
-function EverywatchFetchBlock({ f }: { f: EverywatchDebugFetchRow }) {
+function EverywatchFetchBlock({
+  f,
+  onUseUrl,
+}: {
+  f: EverywatchDebugFetchRow;
+  onUseUrl: (url: string) => void;
+}) {
+  const [showRawJson, setShowRawJson] = useState(false);
   const analysis = f.analysis;
   const hits = (analysis?.parsed_listing_hits_sample as EwListingHit[] | undefined) ?? [];
   const detail = analysis?.detail_import_preview as EwDetailPreview | null | undefined;
@@ -53,55 +62,53 @@ function EverywatchFetchBlock({ f }: { f: EverywatchDebugFetchRow }) {
         <div className="mt-3 space-y-2">
           <p className="text-sm font-medium">Parsed watch links ({hits.length} sample)</p>
           <p className="text-xs text-muted-foreground">
-            Open a row to confirm the match, then paste that URL into <strong>Extra absolute URLs</strong> or save it as{" "}
-            <strong>Everywatch watch URL</strong> on the model detail page.
+            Cards are a search helper only (no catalog import from here). Confirm the match on Everywatch, then paste the
+            URL below or save it as <strong>Everywatch watch URL</strong> on the model detail page.
           </p>
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[520px] text-left text-xs">
-              <thead className="border-b border-border bg-muted/30 text-muted-foreground">
-                <tr>
-                  <th className="p-2 font-medium">Label</th>
-                  <th className="p-2 font-medium">Price hint</th>
-                  <th className="p-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hits.map((h, j) => {
-                  const u = (h.url || "").trim();
-                  const hint =
-                    h.amount && h.currency ? `${h.amount} ${h.currency}` : "—";
-                  return (
-                    <tr key={`${u}-${j}`} className="border-b border-border/60 last:border-0">
-                      <td className="max-w-[280px] p-2 align-top">{(h.label || "").slice(0, 200)}</td>
-                      <td className="whitespace-nowrap p-2 align-top">{hint}</td>
-                      <td className="p-2 align-top">
-                        <div className="flex flex-wrap gap-1">
-                          {u ? (
-                            <>
-                              <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" asChild>
-                                <a href={u} target="_blank" rel="noreferrer">
-                                  Open
-                                </a>
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-[11px]"
-                                onClick={() => copyUrl(u)}
-                              >
-                                Copy URL
-                              </Button>
-                            </>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ul className="space-y-3">
+            {hits.map((h, j) => {
+              const u = (h.url || "").trim();
+              const hint =
+                h.amount && h.currency ? `${h.amount} ${h.currency}` : undefined;
+              return (
+                <li
+                  key={`${u}-${j}`}
+                  className="rounded-lg border border-border bg-muted/5 p-2"
+                >
+                  {u ? (
+                    <>
+                      <MarketMatchRow
+                        href={u}
+                        title={h.label || "Watch"}
+                        imageUrl={h.image_url}
+                        priceHint={hint}
+                      />
+                      <div className="mt-2 flex flex-wrap gap-1 border-t border-border/60 pt-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => copyUrl(u)}
+                        >
+                          Copy URL
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => onUseUrl(u)}
+                        >
+                          Use in form
+                        </Button>
+                      </div>
+                    </>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
 
@@ -156,9 +163,26 @@ function EverywatchFetchBlock({ f }: { f: EverywatchDebugFetchRow }) {
       ) : null}
 
       {analysis ? (
-        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/15 p-2 font-mono text-[11px]">
-          {JSON.stringify(analysis, null, 2)}
-        </pre>
+        <div className="mt-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-[11px] text-muted-foreground"
+            onClick={() => setShowRawJson((v) => !v)}
+          >
+            {showRawJson ? "Hide" : "Show"} technical JSON
+          </Button>
+          {showRawJson ? (
+            <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/15 p-2 font-mono text-[11px]">
+              {JSON.stringify(analysis, null, 2)}
+            </pre>
+          ) : (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Raw parse output is hidden by default — it often includes long HTML snippets.
+            </p>
+          )}
+        </div>
       ) : null}
     </div>
   );
@@ -186,6 +210,31 @@ function EverywatchTestBody() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<EverywatchDebugResponse | null>(null);
+  const [refreshingSnapshots, setRefreshingSnapshots] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const quickSearchQuery =
+    (searchQueries
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .find(Boolean) || "") as string;
+
+  const openEverywatchSearch = () => {
+    const q = quickSearchQuery.trim();
+    if (!q) return;
+    const u = `https://everywatch.com/watch-listing?query=${encodeURIComponent(q)}`;
+    window.open(u, "_blank", "noopener,noreferrer");
+  };
+
+  const appendExtraUrl = (url: string) => {
+    const u = (url || "").trim();
+    if (!u) return;
+    const lines = extraUrls
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (lines.includes(u)) return;
+    setExtraUrls(lines.length ? `${lines.join("\n")}\n${u}` : u);
+  };
 
   const run = () => {
     setBusy(true);
@@ -226,6 +275,50 @@ function EverywatchTestBody() {
       .finally(() => setBusy(false));
   };
 
+  const refreshSnapshotsNow = () => {
+    const id = modelId.trim();
+    if (!id) {
+      setRefreshMsg("Enter a watch model ID first.");
+      return;
+    }
+    setRefreshingSnapshots(true);
+    setRefreshMsg(null);
+    fetch(apiUrl(`/api/watch-models/${encodeURIComponent(id)}/refresh-market-snapshots`), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `${res.status} ${res.statusText}`);
+        try {
+          return JSON.parse(text) as {
+            ok?: boolean;
+            everywatch_hits?: number;
+            chrono24_hits?: number;
+            merged_manual_bounds?: boolean;
+            skipped?: string | null;
+          };
+        } catch {
+          return {};
+        }
+      })
+      .then((payload) => {
+        const ew = payload.everywatch_hits ?? 0;
+        const c24 = payload.chrono24_hits ?? 0;
+        if (payload.skipped) {
+          setRefreshMsg(`Snapshot refresh skipped: ${payload.skipped}`);
+          return;
+        }
+        setRefreshMsg(
+          `Snapshots refreshed. Everywatch hits: ${ew}, Chrono24 hits: ${c24}${
+            payload.merged_manual_bounds ? " (manual bounds updated)" : ""
+          }.`,
+        );
+      })
+      .catch((e: Error) => setRefreshMsg(`Snapshot refresh failed: ${e.message}`))
+      .finally(() => setRefreshingSnapshots(false));
+  };
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
@@ -240,10 +333,27 @@ function EverywatchTestBody() {
           >
             Everywatch
           </a>{" "}
-          and shows parsed structure so you can plan field mapping. Nothing is saved to your catalog from this page.
+          and shows parsed structure so you can plan field mapping. Nothing is saved to your catalog from this page. To
+          import, save a confirmed watch page URL on model detail, then run market snapshot refresh/import actions there.
           Comply with Everywatch terms; keep request volume low.
         </p>
       </div>
+
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-base">Recommended workflow (manual match)</CardTitle>
+          <CardDescription className="space-y-2 text-sm leading-relaxed">
+            <p>
+              1) Enter a search query and click <strong>Open Everywatch search</strong>. 2) In Everywatch, find the correct
+              watch page. 3) Paste that absolute URL into <strong>Extra absolute URLs</strong> (or save it on model detail as{" "}
+              <strong>Everywatch watch URL</strong>). 4) Run debug fetch to confirm parsed specs/price hints.
+            </p>
+            <p>
+              This page intentionally has no one-click import from listing rows; it is for URL discovery + parse validation.
+            </p>
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
       <Card className="border-amber-900/50 bg-amber-950/20">
         <CardHeader>
@@ -363,6 +473,17 @@ function EverywatchTestBody() {
               value={searchQueries}
               onChange={(e) => setSearchQueries(e.target.value)}
             />
+            <div className="mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!quickSearchQuery}
+                onClick={openEverywatchSearch}
+              >
+                Open Everywatch search
+              </Button>
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="ew-url">
@@ -392,7 +513,16 @@ function EverywatchTestBody() {
           <Button type="button" disabled={busy} onClick={() => run()}>
             {busy ? "Fetching…" : "Run debug fetch"}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={refreshingSnapshots || !modelId.trim()}
+            onClick={refreshSnapshotsNow}
+          >
+            {refreshingSnapshots ? "Refreshing snapshots…" : "Refresh market snapshots now"}
+          </Button>
           {err ? <p className="text-sm text-red-400">{err}</p> : null}
+          {refreshMsg ? <p className="text-sm text-muted-foreground">{refreshMsg}</p> : null}
         </CardContent>
       </Card>
 
@@ -448,15 +578,15 @@ function EverywatchTestBody() {
             <CardHeader>
               <CardTitle>Per-URL results</CardTitle>
               <CardDescription>
-                Listing pages expose <code className="rounded bg-muted px-1">parsed_listing_hits_sample</code> as a table;
-                watch detail pages add <code className="rounded bg-muted px-1">detail_import_preview</code> (specs,
-                hero image, GBP price rows). Raw <code className="rounded bg-muted px-1">analysis</code> JSON is below
-                each block.
+                Listing pages expose <code className="rounded bg-muted px-1">parsed_listing_hits_sample</code> as cards
+                (thumb + title + price hint); watch detail pages add{" "}
+                <code className="rounded bg-muted px-1">detail_import_preview</code> (specs, hero image, GBP price rows).
+                Optional <strong>Show technical JSON</strong> reveals raw parse output per fetch.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {result.fetches.map((f, i) => (
-                <EverywatchFetchBlock key={`${f.url}-${i}`} f={f} />
+                <EverywatchFetchBlock key={`${f.url}-${i}`} f={f} onUseUrl={appendExtraUrl} />
               ))}
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as html_lib
 import json
 import logging
 import re
@@ -11,6 +12,7 @@ from urllib.parse import quote, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 
 from watchfinder.config import Settings, get_settings
 
@@ -30,6 +32,35 @@ _GBP_BLOCK_RE = re.compile(
 )
 
 _EW_HOST = re.compile(r"^(?:www\.)?everywatch\.com$", re.I)
+
+
+def _plain_text_from_maybe_html(s: str) -> str:
+    """Strip tags / decode entities when anchors accidentally include HTML fragments."""
+    if not s:
+        return ""
+    t = re.sub(r"<[^>]+>", " ", s)
+    t = html_lib.unescape(t)
+    return " ".join(t.split())
+
+
+def _image_near_anchor(a: Tag) -> str | None:
+    """Best-effort hero thumb for a watch card link."""
+    for img in a.find_all("img", src=True, limit=12):
+        src = (img.get("src") or "").strip()
+        if not src or src.startswith("data:"):
+            continue
+        return src.split(" ", 1)[0]
+    el = a.parent
+    for _ in range(8):
+        if el is None or not isinstance(el, Tag):
+            break
+        img = el.find("img", src=True)
+        if img:
+            src = (img.get("src") or "").strip()
+            if src and not src.startswith("data:"):
+                return src.split(" ", 1)[0]
+        el = el.parent
+    return None
 
 
 def normalize_everywatch_watch_url(raw: str | None) -> str | None:
@@ -183,6 +214,7 @@ def parse_watch_detail_hit(html: str, *, page_url: str) -> dict[str, Any] | None
     title = (h1.get_text(" ", strip=True) if h1 else "") or (
         title_el.get_text(strip=True) if title_el else ""
     )
+    title = _plain_text_from_maybe_html(title)
     label = (title[:500] if len(title) >= 3 else base) or base
 
     amount: str | None = None
@@ -334,9 +366,11 @@ def parse_watch_hits_from_html(html: str, *, page_url: str) -> list[dict[str, An
         if full in seen:
             continue
         seen.add(full)
-        label = " ".join((a.get_text() or "").split())
+        label = _plain_text_from_maybe_html(" ".join((a.get_text() or "").split()))
         if len(label) < 4:
-            label = (a.get("title") or "").strip() or full.rsplit("/watch-", 1)[-1]
+            label = _plain_text_from_maybe_html(
+                (a.get("title") or "").strip()
+            ) or full.rsplit("/watch-", 1)[-1]
         if len(label) < 3:
             continue
         m = _PRICE_RE.search(label)
@@ -345,12 +379,14 @@ def parse_watch_hits_from_html(html: str, *, page_url: str) -> list[dict[str, An
         if m:
             amount = m.group(1).replace(",", "")
             currency = m.group(2).upper()
+        img_url = _image_near_anchor(a)
         hits.append(
             {
                 "url": full,
                 "label": label[:500],
                 "amount": amount,
                 "currency": currency,
+                "image_url": img_url,
             }
         )
         if len(hits) >= 60:

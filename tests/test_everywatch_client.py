@@ -53,6 +53,24 @@ def test_parse_watch_hits_relative_href() -> None:
     assert "166.085" in hits[0]["label"]
 
 
+def test_parse_watch_hits_strips_embedded_markup_in_label() -> None:
+    html = (
+        '<html><body><a href="/omega/watch-2"><span>O</span>mega <b>Foo</b> 1,234 USD</a></body></html>'
+    )
+    hits = parse_watch_hits_from_html(html, page_url="https://everywatch.com/watch-listing?q=1")
+    assert len(hits) == 1
+    assert "<span>" not in hits[0]["label"]
+    assert "Omega Foo" in hits[0]["label"]
+
+
+def test_parse_watch_hits_finds_thumbnail() -> None:
+    html = """<html><body><div class="card"><img src="https://img.everywatch.com/x.jpg" alt="" />
+    <a href="/omega/watch-3">Omega Three 500 USD</a></div></body></html>"""
+    hits = parse_watch_hits_from_html(html, page_url="https://everywatch.com/watch-listing?q=1")
+    assert len(hits) == 1
+    assert hits[0].get("image_url", "").startswith("https://img.everywatch.com/")
+
+
 def test_parse_price_container_gbp_k() -> None:
     html = """<html><body><div class="price-container">
     <h3 class="price-analysis-item"><span class="p-title">Dealers Range</span>
