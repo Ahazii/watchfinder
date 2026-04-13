@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
@@ -15,6 +16,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 _ENDED_MARKER = 'class="error-header-v2__title">We looked everywhere.</h1>'
+_SOLD_MARKER_RE = re.compile(
+    r'<div[^>]+class="[^"]*\bvim\b[^"]*\bd-top-panel-message\b[^"]*"[^>]*>.*?'
+    r'<span[^>]*>\s*This listing sold on\b.*?</span>',
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class EbayBrowseClient:
@@ -94,7 +100,8 @@ class EbayBrowseClient:
                 r = client.get(web_url, headers=headers)
                 if r.status_code >= 400:
                     return None
-                return _ENDED_MARKER in r.text
+                html = r.text
+                return (_ENDED_MARKER in html) or bool(_SOLD_MARKER_RE.search(html))
         except Exception:
             logger.debug("Could not check eBay page marker for %s", web_url, exc_info=True)
             return None
