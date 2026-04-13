@@ -20,6 +20,7 @@ from watchfinder.api.routes import (
     ingest_admin,
     listings,
     market,
+    not_interested,
     watch_link_reviews,
     watch_models,
     watchbase_search,
@@ -78,6 +79,7 @@ app.add_middleware(
 
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(listings.router, prefix="/api")
+app.include_router(not_interested.router, prefix="/api")
 app.include_router(watch_models.router, prefix="/api")
 app.include_router(watch_link_reviews.router, prefix="/api")
 app.include_router(candidates.router, prefix="/api")

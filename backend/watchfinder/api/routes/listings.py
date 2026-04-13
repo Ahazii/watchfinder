@@ -26,6 +26,7 @@ from watchfinder.schemas.watch_models import PromoteWatchCatalogResponse, WatchM
 from watchfinder.services.pipeline import analyze_listing
 from watchfinder.services.valuation.sales_sync import sync_watch_sale_record
 from watchfinder.services.ingestion.live_refresh import refresh_listing_from_ebay
+from watchfinder.services.not_interested import mark_listing_id_not_interested
 from watchfinder.services.watch_models import (
     CatalogLinkOutcome,
     ensure_watch_catalog_for_listing,
@@ -167,6 +168,19 @@ def post_refresh_listing_from_ebay(
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
     return build_listing_detail(db, listing)
+
+
+@router.post("/{listing_id}/not-interested", response_model=dict)
+def post_mark_not_interested(listing_id: UUID, db: Session = Depends(get_db)) -> dict:
+    """Mark listing as not interested: block this eBay id and remove listing row."""
+    row = mark_listing_id_not_interested(
+        db,
+        listing_id,
+        source="listings",
+        reason="user_not_interested",
+    )
+    db.commit()
+    return {"status": "ok", "not_interested_id": str(row.id), "ebay_item_id": row.ebay_item_id}
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)

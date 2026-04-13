@@ -279,6 +279,25 @@ export type AppSettings = {
   watch_catalog_queue_require_identity?: boolean;
 };
 
+export type NotInterestedItem = {
+  id: string;
+  ebay_item_id: string;
+  source?: string | null;
+  reason?: string | null;
+  note?: string | null;
+  last_listing_title?: string | null;
+  last_listing_web_url?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  restored_at?: string | null;
+};
+
+export type NotInterestedListResponse = {
+  items: NotInterestedItem[];
+  total: number;
+};
+
 export type EverywatchDebugFetchRow = {
   url: string;
   status_code: number | null;

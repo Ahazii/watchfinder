@@ -24,6 +24,7 @@ export default function WatchReviewQueuePage() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [queueRequireIdentity, setQueueRequireIdentity] = useState(true);
   const [queueToggleBusy, setQueueToggleBusy] = useState(false);
+  const [notInterestedBusyId, setNotInterestedBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setErr(null);
@@ -94,6 +95,22 @@ export default function WatchReviewQueuePage() {
       .catch((e: Error) => setErr(e.message))
       .finally(() => setQueueToggleBusy(false));
   }, [queueRequireIdentity]);
+
+  const markNotInterested = useCallback((reviewId: string) => {
+    setNotInterestedBusyId(reviewId);
+    setErr(null);
+    fetch(apiUrl(`/api/watch-link-reviews/${reviewId}/not-interested`), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return fetchJson<WatchLinkReviewListResponse>("/api/watch-link-reviews?limit=100");
+      })
+      .then(setData)
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setNotInterestedBusyId(null));
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -226,9 +243,20 @@ export default function WatchReviewQueuePage() {
                       </p>
                     ) : null}
                   </div>
-                  <Button asChild>
-                    <Link href={`/watch-review/detail/?id=${row.id}`}>Review</Link>
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={notInterestedBusyId === row.id}
+                      onClick={() => markNotInterested(row.id)}
+                      title="Remove listing and block this eBay item id from future ingest"
+                    >
+                      {notInterestedBusyId === row.id ? "…" : "Not interested"}
+                    </Button>
+                    <Button asChild>
+                      <Link href={`/watch-review/detail/?id=${row.id}`}>Review</Link>
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

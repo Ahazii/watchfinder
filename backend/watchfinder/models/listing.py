@@ -305,3 +305,27 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class NotInterestedListing(Base):
+    """Blocklist for eBay item ids a user marked as not interested."""
+
+    __tablename__ = "not_interested_listings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    ebay_item_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    source: Mapped[str | None] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(255))
+    note: Mapped[str | None] = mapped_column(Text)
+    last_listing_title: Mapped[str | None] = mapped_column(Text)
+    last_listing_web_url: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

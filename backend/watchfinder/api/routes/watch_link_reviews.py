@@ -23,6 +23,7 @@ from watchfinder.services.watch_models.catalog import (
     create_catalog_from_listing_identity,
     sync_unmatched_listings_watch_catalog,
 )
+from watchfinder.services.not_interested import mark_listing_id_not_interested
 
 router = APIRouter(prefix="/watch-link-reviews", tags=["watch-link-reviews"])
 
@@ -199,3 +200,21 @@ def resolve_watch_link_review(
         listing_id=listing.id,
         watch_model_id=listing.watch_model_id,
     )
+
+
+@router.post("/{review_id}/not-interested", response_model=dict)
+def mark_review_listing_not_interested(
+    review_id: UUID,
+    db: Session = Depends(get_db),
+) -> dict:
+    rev = db.get(WatchModelLinkReview, review_id)
+    if not rev:
+        raise HTTPException(status_code=404, detail="Review not found")
+    row = mark_listing_id_not_interested(
+        db,
+        rev.listing_id,
+        source="match_queue",
+        reason="user_not_interested",
+    )
+    db.commit()
+    return {"status": "ok", "not_interested_id": str(row.id), "ebay_item_id": row.ebay_item_id}

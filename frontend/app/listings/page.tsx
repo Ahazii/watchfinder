@@ -78,6 +78,7 @@ export default function ListingsPage() {
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
   const [promoteBusyId, setPromoteBusyId] = useState<string | null>(null);
+  const [notInterestedBusyId, setNotInterestedBusyId] = useState<string | null>(null);
   const [promoteMsg, setPromoteMsg] = useState<string | null>(null);
   const [recheckBusy, setRecheckBusy] = useState(false);
   const [recheckMsg, setRecheckMsg] = useState<string | null>(null);
@@ -157,6 +158,22 @@ export default function ListingsPage() {
       })
       .catch((e: Error) => setPromoteMsg(e.message))
       .finally(() => setPromoteBusyId(null));
+  };
+
+  const markNotInterested = (listingId: string) => {
+    setNotInterestedBusyId(listingId);
+    setPromoteMsg(null);
+    fetch(apiUrl(`/api/listings/${listingId}/not-interested`), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        setPromoteMsg("Moved one listing to not interested.");
+        setQueryNonce((n) => n + 1);
+      })
+      .catch((e: Error) => setPromoteMsg(e.message))
+      .finally(() => setNotInterestedBusyId(null));
   };
 
   const recheckVisibleActiveStatus = async () => {
@@ -383,8 +400,10 @@ export default function ListingsPage() {
               sortBy={sortBy}
               sortDir={sortDir}
               promoteBusyId={promoteBusyId}
+              notInterestedBusyId={notInterestedBusyId}
               thumbSizeClass={listingsThumbClass}
               onPromoteToCatalog={promoteToCatalog}
+              onMarkNotInterested={markNotInterested}
               onSort={(column) => {
                 if (sortBy === column) {
                   setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -441,16 +460,20 @@ function ListingsTable({
   sortDir,
   onSort,
   promoteBusyId,
+  notInterestedBusyId,
   thumbSizeClass,
   onPromoteToCatalog,
+  onMarkNotInterested,
 }: {
   rows: ListingSummary[];
   sortBy: string;
   sortDir: SortDir;
   onSort: (column: string) => void;
   promoteBusyId: string | null;
+  notInterestedBusyId: string | null;
   thumbSizeClass: string;
   onPromoteToCatalog: (listingId: string) => void;
+  onMarkNotInterested: (listingId: string) => void;
 }) {
   if (!rows.length) {
     return <p className="text-sm text-muted-foreground">No rows.</p>;
@@ -572,26 +595,38 @@ function ListingsTable({
               </Button>
             </TableCell>
             <TableCell className="text-right align-top">
-              {r.watch_model_id ? (
-                <Link
-                  href={`/watch-models/detail/?id=${r.watch_model_id}`}
-                  className="inline-block text-sm font-medium text-primary hover:underline"
-                  title="Open linked watch database entry"
-                >
-                  In watch DB
-                </Link>
-              ) : (
+              <div className="flex flex-col items-end gap-2">
+                {r.watch_model_id ? (
+                  <Link
+                    href={`/watch-models/detail/?id=${r.watch_model_id}`}
+                    className="inline-block text-sm font-medium text-primary hover:underline"
+                    title="Open linked watch database entry"
+                  >
+                    In watch DB
+                  </Link>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={promoteBusyId === r.id}
+                    title="Save to watch database — create or link a catalog row from this listing"
+                    onClick={() => onPromoteToCatalog(r.id)}
+                  >
+                    {promoteBusyId === r.id ? "…" : "Add to DB"}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={promoteBusyId === r.id}
-                  title="Save to watch database — create or link a catalog row from this listing"
-                  onClick={() => onPromoteToCatalog(r.id)}
+                  disabled={notInterestedBusyId === r.id}
+                  onClick={() => onMarkNotInterested(r.id)}
+                  title="Remove this listing and block the eBay item id from future ingest"
                 >
-                  {promoteBusyId === r.id ? "…" : "Add to DB"}
+                  {notInterestedBusyId === r.id ? "…" : "Not interested"}
                 </Button>
-              )}
+              </div>
             </TableCell>
           </TableRow>
         ))}

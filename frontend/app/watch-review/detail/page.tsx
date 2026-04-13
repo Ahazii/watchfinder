@@ -119,6 +119,32 @@ function Body() {
           <Button variant="outline" size="sm" asChild className="ml-2">
             <Link href={`/listings/detail/?id=${row.listing_id}`}>Open in WatchFinder</Link>
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-2"
+            disabled={busy !== null}
+            onClick={() => {
+              setBusy("not-interested");
+              setMsg(null);
+              fetch(apiUrl(`/api/watch-link-reviews/${id}/not-interested`), {
+                method: "POST",
+                headers: { Accept: "application/json" },
+              })
+                .then(async (res) => {
+                  if (!res.ok) throw new Error(await res.text());
+                  return res.json() as Promise<{ ebay_item_id: string }>;
+                })
+                .then((r) => {
+                  router.push(`/not-interested/?q=${encodeURIComponent(r.ebay_item_id)}`);
+                })
+                .catch((e: Error) => setMsg(e.message))
+                .finally(() => setBusy(null));
+            }}
+          >
+            {busy === "not-interested" ? "…" : "Not interested"}
+          </Button>
           {row.reason_codes?.length ? (
             <p className="pt-2 text-xs text-muted-foreground">
               Reasons: {row.reason_codes.join(", ")}

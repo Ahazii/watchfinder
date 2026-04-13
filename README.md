@@ -41,6 +41,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | `/watch-models/everywatch-test/?id=<uuid>` | Debug Everywatch HTML / mapping (optional Cookie header): **`/watch-listing?query=…`** probes, parsed hit table, detail **specs / image / GBP price rows**; does not import into catalog |
 | `/watch-review/` | **Match queue** — pending catalogue links (review mode) |
 | `/watch-review/detail/?id=<review-uuid>` | Resolve one queue item (match / create / dismiss) |
+| `/not-interested/` | Manage blocked eBay items (restore interest or delete history records) |
 | `/listings/detail/?id=<uuid>` | Listing detail, **editable valuation**, **watch catalog link** (override / clear), internal comps, **Save** → `PATCH /api/listings/{id}` |
 | `/api/...` | JSON API (same origin as UI in Docker) |
 | `/docs` | Swagger UI |
@@ -54,6 +55,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | GET | `/api/listings` | Paginated listings + query filters (**`title_q`**, brand, price, repair, **`listing_active`**: `active` / `inactive` / `all`, **`exclude_quartz`**, etc.); rows include **`image_urls`**, **`is_active`**; **`sort_by`** / **`sort_dir`** — see OpenAPI |
 | GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
+| POST | `/api/listings/{uuid}/not-interested` | Mark listing as **not interested**: add/activate blocklist record for this eBay item id, then remove listing row |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
 | POST | `/api/listings/{uuid}/refresh-from-ebay` | Browse **getItem** + eBay page check: refresh row and set **`is_active=false`** only when the listing page contains **`<h1 class="error-header-v2__title">We looked everywhere.</h1>`** |
 | GET | `/api/watch-models` | Paginated catalog (`skip`/`limit`). **`q`** — case-insensitive substring OR across brand, reference, model family, model name. Optional **AND** filters (contains): **`brand`**, **`reference`**, **`model_family`**, **`model_name`**, **`caliber`**. **`pricing`**: `all` (default), **`has_signal`** (any manual/observed £ or WatchBase points), **`missing_signal`**, **`strict_needs`** / **`strict_ok`** (batch “without pricing” rule). **`import_status`**: `all`, **`unmatched`** (no **`reference_url`** or never **`watchbase_imported_at`**), **`matched`**. Brands in **`WATCH_CATALOG_EXCLUDED_BRANDS`** are omitted from this list (and from listing link pickers using the same API). Rows include **`linked_ebay_urls`** and specs |
@@ -63,6 +65,10 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | POST | `/api/watch-link-reviews/sync-from-unmatched` | Re-analyze every **active** listing with **no** `watch_model_id` (same rules as ingest **analyze**): in **review** mode, eligible rows enqueue; in **auto** mode, link or create catalog rows. Returns the same counter object as **`…/backfill-from-listings`** |
 | GET | `/api/watch-link-reviews/{uuid}` | One queue item + scored candidate models |
 | POST | `/api/watch-link-reviews/{uuid}/resolve` | Body `{ "action": "match"|"create"|"dismiss", "watch_model_id"?: uuid }` |
+| POST | `/api/watch-link-reviews/{uuid}/not-interested` | Mark the queued listing as not interested and remove it from listings/match queue |
+| GET | `/api/not-interested` | List not-interested records (`active_only`, `q`, `skip`, `limit`) |
+| POST | `/api/not-interested/{uuid}/restore` | Set record inactive (**I am interested**) so ingest can include that eBay item id again |
+| DELETE | `/api/not-interested/{uuid}` | Permanently delete one not-interested history record |
 | GET | `/api/watch-models/{uuid}` | One model; includes **`linked_ebay_urls`** (active linked listings’ **`web_url`** values) |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
 | GET | `/api/watchbase/search?q=…` | Proxies WatchBase **`/filter/results?q=`** (their on-site search). Returns watch page URLs + labels for the find wizard. **`WATCHBASE_IMPORT_ENABLED=false`** disables |
@@ -102,6 +108,7 @@ After upgrading, run **`alembic upgrade head`** (through **008** / market snapsh
 - **`is_active`** is set **`false`** by **Refresh from eBay** / stale refresh when the listing web page contains **`<h1 class="error-header-v2__title">We looked everywhere.</h1>`**. Ingest search alone does **not** mark missing rows inactive (an item can leave your result set but still be live).
 - **Listings** / **candidates** list APIs default to **`listing_active=active`** (active rows only). Use **`listing_active=all`** or **`inactive`** to include or isolate ended listings. **Detail** still returns inactive rows so you can refresh or read history.
 - **Listings UI state persistence:** filters, active/inactive mode, sort, and pagination offset are saved in browser **`localStorage`** (key **`watchfinder-listings-state-v1`**) so Back navigation returns to your previous list view.
+- **Not interested blocklist:** marking a listing as **Not interested** stores its `ebay_item_id` in **`not_interested_listings`** (active) and removes the current listing row. Ingest skips active blocklist ids so they are not re-downloaded until you restore interest on **`/not-interested/`**.
 
 ## Ingest searches (UI + API)
 

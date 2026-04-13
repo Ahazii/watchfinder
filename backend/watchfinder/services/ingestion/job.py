@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from watchfinder.config import Settings, get_settings
-from watchfinder.models import Listing, ListingSnapshot
+from watchfinder.models import Listing, ListingSnapshot, NotInterestedListing
 from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ebay.api_usage import increment_browse_search
 from watchfinder.services.ingestion.mapper import item_summary_to_listing_fields
@@ -71,6 +71,14 @@ def run_browse_ingest(
                 continue
 
             ebay_id = fields["ebay_item_id"]
+            is_blocked = db.execute(
+                select(NotInterestedListing.id).where(
+                    NotInterestedListing.ebay_item_id == ebay_id,
+                    NotInterestedListing.is_active.is_(True),
+                )
+            ).scalar_one_or_none()
+            if is_blocked:
+                continue
             existing = db.execute(
                 select(Listing).where(Listing.ebay_item_id == ebay_id)
             ).scalar_one_or_none()

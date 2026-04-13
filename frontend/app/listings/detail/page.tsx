@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson } from "@/lib/api";
 import type {
   ListingDetail,
@@ -66,6 +66,7 @@ function SourceSelect({
 
 function DetailBody() {
   const sp = useSearchParams();
+  const router = useRouter();
   const id = sp.get("id");
   const [row, setRow] = useState<ListingDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -93,6 +94,7 @@ function DetailBody() {
   const [promoteErr, setPromoteErr] = useState<string | null>(null);
   const [promoteOk, setPromoteOk] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
+  const [notInterestedBusy, setNotInterestedBusy] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -161,6 +163,25 @@ function DetailBody() {
       })
       .catch((e: Error) => setRefreshMsg(e.message))
       .finally(() => setRefreshBusy(false));
+  };
+
+  const markNotInterested = () => {
+    if (!id) return;
+    setNotInterestedBusy(true);
+    setRefreshMsg(null);
+    fetch(apiUrl(`/api/listings/${id}/not-interested`), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<{ ebay_item_id: string }>;
+      })
+      .then((r) => {
+        router.push(`/not-interested/?q=${encodeURIComponent(r.ebay_item_id)}`);
+      })
+      .catch((e: Error) => setRefreshMsg(e.message))
+      .finally(() => setNotInterestedBusy(false));
   };
 
   useEffect(() => {
@@ -325,6 +346,16 @@ function DetailBody() {
             onClick={refreshFromEbay}
           >
             {refreshBusy ? "Refreshing…" : "Refresh from eBay"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-w-[132px]"
+            disabled={notInterestedBusy}
+            onClick={markNotInterested}
+            title="Remove this listing and block the eBay item id from future ingest"
+          >
+            {notInterestedBusy ? "Working…" : "Not interested"}
           </Button>
         </div>
       </div>
