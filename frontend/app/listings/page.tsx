@@ -31,6 +31,28 @@ import { ListingThumb } from "@/components/listing-thumb";
 import { TableThumbSizeSelect } from "@/components/table-thumb-size-select";
 import { TABLE_THUMB_STORAGE, usePersistedTableThumbSize } from "@/lib/table-thumb-sizes";
 
+const LISTINGS_STATE_KEY = "watchfinder-listings-state-v1";
+
+type ListingsPageState = {
+  filters: {
+    title_q: string;
+    brand: string;
+    price_min: string;
+    price_max: string;
+    repair_keyword: string;
+    condition_q: string;
+    movement: string;
+    caliber_known: string;
+    confidence_min: string;
+    profit_min: string;
+    listing_active: "active" | "inactive" | "all";
+    exclude_quartz: boolean;
+  };
+  skip: number;
+  sortBy: string;
+  sortDir: SortDir;
+};
+
 export default function ListingsPage() {
   const [filters, setFilters] = useState({
     title_q: "",
@@ -54,12 +76,38 @@ export default function ListingsPage() {
   const [data, setData] = useState<ListingListResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [promoteBusyId, setPromoteBusyId] = useState<string | null>(null);
   const [promoteMsg, setPromoteMsg] = useState<string | null>(null);
+  const [recheckBusy, setRecheckBusy] = useState(false);
+  const [recheckMsg, setRecheckMsg] = useState<string | null>(null);
   const { sizeId: listingsThumbId, setSizeId: setListingsThumbId, sizeClass: listingsThumbClass } =
     usePersistedTableThumbSize(TABLE_THUMB_STORAGE.listings);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LISTINGS_STATE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ListingsPageState;
+        if (parsed?.filters) setFilters(parsed.filters);
+        if (typeof parsed?.skip === "number" && parsed.skip >= 0) setSkip(parsed.skip);
+        if (typeof parsed?.sortBy === "string" && parsed.sortBy) setSortBy(parsed.sortBy);
+        if (parsed?.sortDir === "asc" || parsed?.sortDir === "desc") setSortDir(parsed.sortDir);
+      }
+    } catch {
+      // Ignore malformed local state; defaults remain.
+    } finally {
+      setReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const state: ListingsPageState = { filters, skip, sortBy, sortDir };
+    localStorage.setItem(LISTINGS_STATE_KEY, JSON.stringify(state));
+  }, [ready, filters, skip, sortBy, sortDir]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -91,8 +139,9 @@ export default function ListingsPage() {
   }, [skip, limit, sortBy, sortDir]);
 
   useEffect(() => {
+    if (!ready) return;
     void load();
-  }, [skip, queryNonce, load]);
+  }, [skip, queryNonce, load, ready]);
 
   const promoteToCatalog = (listingId: string) => {
     setPromoteBusyId(listingId);
@@ -108,6 +157,37 @@ export default function ListingsPage() {
       })
       .catch((e: Error) => setPromoteMsg(e.message))
       .finally(() => setPromoteBusyId(null));
+  };
+
+  const recheckVisibleActiveStatus = async () => {
+    if (!data?.items?.length) return;
+    setRecheckBusy(true);
+    setRecheckMsg(null);
+    let checked = 0;
+    let ended = 0;
+    let failed = 0;
+    for (const row of data.items) {
+      try {
+        const res = await fetch(apiUrl(`/api/listings/${row.id}/refresh-from-ebay`), {
+          method: "POST",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          failed += 1;
+          continue;
+        }
+        const detail = (await res.json()) as { is_active?: boolean };
+        checked += 1;
+        if (detail.is_active === false) ended += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setRecheckMsg(
+      `Rechecked ${checked} row(s) on this page: ${ended} inactive, ${failed} failed.`,
+    );
+    setQueryNonce((n) => n + 1);
+    setRecheckBusy(false);
   };
 
   return (
@@ -257,6 +337,15 @@ export default function ListingsPage() {
             >
               Clear
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={recheckBusy || !data?.items?.length}
+              onClick={() => void recheckVisibleActiveStatus()}
+              title='Refresh active status for rows on this page using eBay page marker "We looked everywhere."'
+            >
+              {recheckBusy ? "Rechecking…" : "Recheck active (this page)"}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -284,6 +373,9 @@ export default function ListingsPage() {
           </div>
           {promoteMsg ? (
             <p className="text-sm text-muted-foreground">{promoteMsg}</p>
+          ) : null}
+          {recheckMsg ? (
+            <p className="text-sm text-muted-foreground">{recheckMsg}</p>
           ) : null}
           <div className="overflow-x-auto rounded-lg border border-border">
             <ListingsTable
@@ -406,6 +498,9 @@ function ListingsTable({
             sortDir={sortDir}
             onSort={onSort}
           />
+          <TableHead className="w-[1%] whitespace-nowrap text-right text-muted-foreground">
+            eBay
+          </TableHead>
           <TableHead
             className="w-[1%] whitespace-nowrap text-right text-muted-foreground"
             title="Linked to a row in the watch database (catalog), or add one from this listing."
@@ -458,6 +553,23 @@ function ListingsTable({
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">
               {dateShort(r.last_seen_at)}
+            </TableCell>
+            <TableCell className="text-right align-top">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!r.web_url}
+                asChild={Boolean(r.web_url)}
+              >
+                {r.web_url ? (
+                  <a href={r.web_url} target="_blank" rel="noopener noreferrer">
+                    View
+                  </a>
+                ) : (
+                  <span>View</span>
+                )}
+              </Button>
             </TableCell>
             <TableCell className="text-right align-top">
               {r.watch_model_id ? (

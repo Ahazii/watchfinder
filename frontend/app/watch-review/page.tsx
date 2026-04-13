@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiUrl, fetchJson } from "@/lib/api";
-import type { BackfillWatchCatalogResponse, WatchLinkReviewListResponse } from "@/lib/types";
+import type {
+  AppSettings,
+  BackfillWatchCatalogResponse,
+  WatchLinkReviewListResponse,
+} from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,11 +22,21 @@ export default function WatchReviewQueuePage() {
   const [err, setErr] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [queueRequireIdentity, setQueueRequireIdentity] = useState(true);
+  const [queueToggleBusy, setQueueToggleBusy] = useState(false);
 
   const load = useCallback(() => {
     setErr(null);
     fetchJson<WatchLinkReviewListResponse>("/api/watch-link-reviews?limit=100")
       .then(setData)
+      .catch((e: Error) => setErr(e.message));
+  }, []);
+
+  const loadQueueIdentitySetting = useCallback(() => {
+    fetchJson<AppSettings>("/api/settings")
+      .then((s) => {
+        setQueueRequireIdentity(s.watch_catalog_queue_require_identity !== false);
+      })
       .catch((e: Error) => setErr(e.message));
   }, []);
 
@@ -53,7 +67,33 @@ export default function WatchReviewQueuePage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadQueueIdentitySetting();
+  }, [load, loadQueueIdentitySetting]);
+
+  const toggleQueueIdentityRequirement = useCallback(() => {
+    setQueueToggleBusy(true);
+    setErr(null);
+    const next = !queueRequireIdentity;
+    fetch(apiUrl("/api/settings"), {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        watch_catalog_queue_require_identity: next,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<AppSettings>;
+      })
+      .then((s) => {
+        setQueueRequireIdentity(s.watch_catalog_queue_require_identity !== false);
+      })
+      .catch((e: Error) => setErr(e.message))
+      .finally(() => setQueueToggleBusy(false));
+  }, [queueRequireIdentity]);
 
   return (
     <div className="space-y-6">
@@ -73,6 +113,19 @@ export default function WatchReviewQueuePage() {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={queueRequireIdentity ? "outline" : "default"}
+            disabled={queueToggleBusy}
+            onClick={toggleQueueIdentityRequirement}
+            title='Toggle queue identity gate: "brand + (reference or model family)".'
+          >
+            {queueToggleBusy
+              ? "Saving…"
+              : queueRequireIdentity
+                ? "Require identity: ON"
+                : "Require identity: OFF"}
+          </Button>
           <Button
             type="button"
             variant="default"
@@ -105,6 +158,11 @@ export default function WatchReviewQueuePage() {
             <li>
               <strong className="text-foreground">Review queue mode</strong> is required for items to appear
               here. In <strong>Automatic</strong> mode, the app links or creates catalog rows without asking.
+            </li>
+            <li>
+              <strong className="text-foreground">Require identity</strong> (button above) controls whether
+              queueing needs parsed <strong>brand + (reference or model family)</strong>. Turn it{" "}
+              <strong>off</strong> to include identity-poor listings for manual review.
             </li>
             <li>
               <strong className="text-foreground">Sync unmatched</strong> walks every <strong>active</strong>{" "}

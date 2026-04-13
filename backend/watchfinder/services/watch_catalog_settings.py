@@ -8,6 +8,7 @@ from watchfinder.models import AppSetting
 
 KEY_REVIEW_MODE = "watch_catalog_review_mode"
 KEY_EXCLUDED_BRANDS = "watch_catalog_excluded_brands"
+KEY_QUEUE_REQUIRE_IDENTITY = "watch_catalog_queue_require_identity"
 VALID_MODES = frozenset({"auto", "review"})
 
 
@@ -47,4 +48,23 @@ def set_watch_catalog_excluded_brands_text(db: Session, value: str | None) -> No
         row.value_text = v
     else:
         db.add(AppSetting(key=KEY_EXCLUDED_BRANDS, value_text=v))
+    db.commit()
+
+
+def get_watch_catalog_queue_require_identity(db: Session) -> bool:
+    """If true, only queue listings with brand + (reference or family)."""
+    row = db.get(AppSetting, KEY_QUEUE_REQUIRE_IDENTITY)
+    if not row or row.value_text is None:
+        return True
+    v = row.value_text.strip().lower()
+    return v not in {"0", "false", "no", "off"}
+
+
+def set_watch_catalog_queue_require_identity(db: Session, enabled: bool) -> None:
+    row = db.get(AppSetting, KEY_QUEUE_REQUIRE_IDENTITY)
+    txt = "true" if bool(enabled) else "false"
+    if row:
+        row.value_text = txt
+    else:
+        db.add(AppSetting(key=KEY_QUEUE_REQUIRE_IDENTITY, value_text=txt))
     db.commit()

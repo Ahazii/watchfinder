@@ -33,7 +33,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | URL | What it is |
 |-----|------------|
 | `/` | Dashboard (stats, **eBay Browse / OAuth call counters**, recent listings with thumbs) |
-| `/listings/` | Listings + filters (**Title contains**, brand, price, etc.), sortable columns, thumbnails |
+| `/listings/` | Listings + filters (**Title contains**, brand, price, etc.), sortable columns, thumbnails, **View on eBay** per row |
 | `/candidates/` | Repair candidates (same filters as listings where applicable) |
 | `/settings/` | Browse search lines, **interval** + **items per search line** (1–200), **stale listing refresh** (optional scheduler), **match queue sync** interval (re-process active listings with no catalog link), watch-catalog mode, **Ingest now** / **Stale refresh now** |
 | `/watch-models/` | **Watch database** — catalog CRUD (canonical models, manual + observed price bounds) |
@@ -55,7 +55,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
-| POST | `/api/listings/{uuid}/refresh-from-ebay` | Browse **getItem** for this row: refresh price/title/images; **`404`** → set **`is_active=false`** (listing drops off default lists) |
+| POST | `/api/listings/{uuid}/refresh-from-ebay` | Browse **getItem** + eBay page check: refresh row and set **`is_active=false`** only when the listing page contains **`<h1 class="error-header-v2__title">We looked everywhere.</h1>`** |
 | GET | `/api/watch-models` | Paginated catalog (`skip`/`limit`). **`q`** — case-insensitive substring OR across brand, reference, model family, model name. Optional **AND** filters (contains): **`brand`**, **`reference`**, **`model_family`**, **`model_name`**, **`caliber`**. **`pricing`**: `all` (default), **`has_signal`** (any manual/observed £ or WatchBase points), **`missing_signal`**, **`strict_needs`** / **`strict_ok`** (batch “without pricing” rule). **`import_status`**: `all`, **`unmatched`** (no **`reference_url`** or never **`watchbase_imported_at`**), **`matched`**. Brands in **`WATCH_CATALOG_EXCLUDED_BRANDS`** are omitted from this list (and from listing link pickers using the same API). Rows include **`linked_ebay_urls`** and specs |
 | POST | `/api/watch-models` | Create model |
 | POST | `/api/watch-models/backfill-from-listings` | Scan active listings; link or create catalog rows (same rules as ingest analyze) |
@@ -98,9 +98,10 @@ After upgrading, run **`alembic upgrade head`** (through **008** / market snapsh
 
 ### Listing `is_active` and live checks
 
-- **`listings.is_active`** is set **`true`** when an item appears in Browse **ingest** results or when **`POST /api/listings/{id}/refresh-from-ebay`** returns a live **getItem** payload.
-- **`is_active`** is set **`false`** when **getItem** returns **404** (ended / removed from Buy Browse). Use **Refresh from eBay** on the listing detail page, **`POST /api/listings/{id}/refresh-from-ebay`**, or a **stale listing refresh** batch when **getItem** returns 404 for that row. Ingest search alone does **not** mark missing rows inactive (an item can leave your result set but still be live).
+- **`listings.is_active`** is set **`true`** when an item appears in Browse **ingest** results, and remains true on refresh unless an ended marker is detected.
+- **`is_active`** is set **`false`** by **Refresh from eBay** / stale refresh when the listing web page contains **`<h1 class="error-header-v2__title">We looked everywhere.</h1>`**. Ingest search alone does **not** mark missing rows inactive (an item can leave your result set but still be live).
 - **Listings** / **candidates** list APIs default to **`listing_active=active`** (active rows only). Use **`listing_active=all`** or **`inactive`** to include or isolate ended listings. **Detail** still returns inactive rows so you can refresh or read history.
+- **Listings UI state persistence:** filters, active/inactive mode, sort, and pagination offset are saved in browser **`localStorage`** (key **`watchfinder-listings-state-v1`**) so Back navigation returns to your previous list view.
 
 ## Ingest searches (UI + API)
 

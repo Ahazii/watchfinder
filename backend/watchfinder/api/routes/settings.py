@@ -46,8 +46,10 @@ from watchfinder.services.everywatch_credentials_settings import (
 )
 from watchfinder.services.watch_catalog_settings import (
     get_watch_catalog_excluded_brands_text,
+    get_watch_catalog_queue_require_identity,
     get_watch_catalog_review_mode,
     set_watch_catalog_excluded_brands_text,
+    set_watch_catalog_queue_require_identity,
     set_watch_catalog_review_mode,
 )
 from watchfinder.match_queue_sync_worker import scheduled_match_queue_sync_job
@@ -81,6 +83,7 @@ def _settings_out(db: Session) -> SettingsOut:
             db, cfg
         ),
         match_queue_sync_interval_minutes=get_match_queue_sync_interval_minutes(db, cfg),
+        watch_catalog_queue_require_identity=get_watch_catalog_queue_require_identity(db),
         watch_catalog_excluded_brands=get_watch_catalog_excluded_brands_text(db),
         everywatch_login_email=get_everywatch_login_email(db),
         everywatch_password_configured=everywatch_password_configured(db),
@@ -126,6 +129,10 @@ def patch_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> Settin
         )
     if body.match_queue_sync_interval_minutes is not None:
         set_match_queue_sync_interval_minutes(db, body.match_queue_sync_interval_minutes)
+    if body.watch_catalog_queue_require_identity is not None:
+        set_watch_catalog_queue_require_identity(
+            db, body.watch_catalog_queue_require_identity
+        )
     if body.watch_catalog_excluded_brands is not None:
         set_watch_catalog_excluded_brands_text(db, body.watch_catalog_excluded_brands)
     if body.everywatch_login_email is not None or body.everywatch_login_password is not None:

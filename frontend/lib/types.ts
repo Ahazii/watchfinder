@@ -275,6 +275,8 @@ export type AppSettings = {
   stale_listing_refresh_min_age_hours?: number;
   /** 0 = no scheduled job; otherwise minutes between re-processing unmatched listings for the match queue */
   match_queue_sync_interval_minutes?: number;
+  /** Whether queue requires parsed brand + reference/family identity before enqueueing */
+  watch_catalog_queue_require_identity?: boolean;
 };
 
 export type EverywatchDebugFetchRow = {

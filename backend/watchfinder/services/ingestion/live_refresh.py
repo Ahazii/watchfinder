@@ -1,4 +1,4 @@
-"""Refresh one listing from Buy Browse getItem — live price/title and is_active."""
+"""Refresh one listing from Buy Browse getItem + eBay page marker active check."""
 
 from __future__ import annotations
 
@@ -28,10 +28,10 @@ def refresh_listing_from_ebay(
     browse: EbayBrowseClient | None = None,
 ) -> Literal["updated", "ended"]:
     """
-    GET /item/{id} for this row's ebay_item_id.
+    GET /item/{id} for this row's ebay_item_id, then verify active state from web page marker.
 
-    - **updated** — item found; row merged and re-analyzed
-    - **ended** — 404; ``is_active`` set False
+    - **updated** — item merged (or unavailable from Browse API) and listing does not show ended marker
+    - **ended** — eBay page shows "We looked everywhere." marker; ``is_active`` set False
 
     Pass ``browse`` to reuse one OAuth token across many getItem calls (e.g. stale batch).
     """
@@ -57,11 +57,21 @@ def refresh_listing_from_ebay(
         db.flush()
 
     if raw is None:
-        listing.is_active = False
+        ended_marker = browse_client.page_has_not_found_marker(listing.web_url)
+        listing.is_active = ended_marker is not True
         listing.last_seen_at = now
         db.commit()
-        logger.info("eBay getItem 404 — marked inactive %s", listing.ebay_item_id)
-        return "ended"
+        if ended_marker is True:
+            logger.info(
+                "eBay page marker indicates ended listing — marked inactive %s",
+                listing.ebay_item_id,
+            )
+            return "ended"
+        logger.info(
+            "Browse getItem unavailable but no ended-page marker detected; keeping active %s",
+            listing.ebay_item_id,
+        )
+        return "updated"
 
     fields = browse_item_to_listing_fields(raw)
     for k, v in fields.items():
@@ -69,7 +79,8 @@ def refresh_listing_from_ebay(
             continue
         setattr(listing, k, v)
     listing.last_seen_at = now
-    listing.is_active = True
+    ended_marker = browse_client.page_has_not_found_marker(fields.get("web_url") or listing.web_url)
+    listing.is_active = ended_marker is not True
     db.add(
         ListingSnapshot(
             listing_id=listing.id,
@@ -79,4 +90,4 @@ def refresh_listing_from_ebay(
     )
     analyze_listing(db, listing)
     db.commit()
-    return "updated"
+    return "ended" if ended_marker is True else "updated"

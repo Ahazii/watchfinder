@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **10 April 2026**
+Last updated: **13 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -38,6 +38,8 @@ This document records what is implemented in the repository versus the phased pl
 - **Live item** (`browse.py` **`get_item`**, `live_refresh.py`): **`POST /api/listings/{id}/refresh-from-ebay`**; increments **`browse_get_item`** usage counter; listing detail UI **Refresh from eBay**; **`404`** → **`is_active=false`**.
 - **Stale batch refresh**: APScheduler job **`stale_listing_refresh`** (`services/stale_listing_refresh.py`, **`stale_refresh_worker.py`**) — active listings with **`last_seen_at`** older than configurable **min age** (or null; **0** = any past timestamp), up to **max per run**, **~0.35s** between **getItem** calls. One shared **`EbayBrowseClient`** + **`EbayAuthClient`** per batch (single OAuth token while cached). Toggle + limits in **Settings** (persisted **`app_settings`**); env **`STALE_LISTING_REFRESH_*`** defaults. **`POST /api/ingest/stale-refresh-run`** for a manual batch; logs explain **attempted: 0** when no rows match the age filter.
 - **Listings / candidates API**: **`listing_active`** (**active** / **inactive** / **all**) and **`exclude_quartz`** query filters; UI status column and filters.
+- **Active-state refinement (Apr 2026):** listing refresh/stale refresh no longer rely on Browse **404** alone. Rows are marked inactive when the eBay web page contains **`<h1 class="error-header-v2__title">We looked everywhere.</h1>`**; otherwise they remain active.
+- **Listings UX (Apr 2026):** list page now has per-row **View on eBay**, a bulk **Recheck active (this page)** action (runs refresh check for visible rows), and persisted list state (filters/sort/pagination offset) via localStorage so browser Back returns to the prior filtered view.
 - **Schema** migrations **005**–**009**: **`ebay_item_id`** width **128**; **`watch_models`** spec columns + **`reference_url`**; **`external_price_history`** (JSONB) + **`watchbase_imported_at`**; **`008`** **`market_source_snapshots`** (Everywatch/Chrono24 JSON); **`009`** **`everywatch_url`** (optional exact Everywatch listing page for snapshots / **`GET /api/market/search`**).
 - **Tests**: **`pytest`**, **`tests/test_mapper.py`**, **`tests/test_stale_listing_refresh.py`** (bool parsing), **`tests/test_everywatch_client.py`** (Everywatch URL helpers); **`requirements-dev.txt`**; **`ingestion` package `__init__`** no longer imports **`job`** at import time (avoids loading DB for mapper-only tests).
 - **Watch catalog filtering**: **`GET /api/watch-models`** — **`pricing`** (`has_signal` / `missing_signal` / strict P3 gap), **`import_status`** (WatchBase unmatched vs matched), and excluded brands (**`WATCH_CATALOG_EXCLUDED_BRANDS`** env **merged** with **`watch_catalog_excluded_brands`** in **Settings** / **`app_settings`**). UI: **Price data** and **WatchBase** dropdowns on **`/watch-models/`**; batch presets call the same query params.

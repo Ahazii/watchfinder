@@ -34,6 +34,8 @@ class SettingsOut(BaseModel):
     stale_listing_refresh_min_age_hours: int = 12
     match_queue_sync_interval_minutes: int = 60
     """0 = do not run scheduled sync; otherwise minutes between unmatched-listing → queue passes."""
+    watch_catalog_queue_require_identity: bool = True
+    """If true, queue requires brand + (reference or family); if false, queue identity-poor rows too."""
     watch_catalog_excluded_brands: str = ""
     """Comma-separated brands from Settings UI; merged with env WATCH_CATALOG_EXCLUDED_BRANDS."""
     everywatch_login_email: str = ""
@@ -74,6 +76,10 @@ class SettingsPatch(BaseModel):
         ge=0,
         le=1440,
         description="0 = disable scheduled job; 15–1440 = minutes between runs",
+    )
+    watch_catalog_queue_require_identity: bool | None = Field(
+        None,
+        description="When true, queue requires brand + reference/family; when false, queue may include low-identity rows",
     )
     watch_catalog_excluded_brands: str | None = Field(
         None,

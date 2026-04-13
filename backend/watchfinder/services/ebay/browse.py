@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from watchfinder.config import Settings
 
 logger = logging.getLogger(__name__)
+_ENDED_MARKER = 'class="error-header-v2__title">We looked everywhere.</h1>'
 
 
 class EbayBrowseClient:
@@ -71,3 +72,29 @@ class EbayBrowseClient:
                 logger.error("Browse get_item failed: %s %s", r.status_code, r.text[:500])
             r.raise_for_status()
             return r.json()
+
+    def page_has_not_found_marker(self, web_url: str | None) -> bool | None:
+        """
+        Return True when the eBay web page shows the ended-listing marker.
+        Return False when page fetched and marker is absent.
+        Return None when URL missing or fetch fails.
+        """
+        if not web_url or not web_url.strip():
+            return None
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        try:
+            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                r = client.get(web_url, headers=headers)
+                if r.status_code >= 400:
+                    return None
+                return _ENDED_MARKER in r.text
+        except Exception:
+            logger.debug("Could not check eBay page marker for %s", web_url, exc_info=True)
+            return None

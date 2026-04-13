@@ -16,6 +16,7 @@ from watchfinder.services.valuation.effective import (
     effective_reference,
 )
 from watchfinder.services.watch_catalog_settings import get_watch_catalog_review_mode
+from watchfinder.services.watch_catalog_settings import get_watch_catalog_queue_require_identity
 from watchfinder.services.watch_models.candidates import rank_watch_model_candidates
 from watchfinder.services.watch_models.link_review import (
     delete_pending_reviews_for_listing,
@@ -145,6 +146,7 @@ def ensure_watch_catalog_for_listing(
     Else: full auto.
     """
     review_on = get_watch_catalog_review_mode(db) == "review" and not bypass_review
+    require_identity_for_queue = get_watch_catalog_queue_require_identity(db)
 
     if listing.watch_model_id is not None:
         delete_pending_reviews_for_listing(db, listing.id)
@@ -167,12 +169,32 @@ def ensure_watch_catalog_for_listing(
 
     brand = (parsed.get("brand") or "").strip() or None
     if not brand:
+        if review_on and not require_identity_for_queue:
+            candidates = rank_watch_model_candidates(
+                db,
+                brand="",
+                reference=None,
+                model_family=None,
+                title=listing.title,
+            )
+            upsert_pending_watch_link_review(db, listing, parsed, edit, candidates)
+            return CatalogLinkOutcome.QUEUED_FOR_REVIEW
         return CatalogLinkOutcome.SKIPPED_NO_IDENTITY
 
     ref, _ = effective_reference(parsed, edit)
     mf, _ = effective_model_family(parsed, edit)
     mf_clean = (mf or "").strip()
     if not ref and not mf_clean:
+        if review_on and not require_identity_for_queue:
+            candidates = rank_watch_model_candidates(
+                db,
+                brand=brand,
+                reference=None,
+                model_family=None,
+                title=listing.title,
+            )
+            upsert_pending_watch_link_review(db, listing, parsed, edit, candidates)
+            return CatalogLinkOutcome.QUEUED_FOR_REVIEW
         return CatalogLinkOutcome.SKIPPED_NO_IDENTITY
 
     if review_on:

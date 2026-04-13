@@ -62,6 +62,7 @@ export default function SettingsPage() {
   const [searchLimit, setSearchLimit] = useState(50);
   const [maxPages, setMaxPages] = useState(1);
   const [catalogReviewMode, setCatalogReviewMode] = useState<"auto" | "review">("auto");
+  const [queueRequireIdentity, setQueueRequireIdentity] = useState(true);
   const [catalogExcludedBrands, setCatalogExcludedBrands] = useState("");
   const [ewLoginEmail, setEwLoginEmail] = useState("");
   const [ewLoginPassword, setEwLoginPassword] = useState("");
@@ -87,6 +88,7 @@ export default function SettingsPage() {
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
+        setQueueRequireIdentity(d.watch_catalog_queue_require_identity !== false);
         setCatalogExcludedBrands(d.watch_catalog_excluded_brands ?? "");
         setEwLoginEmail(d.everywatch_login_email ?? "");
         setEwLoginPassword("");
@@ -122,6 +124,7 @@ export default function SettingsPage() {
       ingest_max_pages: maxPages,
       ingest_queries: payloadQueries,
       watch_catalog_review_mode: catalogReviewMode,
+      watch_catalog_queue_require_identity: queueRequireIdentity,
       watch_catalog_excluded_brands: catalogExcludedBrands,
       everywatch_login_email: ewLoginEmail.trim(),
       stale_listing_refresh_enabled: staleRefreshEnabled,
@@ -153,6 +156,7 @@ export default function SettingsPage() {
         setCatalogReviewMode(
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
+        setQueueRequireIdentity(d.watch_catalog_queue_require_identity !== false);
         setCatalogExcludedBrands(d.watch_catalog_excluded_brands ?? "");
         setEwLoginEmail(d.everywatch_login_email ?? "");
         setEwLoginPassword("");
@@ -322,6 +326,21 @@ export default function SettingsPage() {
             <option value="auto">Automatic — fuzzy match + create catalog rows without queue</option>
             <option value="review">Review queue — exact matches only; queue the rest</option>
           </select>
+          <div className="pt-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={queueRequireIdentity}
+                onChange={(e) => setQueueRequireIdentity(e.target.checked)}
+              />
+              Require parsed identity for queue entries (brand + reference/family)
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When disabled in <strong>Review queue</strong> mode, listings without full identity can still be
+              enqueued for manual decision instead of being skipped as no-identity.
+            </p>
+          </div>
           <div className="pt-2">
             <label className="text-sm font-medium" htmlFor="mq-sync">
               Match queue — sync from unmatched listings (minutes)

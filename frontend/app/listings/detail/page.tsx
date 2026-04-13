@@ -303,18 +303,25 @@ function DetailBody() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {row.web_url ? (
-            <Button asChild>
+          <Button
+            asChild={Boolean(row.web_url)}
+            disabled={!row.web_url}
+            className="min-w-[132px]"
+          >
+            {row.web_url ? (
               <a href={row.web_url} target="_blank" rel="noopener noreferrer">
                 View on eBay
               </a>
-            </Button>
-          ) : null}
+            ) : (
+              <span>View on eBay</span>
+            )}
+          </Button>
           <Button
             type="button"
             variant="outline"
+            className="min-w-[150px]"
             disabled={refreshBusy}
-            title="Browse API getItem — refresh price/title or mark inactive if listing ended"
+            title='Refresh from eBay and mark inactive only when page shows "We looked everywhere."'
             onClick={refreshFromEbay}
           >
             {refreshBusy ? "Refreshing…" : "Refresh from eBay"}
