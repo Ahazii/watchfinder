@@ -110,10 +110,18 @@ class Listing(Base):
         nullable=True,
     )
 
-    snapshots = relationship("ListingSnapshot", back_populates="listing")
-    parsed_attributes = relationship("ParsedAttribute", back_populates="listing")
-    repair_signals = relationship("RepairSignal", back_populates="listing")
-    opportunity_scores = relationship("OpportunityScore", back_populates="listing")
+    snapshots = relationship(
+        "ListingSnapshot", back_populates="listing", passive_deletes=True
+    )
+    parsed_attributes = relationship(
+        "ParsedAttribute", back_populates="listing", passive_deletes=True
+    )
+    repair_signals = relationship(
+        "RepairSignal", back_populates="listing", passive_deletes=True
+    )
+    opportunity_scores = relationship(
+        "OpportunityScore", back_populates="listing", passive_deletes=True
+    )
     listing_edit = relationship(
         "ListingEdit",
         back_populates="listing",
@@ -125,6 +133,7 @@ class Listing(Base):
         "WatchModelLinkReview",
         back_populates="listing",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
