@@ -97,3 +97,18 @@ class SettingsPatch(BaseModel):
 class IngestRunResponse(BaseModel):
     status: str
     message: str
+
+
+class ActiveRefreshStatusResponse(BaseModel):
+    running: bool
+    total: int = 0
+    processed: int = 0
+    updated: int = 0
+    ended: int = 0
+    errors: int = 0
+    current_item_id: str | None = None
+    current_index: int = 0
+    last_status: str | None = None
+    last_error: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None

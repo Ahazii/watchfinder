@@ -279,6 +279,21 @@ export type AppSettings = {
   watch_catalog_queue_require_identity?: boolean;
 };
 
+export type ActiveRefreshStatus = {
+  running: boolean;
+  total: number;
+  processed: number;
+  updated: number;
+  ended: number;
+  errors: number;
+  current_item_id?: string | null;
+  current_index: number;
+  last_status?: string | null;
+  last_error?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+};
+
 export type NotInterestedItem = {
   id: string;
   ebay_item_id: string;

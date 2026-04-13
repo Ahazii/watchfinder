@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -132,6 +133,16 @@ def iter_stale_active_listing_ids(
     return list(db.scalars(stmt).all())
 
 
+def iter_all_active_listing_ids(db: Session) -> list[UUID]:
+    """All currently active listings, oldest last_seen first (null first)."""
+    stmt = (
+        select(Listing.id)
+        .where(Listing.is_active.is_(True))
+        .order_by(Listing.last_seen_at.asc().nulls_first())
+    )
+    return list(db.scalars(stmt).all())
+
+
 def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> dict[str, int]:
     """
     Refresh up to max_per_run active listings stale by min_age_hours.
@@ -179,6 +190,99 @@ def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> 
         "errors": errors,
     }
     logger.info("Stale listing refresh finished: %s", result)
+    return result
+
+
+def run_full_active_listing_refresh(
+    db: Session,
+    *,
+    settings: Settings | None = None,
+    progress_cb=None,
+) -> dict[str, int]:
+    """
+    Re-check every active listing.
+    Uses adaptive pacing to reduce rate-limit spikes and supports UI progress callback.
+    """
+    settings = settings or get_settings()
+    ids = iter_all_active_listing_ids(db)
+    if progress_cb:
+        progress_cb(
+            {
+                "running": True,
+                "total": len(ids),
+                "processed": 0,
+                "updated": 0,
+                "ended": 0,
+                "errors": 0,
+                "current_item_id": None,
+                "current_index": 0,
+                "last_status": "Starting full active refresh",
+                "last_error": None,
+            }
+        )
+    shared_browse: EbayBrowseClient | None = None
+    if ids:
+        shared_browse = EbayBrowseClient(settings, EbayAuthClient(settings, db))
+    updated = ended = errors = 0
+    delay = 0.45
+    for idx, lid in enumerate(ids, start=1):
+        if idx > 1:
+            # Small jitter to avoid burst patterns.
+            time.sleep(delay + random.uniform(0.05, 0.2))
+        listing = db.get(Listing, lid)
+        eid = listing.ebay_item_id if listing else None
+        try:
+            outcome = refresh_listing_from_ebay(db, lid, settings, browse=shared_browse)
+            if outcome == "ended":
+                ended += 1
+                status = "Not Active"
+            else:
+                updated += 1
+                status = "Found Active"
+            # Ease pace upward gradually on success.
+            delay = max(0.3, delay * 0.96)
+            if progress_cb:
+                progress_cb(
+                    {
+                        "running": True,
+                        "total": len(ids),
+                        "processed": idx,
+                        "updated": updated,
+                        "ended": ended,
+                        "errors": errors,
+                        "current_item_id": eid,
+                        "current_index": idx,
+                        "last_status": status,
+                        "last_error": None,
+                    }
+                )
+        except Exception as exc:
+            logger.exception("Full active refresh failed listing_id=%s", lid)
+            errors += 1
+            # Back off harder after server/API problems.
+            delay = min(3.0, delay * 1.6)
+            if progress_cb:
+                progress_cb(
+                    {
+                        "running": True,
+                        "total": len(ids),
+                        "processed": idx,
+                        "updated": updated,
+                        "ended": ended,
+                        "errors": errors,
+                        "current_item_id": eid,
+                        "current_index": idx,
+                        "last_status": "Server response error",
+                        "last_error": str(exc),
+                    }
+                )
+    result = {
+        "attempted": len(ids),
+        "updated": updated,
+        "ended": ended,
+        "errors": errors,
+    }
+    logger.info("Full active listing refresh finished: %s", result)
     return result
 
 

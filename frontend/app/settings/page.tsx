@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiUrl, fetchJson } from "@/lib/api";
-import type { AppSettings, IngestQueryLine } from "@/lib/types";
+import type { ActiveRefreshStatus, AppSettings, IngestQueryLine } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -76,6 +76,8 @@ export default function SettingsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
+  const [activeRefreshStatus, setActiveRefreshStatus] = useState<ActiveRefreshStatus | null>(null);
+  const [activeRefreshMsg, setActiveRefreshMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setErr(null);
@@ -106,6 +108,26 @@ export default function SettingsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadActiveRefreshStatus = useCallback(() => {
+    fetchJson<ActiveRefreshStatus>("/api/ingest/active-refresh-all-status")
+      .then(setActiveRefreshStatus)
+      .catch(() => {
+        // Keep UI usable if polling fails.
+      });
+  }, []);
+
+  useEffect(() => {
+    loadActiveRefreshStatus();
+  }, [loadActiveRefreshStatus]);
+
+  useEffect(() => {
+    if (!activeRefreshStatus?.running) return;
+    const h = window.setInterval(() => {
+      loadActiveRefreshStatus();
+    }, 1200);
+    return () => window.clearInterval(h);
+  }, [activeRefreshStatus?.running, loadActiveRefreshStatus]);
 
   const save = () => {
     const payloadQueries = lines
@@ -213,6 +235,18 @@ export default function SettingsPage() {
     })
       .then((r) => setIngestMsg(r.message))
       .catch((e: Error) => setIngestMsg(e.message));
+  };
+
+  const fullActiveRefreshNow = () => {
+    setActiveRefreshMsg(null);
+    fetchJson<{ status: string; message: string }>("/api/ingest/active-refresh-all-run", {
+      method: "POST",
+    })
+      .then((r) => {
+        setActiveRefreshMsg(r.message);
+        loadActiveRefreshStatus();
+      })
+      .catch((e: Error) => setActiveRefreshMsg(e.message));
   };
 
   if (err && !data) {
@@ -686,6 +720,9 @@ export default function SettingsPage() {
       {ingestMsg ? (
         <p className="text-sm text-muted-foreground">{ingestMsg}</p>
       ) : null}
+      {activeRefreshMsg ? (
+        <p className="text-sm text-muted-foreground">{activeRefreshMsg}</p>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -708,6 +745,54 @@ export default function SettingsPage() {
           <Button type="button" variant="outline" onClick={staleRefreshNow}>
             Stale refresh now
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={Boolean(activeRefreshStatus?.running)}
+            onClick={fullActiveRefreshNow}
+            title="Checks every currently active listing with adaptive pacing/backoff and reports live progress."
+          >
+            {activeRefreshStatus?.running ? "Active refresh running…" : "Refresh ALL active now"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Active refresh progress</CardTitle>
+          <CardDescription>
+            Live progress for full active checks across all active rows. Status values reflect the latest item
+            check result from the server.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {!activeRefreshStatus ? (
+            <p className="text-muted-foreground">Status unavailable.</p>
+          ) : (
+            <>
+              <p>
+                {activeRefreshStatus.running ? "Running" : "Idle"} · item{" "}
+                <strong>
+                  {activeRefreshStatus.current_index || activeRefreshStatus.processed}
+                </strong>{" "}
+                of <strong>{activeRefreshStatus.total}</strong>
+              </p>
+              <p>
+                Updated active: <strong>{activeRefreshStatus.updated}</strong> · Marked not active:{" "}
+                <strong>{activeRefreshStatus.ended}</strong> · Errors:{" "}
+                <strong>{activeRefreshStatus.errors}</strong>
+              </p>
+              <p>
+                Current item: <code className="rounded bg-muted px-1">
+                  {activeRefreshStatus.current_item_id || "—"}
+                </code>{" "}
+                · Status: <strong>{activeRefreshStatus.last_status || "—"}</strong>
+              </p>
+              {activeRefreshStatus.last_error ? (
+                <p className="text-red-400">{activeRefreshStatus.last_error}</p>
+              ) : null}
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

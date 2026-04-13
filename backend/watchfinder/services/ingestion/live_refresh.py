@@ -57,8 +57,17 @@ def refresh_listing_from_ebay(
         db.flush()
 
     if raw is None:
-        ended_marker = browse_client.page_has_not_found_marker(listing.web_url)
-        listing.is_active = ended_marker is not True
+        ended_marker = browse_client.page_has_not_found_marker(
+            listing.web_url, item_id=listing.ebay_item_id
+        )
+        # Robust fallback:
+        # - explicit ended marker => inactive
+        # - explicit non-ended marker => active
+        # - unknown (e.g. repeated 5xx) => keep prior flag unchanged
+        if ended_marker is True:
+            listing.is_active = False
+        elif ended_marker is False:
+            listing.is_active = True
         listing.last_seen_at = now
         db.commit()
         if ended_marker is True:
@@ -67,10 +76,7 @@ def refresh_listing_from_ebay(
                 listing.ebay_item_id,
             )
             return "ended"
-        logger.info(
-            "Browse getItem unavailable but no ended-page marker detected; keeping active %s",
-            listing.ebay_item_id,
-        )
+        logger.info("Browse getItem unavailable and page state unknown; kept prior flag %s", listing.ebay_item_id)
         return "updated"
 
     fields = browse_item_to_listing_fields(raw)
@@ -79,8 +85,16 @@ def refresh_listing_from_ebay(
             continue
         setattr(listing, k, v)
     listing.last_seen_at = now
-    ended_marker = browse_client.page_has_not_found_marker(fields.get("web_url") or listing.web_url)
-    listing.is_active = ended_marker is not True
+    ended_marker = browse_client.page_has_not_found_marker(
+        fields.get("web_url") or listing.web_url,
+        item_id=listing.ebay_item_id,
+    )
+    ended_at = listing.listing_ended_at
+    ended_by_payload = bool(ended_at and ended_at <= now)
+    # Multi-signal active check:
+    # 1) page ended/sold marker
+    # 2) Browse payload itemEndDate in the past
+    listing.is_active = not (ended_marker is True or ended_by_payload)
     db.add(
         ListingSnapshot(
             listing_id=listing.id,
@@ -90,4 +104,4 @@ def refresh_listing_from_ebay(
     )
     analyze_listing(db, listing)
     db.commit()
-    return "ended" if ended_marker is True else "updated"
+    return "ended" if (ended_marker is True or ended_by_payload) else "updated"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
@@ -79,13 +80,22 @@ class EbayBrowseClient:
             r.raise_for_status()
             return r.json()
 
-    def page_has_not_found_marker(self, web_url: str | None) -> bool | None:
+    def page_has_not_found_marker(
+        self, web_url: str | None, *, item_id: str | None = None
+    ) -> bool | None:
         """
         Return True when the eBay web page shows the ended-listing marker.
         Return False when page fetched and marker is absent.
         Return None when URL missing or fetch fails.
         """
-        if not web_url or not web_url.strip():
+        urls: list[str] = []
+        if web_url and web_url.strip():
+            urls.append(web_url.strip())
+        if item_id and item_id.strip():
+            iid = item_id.strip()
+            urls.append(f"https://www.ebay.co.uk/itm/{iid}")
+            urls.append(f"https://www.ebay.com/itm/{iid}")
+        if not urls:
             return None
         headers = {
             "User-Agent": (
@@ -95,13 +105,31 @@ class EbayBrowseClient:
             ),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         }
-        try:
-            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-                r = client.get(web_url, headers=headers)
-                if r.status_code >= 400:
-                    return None
-                html = r.text
-                return (_ENDED_MARKER in html) or bool(_SOLD_MARKER_RE.search(html))
-        except Exception:
-            logger.debug("Could not check eBay page marker for %s", web_url, exc_info=True)
-            return None
+        for idx, url in enumerate(urls):
+            for attempt in range(3):
+                try:
+                    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                        r = client.get(url, headers=headers)
+                    if r.status_code >= 500:
+                        if attempt < 2:
+                            time.sleep(0.25 * (attempt + 1))
+                            continue
+                        break
+                    if r.status_code >= 400:
+                        break
+                    html = r.text
+                    return (_ENDED_MARKER in html) or bool(_SOLD_MARKER_RE.search(html))
+                except Exception:
+                    if attempt < 2:
+                        time.sleep(0.25 * (attempt + 1))
+                        continue
+                    break
+            if idx < len(urls) - 1:
+                # Try another canonical URL form before giving up.
+                continue
+        logger.debug(
+            "Could not confirm eBay page marker for web_url=%s item_id=%s",
+            web_url,
+            item_id,
+        )
+        return None
