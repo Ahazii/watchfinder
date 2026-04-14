@@ -10,6 +10,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 |----------|---------|
 | [`README.md`](README.md) (this file) | Quick start, API surface, Docker, Unraid summary, env vars |
 | [`PROGRESS.md`](PROGRESS.md) | What is built (phases 1–6), repo map, backlog, planned work |
+| [`buttons.md`](buttons.md) | Complete UI button/action reference by page and workflow |
 | [`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`](Kickoff%20Documents/SIMPLIFIED_NOVICE_SETUP.md) | Step-by-step Unraid install (folders, network, Postgres, app) |
 | [`Kickoff Documents/README_START_HERE.txt`](Kickoff%20Documents/README_START_HERE.txt) | Kickoff folder index |
 | [`Kickoff Documents/CURSOR_PROMPT.txt`](Kickoff%20Documents/CURSOR_PROMPT.txt) | Original full build spec (reference / Cursor) |
