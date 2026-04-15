@@ -16,6 +16,7 @@ from watchfinder.config import Settings, get_settings
 from watchfinder.models import AppSetting, Listing
 from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ingestion.live_refresh import refresh_listing_from_ebay
+from watchfinder.services.listing_status import active_listing_clause
 from watchfinder.util.app_setting_text import truthy_app_value
 
 if TYPE_CHECKING:
@@ -125,7 +126,7 @@ def iter_stale_active_listing_ids(
     cutoff = now - timedelta(hours=min_age_hours)
     stmt = (
         select(Listing.id)
-        .where(Listing.is_active.is_(True))
+        .where(active_listing_clause())
         .where(or_(Listing.last_seen_at.is_(None), Listing.last_seen_at < cutoff))
         .order_by(Listing.last_seen_at.asc().nulls_first())
         .limit(limit)
@@ -137,7 +138,7 @@ def iter_all_active_listing_ids(db: Session) -> list[UUID]:
     """All currently active listings, oldest last_seen first (null first)."""
     stmt = (
         select(Listing.id)
-        .where(Listing.is_active.is_(True))
+        .where(active_listing_clause())
         .order_by(Listing.last_seen_at.asc().nulls_first())
     )
     return list(db.scalars(stmt).all())
@@ -154,7 +155,7 @@ def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> 
     ids = iter_stale_active_listing_ids(db, min_age_hours=min_age, limit=max_n)
     if not ids:
         n_active = db.scalar(
-            select(func.count()).select_from(Listing).where(Listing.is_active.is_(True))
+            select(func.count()).select_from(Listing).where(active_listing_clause())
         )
         n_active = int(n_active or 0)
         logger.info(
@@ -232,7 +233,13 @@ def run_full_active_listing_refresh(
         listing = db.get(Listing, lid)
         eid = listing.ebay_item_id if listing else None
         try:
-            outcome = refresh_listing_from_ebay(db, lid, settings, browse=shared_browse)
+            outcome = refresh_listing_from_ebay(
+                db,
+                lid,
+                settings,
+                browse=shared_browse,
+                check_page_marker=False,
+            )
             if outcome == "ended":
                 ended += 1
                 status = "Not Active"

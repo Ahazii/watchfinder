@@ -26,6 +26,7 @@ def refresh_listing_from_ebay(
     settings: Settings | None = None,
     *,
     browse: EbayBrowseClient | None = None,
+    check_page_marker: bool = True,
 ) -> Literal["updated", "ended"]:
     """
     GET /item/{id} for this row's ebay_item_id, then verify active state from web page marker.
@@ -57,9 +58,15 @@ def refresh_listing_from_ebay(
         db.flush()
 
     if raw is None:
-        ended_marker = browse_client.page_has_not_found_marker(
-            listing.web_url, item_id=listing.ebay_item_id
-        )
+        ended_marker: bool | None
+        if check_page_marker:
+            ended_marker = browse_client.page_has_not_found_marker(
+                listing.web_url, item_id=listing.ebay_item_id
+            )
+        else:
+            # Browse getItem returned 404/unavailable; in bulk mode treat as ended without
+            # performing extra page requests that often get blocked/rate-limited.
+            ended_marker = True
         # Robust fallback:
         # - explicit ended marker => inactive
         # - explicit non-ended marker => active
@@ -85,10 +92,12 @@ def refresh_listing_from_ebay(
             continue
         setattr(listing, k, v)
     listing.last_seen_at = now
-    ended_marker = browse_client.page_has_not_found_marker(
-        fields.get("web_url") or listing.web_url,
-        item_id=listing.ebay_item_id,
-    )
+    ended_marker: bool | None = None
+    if check_page_marker:
+        ended_marker = browse_client.page_has_not_found_marker(
+            fields.get("web_url") or listing.web_url,
+            item_id=listing.ebay_item_id,
+        )
     ended_at = listing.listing_ended_at
     ended_by_payload = bool(ended_at and ended_at <= now)
     # Multi-signal active check:
