@@ -22,6 +22,11 @@ class WatchLinkReviewListItem(BaseModel):
     listing_id: UUID
     ebay_item_id: str
     listing_title: str | None = None
+    listing_description: str | None = None
+    listing_web_url: str | None = None
+    listing_image_urls: list[str] | None = None
+    listing_ended_at: datetime | None = None
+    buying_options: list[str] | None = None
     tier: str | None = None
     confidence: Decimal | None = None
     candidate_count: int = 0
@@ -34,7 +39,11 @@ class WatchLinkReviewDetailOut(BaseModel):
     listing_id: UUID
     ebay_item_id: str
     listing_title: str | None = None
+    listing_description: str | None = None
     listing_web_url: str | None = None
+    listing_image_urls: list[str] | None = None
+    listing_ended_at: datetime | None = None
+    buying_options: list[str] | None = None
     tier: str | None = None
     confidence: Decimal | None = None
     reason_codes: list[str] | None = None

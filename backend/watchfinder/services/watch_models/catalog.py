@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from watchfinder.config import get_settings
 from watchfinder.models import Listing, ListingEdit, WatchModel
 from watchfinder.services.local_media import enrich_watch_model_image_from_listing
+from watchfinder.services.listing_status import active_listing_clause
 from watchfinder.services.valuation.effective import (
     effective_caliber,
     effective_model_family,
@@ -32,6 +33,15 @@ from watchfinder.services.watch_models.match import (
     try_auto_link_listing,
     try_exact_catalog_link,
 )
+
+
+def _entity_codes_force_queue(entity_reason_codes: list[str] | None) -> bool:
+    if not entity_reason_codes:
+        return False
+    return bool(
+        {"entity_brand_unresolved", "entity_brand_ambiguous"}
+        & set(entity_reason_codes)
+    )
 
 
 class CatalogLinkOutcome(str, Enum):
@@ -139,6 +149,7 @@ def ensure_watch_catalog_for_listing(
     edit: ListingEdit | None,
     *,
     bypass_review: bool = False,
+    entity_reason_codes: list[str] | None = None,
 ) -> CatalogLinkOutcome:
     """
     If bypass_review: always full auto (exact + fuzzy + create).
@@ -177,7 +188,31 @@ def ensure_watch_catalog_for_listing(
                 model_family=None,
                 title=listing.title,
             )
-            upsert_pending_watch_link_review(db, listing, parsed, edit, candidates)
+            upsert_pending_watch_link_review(
+                db,
+                listing,
+                parsed,
+                edit,
+                candidates,
+                entity_reason_codes=entity_reason_codes,
+            )
+            return CatalogLinkOutcome.QUEUED_FOR_REVIEW
+        if _entity_codes_force_queue(entity_reason_codes):
+            candidates = rank_watch_model_candidates(
+                db,
+                brand="",
+                reference=None,
+                model_family=None,
+                title=listing.title,
+            )
+            upsert_pending_watch_link_review(
+                db,
+                listing,
+                parsed,
+                edit,
+                candidates,
+                entity_reason_codes=entity_reason_codes,
+            )
             return CatalogLinkOutcome.QUEUED_FOR_REVIEW
         return CatalogLinkOutcome.SKIPPED_NO_IDENTITY
 
@@ -193,7 +228,31 @@ def ensure_watch_catalog_for_listing(
                 model_family=None,
                 title=listing.title,
             )
-            upsert_pending_watch_link_review(db, listing, parsed, edit, candidates)
+            upsert_pending_watch_link_review(
+                db,
+                listing,
+                parsed,
+                edit,
+                candidates,
+                entity_reason_codes=entity_reason_codes,
+            )
+            return CatalogLinkOutcome.QUEUED_FOR_REVIEW
+        if _entity_codes_force_queue(entity_reason_codes):
+            candidates = rank_watch_model_candidates(
+                db,
+                brand=brand,
+                reference=None,
+                model_family=None,
+                title=listing.title,
+            )
+            upsert_pending_watch_link_review(
+                db,
+                listing,
+                parsed,
+                edit,
+                candidates,
+                entity_reason_codes=entity_reason_codes,
+            )
             return CatalogLinkOutcome.QUEUED_FOR_REVIEW
         return CatalogLinkOutcome.SKIPPED_NO_IDENTITY
 
@@ -205,7 +264,14 @@ def ensure_watch_catalog_for_listing(
             model_family=mf_clean or None,
             title=listing.title,
         )
-        upsert_pending_watch_link_review(db, listing, parsed, edit, candidates)
+        upsert_pending_watch_link_review(
+            db,
+            listing,
+            parsed,
+            edit,
+            candidates,
+            entity_reason_codes=entity_reason_codes,
+        )
         return CatalogLinkOutcome.QUEUED_FOR_REVIEW
 
     return _create_catalog_row_and_link_listing(db, listing, parsed, edit)
@@ -231,7 +297,7 @@ def sync_unmatched_listings_watch_catalog(db: Session) -> dict[str, int]:
     }
     stmt = (
         select(Listing.id)
-        .where(Listing.is_active.is_(True), Listing.watch_model_id.is_(None))
+        .where(active_listing_clause(), Listing.watch_model_id.is_(None))
         .order_by(Listing.last_seen_at.desc())
     )
     for lid in db.scalars(stmt).all():
@@ -276,7 +342,7 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
     stmt = (
         select(Listing)
         .options(selectinload(Listing.parsed_attributes))
-        .where(Listing.is_active.is_(True))
+        .where(active_listing_clause())
         .order_by(Listing.last_seen_at.desc())
     )
     for listing in db.scalars(stmt).all():

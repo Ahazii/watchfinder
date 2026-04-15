@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import uuid
 from decimal import Decimal
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Select, Text, cast, exists, func, or_, select
 from sqlalchemy.orm import Session
 
-from watchfinder.models import Listing, OpportunityScore, ParsedAttribute, RepairSignal
+from watchfinder.models import (
+    Listing,
+    ListingCaliber,
+    OpportunityScore,
+    ParsedAttribute,
+    RepairSignal,
+)
 from watchfinder.services.listing_status import active_listing_clause, inactive_listing_clause
 
 
@@ -30,6 +37,9 @@ def base_listing_select(
     ending_within_hours: int | None = None,
     candidates_only: bool = False,
     exclude_quartz: bool = False,
+    resolved_brand_id: uuid.UUID | None = None,
+    resolved_stock_reference_id: uuid.UUID | None = None,
+    caliber_id: uuid.UUID | None = None,
 ) -> Select:
     stmt: Select = select(Listing)
 
@@ -87,6 +97,22 @@ def base_listing_select(
                         ParsedAttribute.value_text.ilike(b),
                     )
                 ),
+            )
+        )
+
+    if resolved_brand_id is not None:
+        stmt = stmt.where(Listing.resolved_brand_id == resolved_brand_id)
+    if resolved_stock_reference_id is not None:
+        stmt = stmt.where(
+            Listing.resolved_stock_reference_id == resolved_stock_reference_id
+        )
+    if caliber_id is not None:
+        stmt = stmt.where(
+            exists(
+                select(1).where(
+                    ListingCaliber.listing_id == Listing.id,
+                    ListingCaliber.caliber_id == caliber_id,
+                )
             )
         )
 

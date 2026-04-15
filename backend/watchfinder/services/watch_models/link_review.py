@@ -32,6 +32,8 @@ def upsert_pending_watch_link_review(
     parsed: dict[str, str],
     edit: ListingEdit | None,
     candidates: list[tuple[WatchModel, float]],
+    *,
+    entity_reason_codes: list[str] | None = None,
 ) -> WatchModelLinkReview:
     brand = (parsed.get("brand") or "").strip() or ""
     ref, _ = effective_reference(parsed, edit)
@@ -53,6 +55,16 @@ def upsert_pending_watch_link_review(
         reasons.append("no_similar_catalog_rows")
     elif best < 0.85:
         reasons.append("uncertain_best_match")
+
+    if entity_reason_codes:
+        reasons.extend(entity_reason_codes)
+    deduped: list[str] = []
+    seen_r: set[str] = set()
+    for x in reasons:
+        if x and x not in seen_r:
+            seen_r.add(x)
+            deduped.append(x)
+    reasons = deduped
 
     ids = [str(w.id) for w, _ in candidates]
     scores = {str(w.id): round(float(s), 4) for w, s in candidates}

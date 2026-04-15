@@ -188,3 +188,13 @@ class BackfillWatchCatalogResponse(BaseModel):
     skipped_no_identity: int
     queued_for_review: int = 0
     skipped_excluded_brand: int = 0
+
+
+class BackfillEntityDictionariesResponse(BaseModel):
+    """Result of POST /api/watch-models/backfill-entity-dictionaries."""
+
+    scanned: int
+    with_resolved_brand: int
+    with_resolved_reference: int
+    with_caliber_link: int
+    inferred_brand: int

@@ -13,6 +13,7 @@ from watchfinder.models import (
     RepairSignal,
     WatchModel,
 )
+from watchfinder.services.entities.resolve import resolve_listing_entities
 from watchfinder.services.parsing import build_listing_corpus, parse_watch_attributes
 from watchfinder.services.repair import extract_repair_signals
 from watchfinder.services.scoring import compute_opportunity_score
@@ -30,6 +31,8 @@ def analyze_listing(db: Session, listing: Listing) -> CatalogLinkOutcome:
     corpus = build_listing_corpus(listing)
     parsed = parse_watch_attributes(listing.title, corpus)
     signals = extract_repair_signals(corpus)
+    edit = db.get(ListingEdit, listing.id)
+    entity_res = resolve_listing_entities(db, listing, parsed, edit)
 
     db.execute(delete(ParsedAttribute).where(ParsedAttribute.listing_id == listing.id))
     db.execute(delete(RepairSignal).where(RepairSignal.listing_id == listing.id))
@@ -55,8 +58,13 @@ def analyze_listing(db: Session, listing: Listing) -> CatalogLinkOutcome:
             )
         )
 
-    edit = db.get(ListingEdit, listing.id)
-    catalog_out = ensure_watch_catalog_for_listing(db, listing, parsed, edit)
+    catalog_out = ensure_watch_catalog_for_listing(
+        db,
+        listing,
+        parsed,
+        edit,
+        entity_reason_codes=entity_res.reason_codes,
+    )
     wm: WatchModel | None = None
     if listing.watch_model_id is not None:
         wm = db.get(WatchModel, listing.watch_model_id)

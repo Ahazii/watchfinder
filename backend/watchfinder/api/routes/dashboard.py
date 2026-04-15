@@ -9,6 +9,7 @@ from watchfinder.api.listing_helpers import listing_to_summary, scores_for_listi
 from watchfinder.models import Listing, OpportunityScore, RepairSignal
 from watchfinder.schemas.listings import DashboardStats
 from watchfinder.services.ebay.api_usage import get_ebay_api_usage
+from watchfinder.services.listing_status import active_listing_clause
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -20,7 +21,7 @@ def dashboard(db: Session = Depends(get_db)) -> DashboardStats:
     )
     active_listings = int(
         db.scalar(
-            select(func.count()).select_from(Listing).where(Listing.is_active.is_(True))
+            select(func.count()).select_from(Listing).where(active_listing_clause())
         )
         or 0
     )
@@ -39,7 +40,7 @@ def dashboard(db: Session = Depends(get_db)) -> DashboardStats:
 
     recent = db.execute(
         select(Listing)
-        .where(Listing.is_active.is_(True))
+        .where(active_listing_clause())
         .order_by(
             Listing.first_seen_at.desc().nulls_last(),
             Listing.last_seen_at.desc(),

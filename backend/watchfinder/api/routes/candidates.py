@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -55,6 +56,18 @@ def list_candidates(
         False,
         description="Omit rows whose title or parsed movement mentions quartz",
     ),
+    resolved_brand_id: UUID | None = Query(
+        None,
+        description="Filter by resolved dictionary brand id",
+    ),
+    resolved_stock_reference_id: UUID | None = Query(
+        None,
+        description="Filter by resolved stock reference id",
+    ),
+    caliber_id: UUID | None = Query(
+        None,
+        description="Filter listings linked to this caliber row",
+    ),
     sort_by: str | None = Query(
         None,
         description="Sort column: last_seen, title, price, confidence, profit",
@@ -79,6 +92,9 @@ def list_candidates(
         ending_within_hours=ending_within_hours,
         candidates_only=True,
         exclude_quartz=exclude_quartz,
+        resolved_brand_id=resolved_brand_id,
+        resolved_stock_reference_id=resolved_stock_reference_id,
+        caliber_id=caliber_id,
     )
     total = count_listings(db, base)
     sk, desc = normalize_sort(sort_by, sort_dir)

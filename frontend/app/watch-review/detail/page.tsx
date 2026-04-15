@@ -4,9 +4,11 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson } from "@/lib/api";
-import type { WatchLinkReviewDetail } from "@/lib/types";
-import { money } from "@/lib/format";
+import { plainTextFromMaybeHtml } from "@/lib/plain-text";
+import type { WatchLinkReviewDetail, WatchModelListResponse } from "@/lib/types";
+import { dateShort, money } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -14,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ListingThumb } from "@/components/listing-thumb";
 
 export default function WatchReviewDetailPage() {
   return (
@@ -31,6 +34,9 @@ function Body() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [dbSearchQ, setDbSearchQ] = useState("");
+  const [dbSearchBusy, setDbSearchBusy] = useState(false);
+  const [dbSearchData, setDbSearchData] = useState<WatchModelListResponse | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -43,6 +49,24 @@ function Body() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const runDbSearch = useCallback(() => {
+    const q = dbSearchQ.trim();
+    setDbSearchBusy(true);
+    setMsg(null);
+    const qs = new URLSearchParams();
+    if (q) qs.set("q", q);
+    qs.set("limit", "50");
+    fetchJson<WatchModelListResponse>(`/api/watch-models?${qs.toString()}`)
+      .then(setDbSearchData)
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setDbSearchBusy(false));
+  }, [dbSearchQ]);
+
+  useEffect(() => {
+    if (dbSearchData !== null) return;
+    void runDbSearch();
+  }, [dbSearchData, runDbSearch]);
 
   const resolve = (action: "match" | "create" | "dismiss", watchModelId?: string) => {
     if (!id) return;
@@ -107,12 +131,32 @@ function Body() {
           <CardTitle>Listing</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p className="font-medium">{row.listing_title || row.ebay_item_id}</p>
+          <div className="flex gap-3">
+            <ListingThumb
+              urls={row.listing_image_urls}
+              alt={row.listing_title || row.ebay_item_id}
+              sizeClass="h-28 w-28"
+            />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="font-medium leading-snug">{row.listing_title || row.ebay_item_id}</p>
+              {row.listing_description ? (
+                <p className="text-xs leading-snug text-muted-foreground whitespace-pre-wrap">
+                  {plainTextFromMaybeHtml(row.listing_description)}
+                </p>
+              ) : null}
+            </div>
+          </div>
           <p className="text-muted-foreground">eBay {row.ebay_item_id}</p>
+          {row.buying_options?.length ? (
+            <p className="text-xs text-muted-foreground">Sale type: {row.buying_options.join(", ")}</p>
+          ) : null}
+          {row.listing_ended_at ? (
+            <p className="text-xs text-muted-foreground">Ends: {dateShort(row.listing_ended_at)}</p>
+          ) : null}
           {row.listing_web_url ? (
             <Button variant="outline" size="sm" asChild>
               <a href={row.listing_web_url} target="_blank" rel="noopener noreferrer">
-                Open on eBay
+                Open on eBay (new window)
               </a>
             </Button>
           ) : null}
@@ -150,6 +194,68 @@ function Body() {
               Reasons: {row.reason_codes.join(", ")}
             </p>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Watch database search</CardTitle>
+          <CardDescription>
+            Full catalog search from this review screen. You can also open the full watch database
+            page in a separate window.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[20rem] flex-1 space-y-1">
+              <label className="text-xs text-muted-foreground">Search brand / reference / family / name</label>
+              <Input
+                value={dbSearchQ}
+                onChange={(e) => setDbSearchQ(e.target.value)}
+                placeholder="e.g. Omega 2254.50 Seamaster"
+              />
+            </div>
+            <Button type="button" variant="outline" disabled={dbSearchBusy} onClick={() => void runDbSearch()}>
+              {dbSearchBusy ? "Searching…" : "Search"}
+            </Button>
+            <Button type="button" variant="outline" asChild>
+              <a href="/watch-models/" target="_blank" rel="noopener noreferrer">
+                Open watch database (new window)
+              </a>
+            </Button>
+          </div>
+          {!dbSearchData ? (
+            <p className="text-sm text-muted-foreground">Loading catalog rows…</p>
+          ) : dbSearchData.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No catalog rows found.</p>
+          ) : (
+            <div className="max-h-[28rem] space-y-2 overflow-auto pr-1">
+              {dbSearchData.items.map((m) => (
+                <div
+                  key={`search-${m.id}`}
+                  className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="text-sm">
+                    <p className="font-medium">
+                      {[m.brand, m.reference, m.model_family].filter(Boolean).join(" · ")}
+                    </p>
+                    {m.model_name ? <p className="text-xs text-muted-foreground">{m.model_name}</p> : null}
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      catalog obs {money(m.observed_price_low, "GBP")} – {money(m.observed_price_high, "GBP")}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => resolve("match", m.id)}
+                  >
+                    {busy === `match${m.id}` ? "…" : "Match to this type"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -12,6 +12,7 @@ from watchfinder.api.deps import get_db
 from watchfinder.config import get_settings
 from watchfinder.models import Listing, WatchModel
 from watchfinder.schemas.watch_models import (
+    BackfillEntityDictionariesResponse,
     BackfillWatchCatalogResponse,
     MarketSnapshotsRefreshResponse,
     WatchBaseImportRequest,
@@ -22,6 +23,8 @@ from watchfinder.schemas.watch_models import (
     WatchModelPatch,
 )
 from watchfinder.services.market_snapshots import refresh_market_snapshots_for_model
+from watchfinder.services.listing_status import active_listing_clause
+from watchfinder.services.entities.resolve import backfill_entity_dictionaries
 from watchfinder.services.watch_models import backfill_watch_catalog, refresh_watch_model_observed_bounds
 from watchfinder.services.watch_models.exclusions import catalog_excluded_brands
 from watchfinder.services.watchbase_import import WatchBaseImportError, import_watchbase_for_model
@@ -37,7 +40,7 @@ def _linked_ebay_urls_for_model(db: Session, model_id: UUID) -> list[str]:
         select(Listing.web_url)
         .where(
             Listing.watch_model_id == model_id,
-            Listing.is_active.is_(True),
+            active_listing_clause(),
             Listing.web_url.isnot(None),
         )
         .order_by(nulls_last(Listing.last_seen_at.desc()))
@@ -68,6 +71,19 @@ def backfill_from_listings(db: Session = Depends(get_db)) -> BackfillWatchCatalo
     stats = backfill_watch_catalog(db)
     db.commit()
     return BackfillWatchCatalogResponse(**stats)
+
+
+@router.post(
+    "/backfill-entity-dictionaries",
+    response_model=BackfillEntityDictionariesResponse,
+    summary="Resolve brands/calibers/stock references for all active listings",
+)
+def backfill_entity_dictionaries_route(
+    db: Session = Depends(get_db),
+) -> BackfillEntityDictionariesResponse:
+    stats = backfill_entity_dictionaries(db)
+    db.commit()
+    return BackfillEntityDictionariesResponse(**stats)
 
 
 def _apply_search(stmt, q: str | None):

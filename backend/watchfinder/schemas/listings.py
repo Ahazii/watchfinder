@@ -75,11 +75,15 @@ class ListingSummary(BaseModel):
     currency: str | None
     web_url: str | None
     condition_description: str | None
+    buying_options: list[str] | None = None
+    listing_ended_at: datetime | None = None
     last_seen_at: datetime | None
     first_seen_at: datetime | None = None
     is_active: bool = True
     image_urls: list | None = None
     watch_model_id: UUID | None = None
+    resolved_brand_id: UUID | None = None
+    resolved_stock_reference_id: UUID | None = None
     score: OpportunityScoreOut | None = None
 
 

@@ -24,6 +24,8 @@ export type ListingSummary = {
   is_active?: boolean;
   image_urls?: string[] | null;
   watch_model_id?: string | null;
+  resolved_brand_id?: string | null;
+  resolved_stock_reference_id?: string | null;
   score?: OpportunityScore | null;
 };
 
@@ -167,6 +169,14 @@ export type BackfillWatchCatalogResponse = {
   skipped_no_identity: number;
   queued_for_review?: number;
   skipped_excluded_brand?: number;
+};
+
+export type BackfillEntityDictionariesResponse = {
+  scanned: number;
+  with_resolved_brand: number;
+  with_resolved_reference: number;
+  with_caliber_link: number;
+  inferred_brand: number;
 };
 
 export type WatchLinkReviewBrief = {

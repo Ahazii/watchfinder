@@ -69,6 +69,9 @@ class WatchModel(Base):
     )
 
     listings = relationship("Listing", back_populates="watch_model")
+    stock_references = relationship(
+        "StockReference", back_populates="watch_model", passive_deletes=True
+    )
 
 
 class Listing(Base):
@@ -109,6 +112,18 @@ class Listing(Base):
         index=True,
         nullable=True,
     )
+    resolved_brand_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("brands.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    resolved_stock_reference_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("stock_references.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
 
     snapshots = relationship(
         "ListingSnapshot", back_populates="listing", passive_deletes=True
@@ -129,6 +144,16 @@ class Listing(Base):
         cascade="all, delete-orphan",
     )
     watch_model = relationship("WatchModel", back_populates="listings")
+    resolved_brand = relationship("Brand", foreign_keys=[resolved_brand_id])
+    resolved_stock_reference = relationship(
+        "StockReference", foreign_keys=[resolved_stock_reference_id]
+    )
+    listing_calibers = relationship(
+        "ListingCaliber",
+        back_populates="listing",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     watch_link_reviews = relationship(
         "WatchModelLinkReview",
         back_populates="listing",

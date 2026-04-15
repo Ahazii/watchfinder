@@ -154,6 +154,8 @@ function RecentTable({ rows }: { rows: ListingSummary[] }) {
           <TableHead title="Rule-based profit estimate in the same currency as price.">
             Profit est.
           </TableHead>
+          <TableHead>Sale type</TableHead>
+          <TableHead>Ends</TableHead>
           <TableHead>First seen</TableHead>
         </TableRow>
       </TableHeader>
@@ -184,6 +186,12 @@ function RecentTable({ rows }: { rows: ListingSummary[] }) {
               ) : (
                 "—"
               )}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {r.buying_options?.length ? r.buying_options.join(", ") : "—"}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {dateShort(r.listing_ended_at)}
             </TableCell>
             <TableCell className="text-muted-foreground text-xs">
               {dateShort(r.first_seen_at || r.last_seen_at)}

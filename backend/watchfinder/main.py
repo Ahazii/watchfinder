@@ -16,6 +16,7 @@ from watchfinder import runtime
 from watchfinder.api.routes import (
     candidates,
     dashboard,
+    entities,
     everywatch_debug,
     ingest_admin,
     listings,
@@ -79,6 +80,7 @@ app.add_middleware(
 
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(listings.router, prefix="/api")
+app.include_router(entities.router, prefix="/api")
 app.include_router(not_interested.router, prefix="/api")
 app.include_router(watch_models.router, prefix="/api")
 app.include_router(watch_link_reviews.router, prefix="/api")

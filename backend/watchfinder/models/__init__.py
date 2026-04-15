@@ -1,3 +1,11 @@
+from watchfinder.models.entities import (
+    Brand,
+    Caliber,
+    CaliberBrandLink,
+    CaliberStockReferenceLink,
+    ListingCaliber,
+    StockReference,
+)
 from watchfinder.models.listing import (
     AppSetting,
     Listing,
@@ -15,7 +23,12 @@ from watchfinder.models.listing import (
 
 __all__ = [
     "AppSetting",
+    "Brand",
+    "Caliber",
+    "CaliberBrandLink",
+    "CaliberStockReferenceLink",
     "Listing",
+    "ListingCaliber",
     "ListingEdit",
     "ListingSnapshot",
     "NotInterestedListing",
@@ -23,6 +36,7 @@ __all__ = [
     "RepairSignal",
     "OpportunityScore",
     "SavedSearch",
+    "StockReference",
     "WatchModel",
     "WatchModelLinkReview",
     "WatchSaleRecord",

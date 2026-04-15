@@ -7,6 +7,7 @@ import { TABLE_THUMB_STORAGE, usePersistedTableThumbSize } from "@/lib/table-thu
 import { TableThumbSizeSelect } from "@/components/table-thumb-size-select";
 import { WatchbaseBatchWizard } from "@/components/watchbase-batch-wizard";
 import type {
+  BackfillEntityDictionariesResponse,
   BackfillWatchCatalogResponse,
   WatchModel,
   WatchModelListResponse,
@@ -63,6 +64,8 @@ export default function WatchModelsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
+  const [entityBackfillBusy, setEntityBackfillBusy] = useState(false);
+  const [entityBackfillMsg, setEntityBackfillMsg] = useState<string | null>(null);
   const { sizeId: thumbSizeId, setSizeId: setThumbSizeId, sizeClass: thumbSizeClass } =
     usePersistedTableThumbSize(TABLE_THUMB_STORAGE.watchDatabase);
 
@@ -190,6 +193,26 @@ export default function WatchModelsPage() {
       })
       .catch((e: Error) => setBackfillMsg(e.message))
       .finally(() => setBackfillBusy(false));
+  };
+
+  const runEntityBackfill = () => {
+    setEntityBackfillBusy(true);
+    setEntityBackfillMsg(null);
+    fetch(apiUrl("/api/watch-models/backfill-entity-dictionaries"), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<BackfillEntityDictionariesResponse>;
+      })
+      .then((r) => {
+        setEntityBackfillMsg(
+          `Scanned ${r.scanned}: ${r.with_resolved_brand} with resolved brand, ${r.with_resolved_reference} with stock reference, ${r.with_caliber_link} with caliber link, ${r.inferred_brand} inferred brand from caliber+reference.`,
+        );
+      })
+      .catch((e: Error) => setEntityBackfillMsg(e.message))
+      .finally(() => setEntityBackfillBusy(false));
   };
 
   const handleCheckboxChange = (id: string, rowIndex: number, checked: boolean, shiftKey: boolean) => {
@@ -408,6 +431,26 @@ export default function WatchModelsPage() {
           </Button>
           {backfillMsg ? (
             <p className="text-sm text-muted-foreground">{backfillMsg}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Backfill entity dictionaries</CardTitle>
+          <CardDescription>
+            Scan every <strong>active</strong> listing and resolve <strong>brand</strong>,{" "}
+            <strong>caliber</strong>, and <strong>stock reference</strong> rows (fuzzy match + infer brand
+            from caliber+reference when possible). Separate from watch catalog linking above. Safe to run
+            repeatedly.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Button type="button" disabled={entityBackfillBusy} onClick={runEntityBackfill}>
+            {entityBackfillBusy ? "Running…" : "Run entity dictionary backfill"}
+          </Button>
+          {entityBackfillMsg ? (
+            <p className="text-sm text-muted-foreground">{entityBackfillMsg}</p>
           ) : null}
         </CardContent>
       </Card>

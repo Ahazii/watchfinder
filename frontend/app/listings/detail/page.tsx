@@ -756,6 +756,8 @@ function DetailBody() {
             <Row k="Seller" v={row.seller_username || "—"} />
             <Row k="Condition" v={row.condition_description || "—"} />
             <Row k="Category" v={row.category_path || "—"} />
+            <Row k="Sale type" v={row.buying_options?.length ? row.buying_options.join(", ") : "—"} />
+            <Row k="Listing ends" v={dateShort(row.listing_ended_at)} />
             <Row k="Active" v={row.is_active ? "yes" : "no"} />
           </CardContent>
         </Card>

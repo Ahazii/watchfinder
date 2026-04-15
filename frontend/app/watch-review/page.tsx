@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiUrl, fetchJson } from "@/lib/api";
+import { plainTextFromMaybeHtml } from "@/lib/plain-text";
+import { dateShort } from "@/lib/format";
 import type {
   AppSettings,
   BackfillWatchCatalogResponse,
@@ -16,6 +18,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ListingThumb } from "@/components/listing-thumb";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default function WatchReviewQueuePage() {
   const [data, setData] = useState<WatchLinkReviewListResponse | null>(null);
@@ -25,6 +36,8 @@ export default function WatchReviewQueuePage() {
   const [queueRequireIdentity, setQueueRequireIdentity] = useState(true);
   const [queueToggleBusy, setQueueToggleBusy] = useState(false);
   const [notInterestedBusyId, setNotInterestedBusyId] = useState<string | null>(null);
+  const [imageSize, setImageSize] = useState<"sm" | "md" | "lg">("md");
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const load = useCallback(() => {
     setErr(null);
@@ -222,45 +235,132 @@ export default function WatchReviewQueuePage() {
       ) : (
         <>
           <p className="text-sm text-muted-foreground">{data.total} pending</p>
-          <div className="space-y-3">
-            {data.items.map((row) => (
-              <Card key={row.id}>
-                <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 space-y-1">
-                    <p className="font-medium line-clamp-2">
-                      {row.listing_title || row.ebay_item_id}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      eBay {row.ebay_item_id} · tier {row.tier ?? "—"} ·{" "}
-                      {row.candidate_count} candidate(s)
-                      {row.confidence != null && row.confidence !== ""
-                        ? ` · score ${row.confidence}`
-                        : ""}
-                    </p>
-                    {row.reason_codes?.length ? (
-                      <p className="text-xs text-muted-foreground">
-                        {row.reason_codes.join(", ")}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={notInterestedBusyId === row.id}
-                      onClick={() => markNotInterested(row.id)}
-                      title="Remove listing and block this eBay item id from future ingest"
-                    >
-                      {notInterestedBusyId === row.id ? "…" : "Not interested"}
-                    </Button>
-                    <Button asChild>
-                      <Link href={`/watch-review/detail/?id=${row.id}`}>Review</Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="flex items-center justify-end gap-2">
+            <label htmlFor="match-queue-image-size" className="text-xs text-muted-foreground">
+              Picture size
+            </label>
+            <select
+              id="match-queue-image-size"
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+              value={imageSize}
+              onChange={(e) => setImageSize(e.target.value as "sm" | "md" | "lg")}
+            >
+              <option value="sm">Small</option>
+              <option value="md">Medium</option>
+              <option value="lg">Large</option>
+            </select>
           </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-28">Photo</TableHead>
+                <TableHead className="min-w-[26rem]">Title / Description</TableHead>
+                <TableHead className="w-56">eBay</TableHead>
+                <TableHead className="w-52">Match Signals</TableHead>
+                <TableHead className="w-72">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.items.map((row) => {
+                const thumbSizeClass =
+                  imageSize === "lg"
+                    ? "h-24 w-24"
+                    : imageSize === "sm"
+                      ? "h-12 w-12"
+                      : "h-16 w-16";
+                const isExpanded = expandedRows[row.id] === true;
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell className="align-top">
+                      <ListingThumb
+                        urls={row.listing_image_urls}
+                        alt={row.listing_title || row.ebay_item_id}
+                        sizeClass={thumbSizeClass}
+                      />
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <p className={`text-sm font-medium leading-snug ${isExpanded ? "" : "line-clamp-5"}`}>
+                        {row.listing_title || row.ebay_item_id}
+                      </p>
+                      {row.listing_description ? (
+                        <p
+                          className={`mt-1 text-xs leading-snug text-muted-foreground ${isExpanded ? "" : "line-clamp-6"}`}
+                        >
+                          {plainTextFromMaybeHtml(row.listing_description)}
+                        </p>
+                      ) : null}
+                      {row.listing_description ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="mt-1 h-7 px-2 text-xs"
+                          onClick={() =>
+                            setExpandedRows((prev) => ({
+                              ...prev,
+                              [row.id]: !isExpanded,
+                            }))
+                          }
+                        >
+                          {isExpanded ? "Show less" : "Show more"}
+                        </Button>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <p className="text-xs text-muted-foreground">Item ID</p>
+                      <p className="font-mono text-xs">{row.ebay_item_id}</p>
+                      {row.listing_web_url ? (
+                        <Button variant="outline" size="sm" asChild className="mt-2">
+                          <a href={row.listing_web_url} target="_blank" rel="noopener noreferrer">
+                            Open eBay (new window)
+                          </a>
+                        </Button>
+                      ) : null}
+                      {row.buying_options?.length ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Sale type: {row.buying_options.join(", ")}
+                        </p>
+                      ) : null}
+                      {row.listing_ended_at ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Ends: {dateShort(row.listing_ended_at)}
+                        </p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="align-top text-xs text-muted-foreground">
+                      <p>
+                        tier {row.tier ?? "—"} · {row.candidate_count} candidate(s)
+                        {row.confidence != null && row.confidence !== ""
+                          ? ` · score ${row.confidence}`
+                          : ""}
+                      </p>
+                      {row.reason_codes?.length ? <p className="mt-1">{row.reason_codes.join(", ")}</p> : null}
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild size="sm">
+                          <Link href={`/watch-review/detail/?id=${row.id}`}>Review</Link>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/listings/detail/?id=${row.listing_id}`}>Open in WatchFinder</Link>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={notInterestedBusyId === row.id}
+                          onClick={() => markNotInterested(row.id)}
+                          title="Remove listing and block this eBay item id from future ingest"
+                        >
+                          {notInterestedBusyId === row.id ? "…" : "Not interested"}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </>
       )}
     </div>

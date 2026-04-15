@@ -47,6 +47,9 @@ type ListingsPageState = {
     title_q: string;
     text_q: string;
     brand: string;
+    resolved_brand_id: string;
+    resolved_stock_reference_id: string;
+    caliber_id: string;
     price_min: string;
     price_max: string;
     repair_keyword: string;
@@ -71,6 +74,9 @@ export default function ListingsPage() {
     title_q: "",
     text_q: "",
     brand: "",
+    resolved_brand_id: "",
+    resolved_stock_reference_id: "",
+    caliber_id: "",
     price_min: "",
     price_max: "",
     repair_keyword: "",
@@ -102,6 +108,7 @@ export default function ListingsPage() {
     usePersistedTableThumbSize(TABLE_THUMB_STORAGE.listings);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+  const urlEntityHydrated = useRef(false);
 
   useEffect(() => {
     try {
@@ -114,6 +121,9 @@ export default function ListingsPage() {
             ...prev,
             ...pf,
             text_q: pf.text_q ?? "",
+            resolved_brand_id: pf.resolved_brand_id ?? "",
+            resolved_stock_reference_id: pf.resolved_stock_reference_id ?? "",
+            caliber_id: pf.caliber_id ?? "",
           }));
         }
         if (typeof parsed?.skip === "number" && parsed.skip >= 0) setSkip(parsed.skip);
@@ -132,6 +142,25 @@ export default function ListingsPage() {
       setReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!ready || urlEntityHydrated.current) return;
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const rb = sp.get("resolved_brand_id");
+    const rr = sp.get("resolved_stock_reference_id");
+    const cid = sp.get("caliber_id");
+    if (rb || rr || cid) {
+      urlEntityHydrated.current = true;
+      setFilters((f) => ({
+        ...f,
+        resolved_brand_id: rb ?? "",
+        resolved_stock_reference_id: rr ?? "",
+        caliber_id: cid ?? "",
+      }));
+      setQueryNonce((n) => n + 1);
+    }
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -154,6 +183,11 @@ export default function ListingsPage() {
     if (f.title_q) q.set("title_q", f.title_q);
     if ((f.text_q ?? "").trim()) q.set("text_q", (f.text_q ?? "").trim());
     if (f.brand) q.set("brand", f.brand);
+    if (f.resolved_brand_id.trim()) q.set("resolved_brand_id", f.resolved_brand_id.trim());
+    if (f.resolved_stock_reference_id.trim()) {
+      q.set("resolved_stock_reference_id", f.resolved_stock_reference_id.trim());
+    }
+    if (f.caliber_id.trim()) q.set("caliber_id", f.caliber_id.trim());
     if (f.price_min) q.set("price_min", f.price_min);
     if (f.price_max) q.set("price_max", f.price_max);
     if (f.repair_keyword) q.set("repair_keyword", f.repair_keyword);
@@ -284,6 +318,23 @@ export default function ListingsPage() {
               onChange={(v) => setFilters((f) => ({ ...f, brand: v }))}
             />
             <Field
+              label="Resolved brand id (UUID)"
+              value={filters.resolved_brand_id}
+              onChange={(v) => setFilters((f) => ({ ...f, resolved_brand_id: v }))}
+            />
+            <Field
+              label="Resolved stock reference id (UUID)"
+              value={filters.resolved_stock_reference_id}
+              onChange={(v) =>
+                setFilters((f) => ({ ...f, resolved_stock_reference_id: v }))
+              }
+            />
+            <Field
+              label="Caliber id (UUID)"
+              value={filters.caliber_id}
+              onChange={(v) => setFilters((f) => ({ ...f, caliber_id: v }))}
+            />
+            <Field
               label="Price min (numeric)"
               value={filters.price_min}
               onChange={(v) => setFilters((f) => ({ ...f, price_min: v }))}
@@ -408,6 +459,9 @@ export default function ListingsPage() {
                   title_q: "",
                   text_q: "",
                   brand: "",
+                  resolved_brand_id: "",
+                  resolved_stock_reference_id: "",
+                  caliber_id: "",
                   price_min: "",
                   price_max: "",
                   repair_keyword: "",
