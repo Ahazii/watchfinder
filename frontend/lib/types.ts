@@ -17,6 +17,8 @@ export type ListingSummary = {
   currency: string | null;
   web_url: string | null;
   condition_description: string | null;
+  buying_options?: string[] | null;
+  listing_ended_at?: string | null;
   last_seen_at: string | null;
   first_seen_at?: string | null;
   is_active?: boolean;
@@ -180,6 +182,11 @@ export type WatchLinkReviewListItem = {
   listing_id: string;
   ebay_item_id: string;
   listing_title?: string | null;
+  listing_description?: string | null;
+  listing_web_url?: string | null;
+  listing_image_urls?: string[] | null;
+  listing_ended_at?: string | null;
+  buying_options?: string[] | null;
   tier?: string | null;
   confidence?: string | number | null;
   candidate_count: number;
@@ -197,7 +204,11 @@ export type WatchLinkReviewDetail = {
   listing_id: string;
   ebay_item_id: string;
   listing_title?: string | null;
+  listing_description?: string | null;
   listing_web_url?: string | null;
+  listing_image_urls?: string[] | null;
+  listing_ended_at?: string | null;
+  buying_options?: string[] | null;
   tier?: string | null;
   confidence?: string | number | null;
   reason_codes?: string[] | null;
@@ -265,7 +276,7 @@ export type AppSettings = {
   ingest_queries: IngestQueryDto[];
   env_fallback_query: string;
   watch_catalog_review_mode?: string;
-  /** Comma-separated; merged with server env WATCH_CATALOG_EXCLUDED_BRANDS */
+  /** Comma-separated excluded words/phrases; merged with server env WATCH_CATALOG_EXCLUDED_BRANDS */
   watch_catalog_excluded_brands?: string;
   everywatch_login_email?: string;
   everywatch_password_configured?: boolean;
