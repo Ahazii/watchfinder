@@ -7,23 +7,50 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+const NOT_INTERESTED_PAGE_SIZE_KEY = "watchfinder-not-interested-page-size";
+const NOT_INTERESTED_PAGE_SIZE_OPTIONS = [30, 50, 100, 200, 500] as const;
+
 export default function NotInterestedPage() {
   const [data, setData] = useState<NotInterestedListResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [activeOnly, setActiveOnly] = useState(true);
+  const [skip, setSkip] = useState(0);
+  const [limit, setLimit] = useState<number>(() => {
+    if (typeof window === "undefined") return 50;
+    const raw = Number(localStorage.getItem(NOT_INTERESTED_PAGE_SIZE_KEY));
+    return NOT_INTERESTED_PAGE_SIZE_OPTIONS.includes(
+      raw as (typeof NOT_INTERESTED_PAGE_SIZE_OPTIONS)[number],
+    )
+      ? raw
+      : 50;
+  });
 
   const load = useCallback(() => {
     setErr(null);
     const qs = new URLSearchParams();
-    qs.set("limit", "500");
+    qs.set("skip", String(skip));
+    qs.set("limit", String(limit));
     qs.set("active_only", activeOnly ? "true" : "false");
     if (q.trim()) qs.set("q", q.trim());
     fetchJson<NotInterestedListResponse>(`/api/not-interested?${qs.toString()}`)
       .then(setData)
       .catch((e: Error) => setErr(e.message));
-  }, [activeOnly, q]);
+  }, [activeOnly, q, skip, limit]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(NOT_INTERESTED_PAGE_SIZE_KEY, String(limit));
+    } catch {
+      // Ignore storage write errors.
+    }
+    setSkip(0);
+  }, [limit]);
+
+  useEffect(() => {
+    setSkip(0);
+  }, [q, activeOnly]);
 
   useEffect(() => {
     load();
@@ -92,6 +119,26 @@ export default function NotInterestedPage() {
             <Button variant="outline" onClick={load}>
               Refresh
             </Button>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="not-interested-page-size"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Rows per page
+              </label>
+              <select
+                id="not-interested-page-size"
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                value={String(limit)}
+                onChange={(e) => setLimit(Number(e.target.value))}
+              >
+                {NOT_INTERESTED_PAGE_SIZE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           {err ? <p className="text-sm text-red-400">{err}</p> : null}
         </CardContent>
@@ -103,6 +150,9 @@ export default function NotInterestedPage() {
         <p className="text-muted-foreground">No records.</p>
       ) : (
         <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Showing {data.items.length} of {data.total} (skip {skip}, limit {limit})
+          </p>
           {data.items.map((row) => (
             <Card key={row.id}>
               <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -137,6 +187,22 @@ export default function NotInterestedPage() {
               </CardContent>
             </Card>
           ))}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={skip === 0}
+              onClick={() => setSkip((s) => Math.max(0, s - limit))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              disabled={skip + limit >= data.total}
+              onClick={() => setSkip((s) => s + limit)}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
     </div>

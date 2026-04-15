@@ -34,15 +34,15 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | URL | What it is |
 |-----|------------|
 | `/` | Dashboard (stats, **eBay Browse / OAuth call counters**, recent listings with thumbs) |
-| `/listings/` | Listings + filters (**Title contains**, brand, price, etc.), sortable columns, thumbnails, **View on eBay** per row |
-| `/candidates/` | Repair candidates (same filters as listings where applicable) |
+| `/listings/` | Listings + filters (**Title contains**, brand, price, etc.), sortable columns, thumbnails, **View on eBay** per row, and persisted **rows per page** |
+| `/candidates/` | Repair candidates (same filters as listings where applicable), with persisted **rows per page** |
 | `/settings/` | Browse search lines, **interval** + **items per search line** (1–200), **stale listing refresh** (optional scheduler), **Refresh ALL active now** (full active pass + live progress), **match queue sync** interval, **require identity before queue** (brand + reference/family), watch-catalog mode, **Ingest now** / **Stale refresh now** |
 | `/watch-models/` | **Watch database** — catalog CRUD (canonical models, manual + observed price bounds) |
 | `/watch-models/detail/?id=<uuid>` | Edit one model (all fields); optional **Everywatch watch URL** (exact listing page) drives snapshots and market search; omit `id` to create; **Everywatch import tester** link opens **`/watch-models/everywatch-test/?id=`** for debug fetches |
 | `/watch-models/everywatch-test/?id=<uuid>` | Debug Everywatch HTML / mapping (optional Cookie header): **`/watch-listing?query=…`** probes, parsed hit table, detail **specs / image / GBP price rows**; does not import into catalog |
 | `/watch-review/` | **Match queue** — pending catalogue links (review mode) |
 | `/watch-review/detail/?id=<review-uuid>` | Resolve one queue item (match / create / dismiss) |
-| `/not-interested/` | Manage blocked eBay items (restore interest or delete history records) |
+| `/not-interested/` | Manage blocked eBay items (restore interest or delete history records), with pagination + **rows per page** |
 | `/listings/detail/?id=<uuid>` | Listing detail, **editable valuation**, **watch catalog link** (override / clear), internal comps, **Save** → `PATCH /api/listings/{id}` |
 | `/api/...` | JSON API (same origin as UI in Docker) |
 | `/docs` | Swagger UI |
@@ -112,6 +112,7 @@ After upgrading, run **`alembic upgrade head`** (through **010** / **`not_intere
 - **Refresh paths** use two modes. **Single-item refresh** keeps the stricter path (Browse **`getItem`** plus optional HTML marker checks on item pages). **Batch/full active refresh** uses a faster Browse-first path (no per-item HTML page-marker fetch) so long runs are less likely to stall on repeated eBay page **403/503** responses. In both modes, **`is_active`** is set **`false`** when Browse signals the listing ended (for example, **`listing_ended_at`** in the past). Excluded words/phrases from Settings/env are enforced as a hard block: matched listings are forced inactive and cannot be reactivated by ingest/refresh.
 - **Listings** / **candidates** list APIs default to **`listing_active=active`** (active rows only). Use **`listing_active=all`** or **`inactive`** to include or isolate ended listings. **Detail** still returns inactive rows so you can refresh or read history.
 - **Listings UI state persistence:** filters, active/inactive mode, sort, and pagination offset are saved in browser **`localStorage`** (key **`watchfinder-listings-state-v1`**) so Back navigation returns to your previous list view.
+- **Rows per page controls:** **`/listings/`** and **`/candidates/`** expose **30 / 50 / 100 / 200** options; **`/not-interested/`** exposes **30 / 50 / 100 / 200 / 500**. Each page persists your choice in browser `localStorage`.
 - **Not interested blocklist:** marking a listing as **Not interested** stores its `ebay_item_id` in **`not_interested_listings`** (active) and removes the current listing row. Ingest skips active blocklist ids so they are not re-downloaded until you restore interest on **`/not-interested/`**.
 
 ## Ingest searches (UI + API)

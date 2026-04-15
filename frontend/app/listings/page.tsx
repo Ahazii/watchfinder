@@ -32,6 +32,7 @@ import { TableThumbSizeSelect } from "@/components/table-thumb-size-select";
 import { TABLE_THUMB_STORAGE, usePersistedTableThumbSize } from "@/lib/table-thumb-sizes";
 
 const LISTINGS_STATE_KEY = "watchfinder-listings-state-v1";
+const LISTINGS_PAGE_SIZE_OPTIONS = [30, 50, 100, 200] as const;
 
 type ListingsPageState = {
   filters: {
@@ -45,10 +46,13 @@ type ListingsPageState = {
     caliber_known: string;
     confidence_min: string;
     profit_min: string;
+    sale_type: string;
+    ending_within_hours: string;
     listing_active: "active" | "inactive" | "all";
     exclude_quartz: boolean;
   };
   skip: number;
+  limit?: number;
   sortBy: string;
   sortDir: SortDir;
 };
@@ -65,14 +69,16 @@ export default function ListingsPage() {
     caliber_known: "",
     confidence_min: "",
     profit_min: "",
+    sale_type: "",
+    ending_within_hours: "",
     listing_active: "active" as "active" | "inactive" | "all",
     exclude_quartz: false,
   });
   const [skip, setSkip] = useState(0);
+  const [limit, setLimit] = useState<number>(30);
   const [queryNonce, setQueryNonce] = useState(0);
   const [sortBy, setSortBy] = useState("last_seen");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const limit = 30;
   const [data, setData] = useState<ListingListResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +100,12 @@ export default function ListingsPage() {
         const parsed = JSON.parse(raw) as ListingsPageState;
         if (parsed?.filters) setFilters(parsed.filters);
         if (typeof parsed?.skip === "number" && parsed.skip >= 0) setSkip(parsed.skip);
+        if (
+          typeof parsed?.limit === "number" &&
+          LISTINGS_PAGE_SIZE_OPTIONS.includes(parsed.limit as (typeof LISTINGS_PAGE_SIZE_OPTIONS)[number])
+        ) {
+          setLimit(parsed.limit);
+        }
         if (typeof parsed?.sortBy === "string" && parsed.sortBy) setSortBy(parsed.sortBy);
         if (parsed?.sortDir === "asc" || parsed?.sortDir === "desc") setSortDir(parsed.sortDir);
       }
@@ -107,8 +119,13 @@ export default function ListingsPage() {
   useEffect(() => {
     if (!ready) return;
     const state: ListingsPageState = { filters, skip, sortBy, sortDir };
+    state.limit = limit;
     localStorage.setItem(LISTINGS_STATE_KEY, JSON.stringify(state));
-  }, [ready, filters, skip, sortBy, sortDir]);
+  }, [ready, filters, skip, sortBy, sortDir, limit]);
+
+  useEffect(() => {
+    setSkip(0);
+  }, [limit]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -128,6 +145,8 @@ export default function ListingsPage() {
     if (f.caliber_known === "no") q.set("caliber_known", "false");
     if (f.confidence_min) q.set("confidence_min", f.confidence_min);
     if (f.profit_min) q.set("profit_min", f.profit_min);
+    if (f.sale_type) q.set("sale_type", f.sale_type);
+    if (f.ending_within_hours) q.set("ending_within_hours", f.ending_within_hours);
     q.set("listing_active", f.listing_active);
     if (f.exclude_quartz) q.set("exclude_quartz", "true");
     q.set("sort_by", sortBy);
@@ -289,6 +308,16 @@ export default function ListingsPage() {
               value={filters.profit_min}
               onChange={(v) => setFilters((f) => ({ ...f, profit_min: v }))}
             />
+            <Field
+              label="Sale type (e.g. AUCTION)"
+              value={filters.sale_type}
+              onChange={(v) => setFilters((f) => ({ ...f, sale_type: v }))}
+            />
+            <Field
+              label="Ending within hours"
+              value={filters.ending_within_hours}
+              onChange={(v) => setFilters((f) => ({ ...f, ending_within_hours: v }))}
+            />
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">
                 Listing status
@@ -345,6 +374,8 @@ export default function ListingsPage() {
                   caliber_known: "",
                   confidence_min: "",
                   profit_min: "",
+                  sale_type: "",
+                  ending_within_hours: "",
                   listing_active: "active",
                   exclude_quartz: false,
                 });
@@ -382,11 +413,33 @@ export default function ListingsPage() {
               Showing {data.items.length} of {data.total} (skip {data.skip}, limit{" "}
               {data.limit})
             </p>
-            <TableThumbSizeSelect
-              id="listings-thumb-size"
-              value={listingsThumbId}
-              onChange={setListingsThumbId}
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="listings-page-size"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Rows per page
+                </label>
+                <select
+                  id="listings-page-size"
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                  value={String(limit)}
+                  onChange={(e) => setLimit(Number(e.target.value))}
+                >
+                  {LISTINGS_PAGE_SIZE_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <TableThumbSizeSelect
+                id="listings-thumb-size"
+                value={listingsThumbId}
+                onChange={setListingsThumbId}
+              />
+            </div>
           </div>
           {promoteMsg ? (
             <p className="text-sm text-muted-foreground">{promoteMsg}</p>
@@ -521,6 +574,10 @@ function ListingsTable({
             sortDir={sortDir}
             onSort={onSort}
           />
+          <TableHead className="text-muted-foreground">Sale type</TableHead>
+          <TableHead className="text-muted-foreground" title="eBay item end date/time">
+            Ends
+          </TableHead>
           <TableHead className="w-[1%] whitespace-nowrap text-right text-muted-foreground">
             eBay
           </TableHead>
@@ -576,6 +633,12 @@ function ListingsTable({
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">
               {dateShort(r.last_seen_at)}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {r.buying_options?.length ? r.buying_options.join(", ") : "—"}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {dateShort(r.listing_ended_at)}
             </TableCell>
             <TableCell className="text-right align-top">
               <Button

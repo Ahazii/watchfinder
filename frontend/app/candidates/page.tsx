@@ -29,6 +29,9 @@ import {
 } from "@/components/sortable-table-head";
 import { ListingThumb } from "@/components/listing-thumb";
 
+const CANDIDATES_PAGE_SIZE_KEY = "watchfinder-candidates-page-size";
+const CANDIDATES_PAGE_SIZE_OPTIONS = [30, 50, 100, 200] as const;
+
 export default function CandidatesPage() {
   const [filters, setFilters] = useState({
     title_q: "",
@@ -36,14 +39,24 @@ export default function CandidatesPage() {
     price_max: "",
     repair_keyword: "",
     confidence_min: "",
+    sale_type: "",
+    ending_within_hours: "",
     listing_active: "active" as "active" | "inactive" | "all",
     exclude_quartz: false,
   });
   const [skip, setSkip] = useState(0);
+  const [limit, setLimit] = useState<number>(() => {
+    if (typeof window === "undefined") return 30;
+    const raw = Number(localStorage.getItem(CANDIDATES_PAGE_SIZE_KEY));
+    return CANDIDATES_PAGE_SIZE_OPTIONS.includes(
+      raw as (typeof CANDIDATES_PAGE_SIZE_OPTIONS)[number],
+    )
+      ? raw
+      : 30;
+  });
   const [queryNonce, setQueryNonce] = useState(0);
   const [sortBy, setSortBy] = useState("last_seen");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const limit = 30;
   const [data, setData] = useState<ListingListResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
@@ -63,6 +76,8 @@ export default function CandidatesPage() {
     if (f.price_max) q.set("price_max", f.price_max);
     if (f.repair_keyword) q.set("repair_keyword", f.repair_keyword);
     if (f.confidence_min) q.set("confidence_min", f.confidence_min);
+    if (f.sale_type) q.set("sale_type", f.sale_type);
+    if (f.ending_within_hours) q.set("ending_within_hours", f.ending_within_hours);
     q.set("listing_active", f.listing_active);
     if (f.exclude_quartz) q.set("exclude_quartz", "true");
     q.set("sort_by", sortBy);
@@ -83,6 +98,15 @@ export default function CandidatesPage() {
       .catch((e: Error) => setErr(e.message))
       .finally(() => setLoading(false));
   }, [skip, limit, sortBy, sortDir]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CANDIDATES_PAGE_SIZE_KEY, String(limit));
+    } catch {
+      // Ignore storage write errors.
+    }
+    setSkip(0);
+  }, [limit]);
 
   useEffect(() => {
     void load();
@@ -154,6 +178,26 @@ export default function CandidatesPage() {
                 }
               />
             </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Sale type</label>
+              <Input
+                value={filters.sale_type}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, sale_type: e.target.value }))
+                }
+                placeholder="AUCTION / FIXED_PRICE / BEST_OFFER"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Ending within hours</label>
+              <Input
+                value={filters.ending_within_hours}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, ending_within_hours: e.target.value }))
+                }
+                placeholder="24"
+              />
+            </div>
             <Button
               type="button"
               onClick={() => {
@@ -213,8 +257,28 @@ export default function CandidatesPage() {
       ) : data ? (
         <>
           <p className="text-sm text-muted-foreground">
-            {data.total} candidate(s) · skip {data.skip}
+            {data.total} candidate(s) · skip {data.skip} · limit {data.limit}
           </p>
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="candidates-page-size"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Rows per page
+            </label>
+            <select
+              id="candidates-page-size"
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              value={String(limit)}
+              onChange={(e) => setLimit(Number(e.target.value))}
+            >
+              {CANDIDATES_PAGE_SIZE_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
           <CandidatesTable
             rows={data.items}
             sortBy={sortBy}
@@ -313,6 +377,9 @@ function CandidatesTable({
             sortDir={sortDir}
             onSort={onSort}
           />
+          <TableHead className="text-muted-foreground">Sale type</TableHead>
+          <TableHead className="text-muted-foreground">Ends</TableHead>
+          <TableHead className="text-muted-foreground">eBay</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -365,6 +432,23 @@ function CandidatesTable({
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">
               {dateShort(r.last_seen_at)}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {r.buying_options?.length ? r.buying_options.join(", ") : "—"}
+            </TableCell>
+            <TableCell className="text-xs text-muted-foreground">
+              {dateShort(r.listing_ended_at)}
+            </TableCell>
+            <TableCell className="align-top">
+              {r.web_url ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={r.web_url} target="_blank" rel="noopener noreferrer">
+                    View
+                  </a>
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
             </TableCell>
           </TableRow>
         ))}
