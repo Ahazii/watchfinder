@@ -9,14 +9,13 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from watchfinder.config import Settings, get_settings
 from watchfinder.models import AppSetting, Listing
 from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ingestion.live_refresh import refresh_listing_from_ebay
-from watchfinder.services.listing_status import active_listing_clause
 from watchfinder.util.app_setting_text import truthy_app_value
 
 if TYPE_CHECKING:
@@ -31,6 +30,14 @@ KEY_ENABLED = "stale_listing_refresh_enabled"
 KEY_INTERVAL = "stale_listing_refresh_interval_minutes"
 KEY_MAX_PER_RUN = "stale_listing_refresh_max_per_run"
 KEY_MIN_AGE_HOURS = "stale_listing_refresh_min_age_hours"
+
+
+def _active_listing_clause():
+    now = datetime.now(UTC)
+    return and_(
+        Listing.is_active.is_(True),
+        or_(Listing.listing_ended_at.is_(None), Listing.listing_ended_at > now),
+    )
 
 
 def get_stale_listing_refresh_enabled(db: Session, settings: Settings) -> bool:
@@ -126,7 +133,7 @@ def iter_stale_active_listing_ids(
     cutoff = now - timedelta(hours=min_age_hours)
     stmt = (
         select(Listing.id)
-        .where(active_listing_clause())
+        .where(_active_listing_clause())
         .where(or_(Listing.last_seen_at.is_(None), Listing.last_seen_at < cutoff))
         .order_by(Listing.last_seen_at.asc().nulls_first())
         .limit(limit)
@@ -138,7 +145,7 @@ def iter_all_active_listing_ids(db: Session) -> list[UUID]:
     """All currently active listings, oldest last_seen first (null first)."""
     stmt = (
         select(Listing.id)
-        .where(active_listing_clause())
+        .where(_active_listing_clause())
         .order_by(Listing.last_seen_at.asc().nulls_first())
     )
     return list(db.scalars(stmt).all())
@@ -155,7 +162,7 @@ def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> 
     ids = iter_stale_active_listing_ids(db, min_age_hours=min_age, limit=max_n)
     if not ids:
         n_active = db.scalar(
-            select(func.count()).select_from(Listing).where(active_listing_clause())
+            select(func.count()).select_from(Listing).where(_active_listing_clause())
         )
         n_active = int(n_active or 0)
         logger.info(
