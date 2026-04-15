@@ -34,9 +34,18 @@ import { TABLE_THUMB_STORAGE, usePersistedTableThumbSize } from "@/lib/table-thu
 const LISTINGS_STATE_KEY = "watchfinder-listings-state-v1";
 const LISTINGS_PAGE_SIZE_OPTIONS = [30, 50, 100, 200] as const;
 
+/** eBay Browse `buyingOptions` values; stored as JSON array on listings. */
+const SALE_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Any" },
+  { value: "AUCTION", label: "Auction" },
+  { value: "FIXED_PRICE", label: "Fixed price" },
+  { value: "BEST_OFFER", label: "Best offer" },
+];
+
 type ListingsPageState = {
   filters: {
     title_q: string;
+    text_q: string;
     brand: string;
     price_min: string;
     price_max: string;
@@ -60,6 +69,7 @@ type ListingsPageState = {
 export default function ListingsPage() {
   const [filters, setFilters] = useState({
     title_q: "",
+    text_q: "",
     brand: "",
     price_min: "",
     price_max: "",
@@ -98,7 +108,14 @@ export default function ListingsPage() {
       const raw = localStorage.getItem(LISTINGS_STATE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as ListingsPageState;
-        if (parsed?.filters) setFilters(parsed.filters);
+        if (parsed?.filters) {
+          const pf = parsed.filters as ListingsPageState["filters"];
+          setFilters((prev) => ({
+            ...prev,
+            ...pf,
+            text_q: pf.text_q ?? "",
+          }));
+        }
         if (typeof parsed?.skip === "number" && parsed.skip >= 0) setSkip(parsed.skip);
         if (
           typeof parsed?.limit === "number" &&
@@ -135,6 +152,7 @@ export default function ListingsPage() {
     q.set("skip", String(skip));
     q.set("limit", String(limit));
     if (f.title_q) q.set("title_q", f.title_q);
+    if ((f.text_q ?? "").trim()) q.set("text_q", (f.text_q ?? "").trim());
     if (f.brand) q.set("brand", f.brand);
     if (f.price_min) q.set("price_min", f.price_min);
     if (f.price_max) q.set("price_max", f.price_max);
@@ -242,7 +260,10 @@ export default function ListingsPage() {
           <CardTitle>Filters</CardTitle>
           <CardDescription>
             Adjust fields, then Apply. Pagination keeps the same filters. Price and profit filters are plain
-            numeric comparisons (they do not convert currencies).
+            numeric comparisons (they do not convert currencies).{" "}
+            <strong>Contains text (any field)</strong> searches one phrase across title, subtitle, eBay id, URLs,
+            condition, category, seller, buying options, item aspects, raw JSON, all parsed attributes, and repair
+            signals (case-insensitive substring).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -251,6 +272,11 @@ export default function ListingsPage() {
               label="Title contains"
               value={filters.title_q}
               onChange={(v) => setFilters((f) => ({ ...f, title_q: v }))}
+            />
+            <Field
+              label="Contains text (any field)"
+              value={filters.text_q}
+              onChange={(v) => setFilters((f) => ({ ...f, text_q: v }))}
             />
             <Field
               label="Brand"
@@ -308,21 +334,36 @@ export default function ListingsPage() {
               value={filters.profit_min}
               onChange={(v) => setFilters((f) => ({ ...f, profit_min: v }))}
             />
-            <Field
-              label="Sale type (e.g. AUCTION)"
-              value={filters.sale_type}
-              onChange={(v) => setFilters((f) => ({ ...f, sale_type: v }))}
-            />
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="sale-type">
+                Sale type
+              </label>
+              <select
+                id="sale-type"
+                className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                value={filters.sale_type}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, sale_type: e.target.value }))
+                }
+              >
+                {SALE_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value || "any"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <Field
               label="Ending within hours"
               value={filters.ending_within_hours}
               onChange={(v) => setFilters((f) => ({ ...f, ending_within_hours: v }))}
             />
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="listing-status">
                 Listing status
               </label>
               <select
+                id="listing-status"
                 className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
                 value={filters.listing_active}
                 onChange={(e) =>
@@ -332,9 +373,9 @@ export default function ListingsPage() {
                   }))
                 }
               >
-                <option value="active">Active only</option>
-                <option value="inactive">Inactive only</option>
-                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="all">Both (active + inactive)</option>
               </select>
             </div>
             <label className="flex cursor-pointer items-center gap-2 pt-6 text-sm sm:col-span-2 lg:col-span-3">
@@ -365,6 +406,7 @@ export default function ListingsPage() {
               onClick={() => {
                 setFilters({
                   title_q: "",
+                  text_q: "",
                   brand: "",
                   price_min: "",
                   price_max: "",

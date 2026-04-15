@@ -34,7 +34,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | URL | What it is |
 |-----|------------|
 | `/` | Dashboard (stats, **eBay Browse / OAuth call counters**, recent listings with thumbs) |
-| `/listings/` | Listings + filters (**Title contains**, brand, price, etc.), sortable columns, thumbnails, **View on eBay** per row, and persisted **rows per page** |
+| `/listings/` | Listings + filters (**Title contains**, **Contains text (any field)** substring across listing + JSON + parsed fields, brand, price, sale-type dropdown, status, etc.), sortable columns, thumbnails, **View on eBay** per row, and persisted **rows per page** |
 | `/candidates/` | Repair candidates (same filters as listings where applicable), with persisted **rows per page** |
 | `/settings/` | Browse search lines, **interval** + **items per search line** (1–200), **stale listing refresh** (optional scheduler), **Refresh ALL active now** (full active pass + live progress), **match queue sync** interval, **require identity before queue** (brand + reference/family), watch-catalog mode, **Ingest now** / **Stale refresh now** |
 | `/watch-models/` | **Watch database** — catalog CRUD (canonical models, manual + observed price bounds) |

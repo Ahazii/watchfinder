@@ -24,6 +24,10 @@ def list_candidates(
         None,
         description="Case-insensitive substring match on listing title only",
     ),
+    text_q: str | None = Query(
+        None,
+        description="Case-insensitive substring across title, URLs, condition, JSON, parsed attributes, repair signals",
+    ),
     brand: str | None = None,
     price_min: Decimal | None = None,
     price_max: Decimal | None = None,
@@ -33,6 +37,16 @@ def list_candidates(
     caliber_known: bool | None = None,
     confidence_min: Decimal | None = None,
     profit_min: Decimal | None = None,
+    sale_type: str | None = Query(
+        None,
+        description="Filter sale format, e.g. AUCTION, FIXED_PRICE, BEST_OFFER",
+    ),
+    ending_within_hours: int | None = Query(
+        None,
+        ge=0,
+        le=720,
+        description="Only listings ending within N hours from now",
+    ),
     listing_active: Literal["active", "inactive", "all"] = Query(
         "active",
         description="Filter by row flag: active listings, inactive only, or all",
@@ -51,6 +65,7 @@ def list_candidates(
     base = base_listing_select(
         listing_active=listing_active,
         title_q=title_q,
+        text_q=text_q,
         brand=brand,
         price_min=price_min,
         price_max=price_max,
@@ -60,6 +75,8 @@ def list_candidates(
         caliber_known=caliber_known,
         confidence_min=confidence_min,
         profit_min=profit_min,
+        sale_type=sale_type,
+        ending_within_hours=ending_within_hours,
         candidates_only=True,
         exclude_quartz=exclude_quartz,
     )

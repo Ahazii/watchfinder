@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Select, exists, func, or_, select
+from sqlalchemy import Select, Text, cast, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from watchfinder.models import Listing, OpportunityScore, ParsedAttribute, RepairSignal
+from watchfinder.services.listing_status import active_listing_clause, inactive_listing_clause
 
 
 def base_listing_select(
     *,
     listing_active: str = "active",
     title_q: str | None = None,
+    text_q: str | None = None,
     brand: str | None = None,
     price_min: Decimal | None = None,
     price_max: Decimal | None = None,
@@ -23,6 +26,8 @@ def base_listing_select(
     caliber_known: bool | None = None,
     confidence_min: Decimal | None = None,
     profit_min: Decimal | None = None,
+    sale_type: str | None = None,
+    ending_within_hours: int | None = None,
     candidates_only: bool = False,
     exclude_quartz: bool = False,
 ) -> Select:
@@ -30,14 +35,44 @@ def base_listing_select(
 
     la = (listing_active or "active").strip().lower()
     if la == "active":
-        stmt = stmt.where(Listing.is_active.is_(True))
+        stmt = stmt.where(active_listing_clause())
     elif la == "inactive":
-        stmt = stmt.where(Listing.is_active.is_(False))
+        stmt = stmt.where(inactive_listing_clause())
     # "all" — no is_active filter
 
     if title_q:
         t = f"%{title_q.strip()}%"
         stmt = stmt.where(Listing.title.ilike(t))
+
+    if text_q and text_q.strip():
+        raw = text_q.strip()
+        t = f"%{raw}%"
+        stmt = stmt.where(
+            or_(
+                Listing.title.ilike(t),
+                Listing.subtitle.ilike(t),
+                Listing.web_url.ilike(t),
+                Listing.ebay_item_id.ilike(t),
+                Listing.condition_description.ilike(t),
+                Listing.category_path.ilike(t),
+                Listing.seller_username.ilike(t),
+                cast(Listing.buying_options, Text).ilike(t),
+                cast(Listing.item_aspects, Text).ilike(t),
+                cast(Listing.raw_item_json, Text).ilike(t),
+                exists(
+                    select(1).where(
+                        ParsedAttribute.listing_id == Listing.id,
+                        ParsedAttribute.value_text.ilike(t),
+                    )
+                ),
+                exists(
+                    select(1).where(
+                        RepairSignal.listing_id == Listing.id,
+                        RepairSignal.matched_text.ilike(t),
+                    )
+                ),
+            )
+        )
 
     if brand:
         b = f"%{brand.strip()}%"
@@ -141,6 +176,19 @@ def base_listing_select(
                     OpportunityScore.potential_profit >= profit_min,
                 )
             )
+        )
+
+    if sale_type and sale_type.strip():
+        st = f"%{sale_type.strip().lower()}%"
+        stmt = stmt.where(func.lower(cast(Listing.buying_options, Text)).ilike(st))
+
+    if ending_within_hours is not None:
+        now = datetime.now(UTC)
+        horizon = now + timedelta(hours=max(0, int(ending_within_hours)))
+        stmt = stmt.where(
+            Listing.listing_ended_at.is_not(None),
+            Listing.listing_ended_at > now,
+            Listing.listing_ended_at <= horizon,
         )
 
     if candidates_only:
