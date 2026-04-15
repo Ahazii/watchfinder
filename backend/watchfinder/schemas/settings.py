@@ -37,7 +37,7 @@ class SettingsOut(BaseModel):
     watch_catalog_queue_require_identity: bool = True
     """If true, queue requires brand + (reference or family); if false, queue identity-poor rows too."""
     watch_catalog_excluded_brands: str = ""
-    """Comma-separated brands from Settings UI; merged with env WATCH_CATALOG_EXCLUDED_BRANDS."""
+    """Comma-separated excluded words/phrases; merged with env WATCH_CATALOG_EXCLUDED_BRANDS."""
     everywatch_login_email: str = ""
     everywatch_password_configured: bool = False
     """Password is never returned; only whether one is stored."""
@@ -84,7 +84,7 @@ class SettingsPatch(BaseModel):
     watch_catalog_excluded_brands: str | None = Field(
         None,
         max_length=4000,
-        description="Comma-separated brand names; merged with env WATCH_CATALOG_EXCLUDED_BRANDS",
+        description="Comma-separated excluded words/phrases; merged with env WATCH_CATALOG_EXCLUDED_BRANDS",
     )
     everywatch_login_email: str | None = Field(None, max_length=320)
     everywatch_login_password: str | None = Field(

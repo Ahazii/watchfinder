@@ -10,6 +10,8 @@ from watchfinder.config import get_settings
 from watchfinder.db import SessionLocal
 from watchfinder.schemas.settings import ActiveRefreshStatusResponse, IngestRunResponse
 from watchfinder.services.ingestion.job import run_all_browse_ingest
+from watchfinder.services.listing_exclusions import apply_excluded_terms_to_all_listings
+from watchfinder.services.listing_status import recompute_all_listing_is_active
 from watchfinder.services.stale_listing_refresh import (
     run_full_active_listing_refresh,
     run_stale_listing_refresh,
@@ -151,3 +153,31 @@ def active_refresh_all_status() -> ActiveRefreshStatusResponse:
     with _active_refresh_lock:
         snap = dict(_active_refresh_status)
     return ActiveRefreshStatusResponse(**snap)
+
+
+@router.post("/recompute-active-from-end-date", response_model=dict)
+def recompute_active_from_end_date() -> dict:
+    """Recompute is_active for all listings from listing_ended_at in one DB pass."""
+    db = SessionLocal()
+    try:
+        out = recompute_all_listing_is_active(db)
+        return {"status": "ok", **out}
+    except Exception:
+        logger.exception("Recompute active-from-end-date failed")
+        raise
+    finally:
+        db.close()
+
+
+@router.post("/apply-excluded-words-all", response_model=dict)
+def apply_excluded_words_all() -> dict:
+    """Mark listings inactive when any excluded term matches listing content."""
+    db = SessionLocal()
+    try:
+        out = apply_excluded_terms_to_all_listings(db, get_settings())
+        return {"status": "ok", **out}
+    except Exception:
+        logger.exception("Apply excluded words to all listings failed")
+        raise
+    finally:
+        db.close()

@@ -63,7 +63,7 @@ export default function SettingsPage() {
   const [maxPages, setMaxPages] = useState(1);
   const [catalogReviewMode, setCatalogReviewMode] = useState<"auto" | "review">("auto");
   const [queueRequireIdentity, setQueueRequireIdentity] = useState(true);
-  const [catalogExcludedBrands, setCatalogExcludedBrands] = useState("");
+  const [catalogExcludedWords, setCatalogExcludedWords] = useState("");
   const [ewLoginEmail, setEwLoginEmail] = useState("");
   const [ewLoginPassword, setEwLoginPassword] = useState("");
   const [ewPasswordConfigured, setEwPasswordConfigured] = useState(false);
@@ -78,6 +78,8 @@ export default function SettingsPage() {
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
   const [activeRefreshStatus, setActiveRefreshStatus] = useState<ActiveRefreshStatus | null>(null);
   const [activeRefreshMsg, setActiveRefreshMsg] = useState<string | null>(null);
+  const [activeCheckAllBusy, setActiveCheckAllBusy] = useState(false);
+  const [applyExcludedBusy, setApplyExcludedBusy] = useState(false);
 
   const load = useCallback(() => {
     setErr(null);
@@ -91,7 +93,7 @@ export default function SettingsPage() {
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
         setQueueRequireIdentity(d.watch_catalog_queue_require_identity !== false);
-        setCatalogExcludedBrands(d.watch_catalog_excluded_brands ?? "");
+        setCatalogExcludedWords(d.watch_catalog_excluded_brands ?? "");
         setEwLoginEmail(d.everywatch_login_email ?? "");
         setEwLoginPassword("");
         setEwPasswordConfigured(Boolean(d.everywatch_password_configured));
@@ -147,7 +149,7 @@ export default function SettingsPage() {
       ingest_queries: payloadQueries,
       watch_catalog_review_mode: catalogReviewMode,
       watch_catalog_queue_require_identity: queueRequireIdentity,
-      watch_catalog_excluded_brands: catalogExcludedBrands,
+      watch_catalog_excluded_brands: catalogExcludedWords,
       everywatch_login_email: ewLoginEmail.trim(),
       stale_listing_refresh_enabled: staleRefreshEnabled,
       stale_listing_refresh_interval_minutes: staleRefreshInterval,
@@ -179,7 +181,7 @@ export default function SettingsPage() {
           d.watch_catalog_review_mode === "review" ? "review" : "auto",
         );
         setQueueRequireIdentity(d.watch_catalog_queue_require_identity !== false);
-        setCatalogExcludedBrands(d.watch_catalog_excluded_brands ?? "");
+        setCatalogExcludedWords(d.watch_catalog_excluded_brands ?? "");
         setEwLoginEmail(d.everywatch_login_email ?? "");
         setEwLoginPassword("");
         setEwPasswordConfigured(Boolean(d.everywatch_password_configured));
@@ -247,6 +249,47 @@ export default function SettingsPage() {
         loadActiveRefreshStatus();
       })
       .catch((e: Error) => setActiveRefreshMsg(e.message));
+  };
+
+  const checkActiveAllNow = () => {
+    setActiveRefreshMsg(null);
+    setActiveCheckAllBusy(true);
+    fetchJson<{
+      status: string;
+      total: number;
+      updated: number;
+      active_now: number;
+      inactive_now: number;
+    }>("/api/ingest/recompute-active-from-end-date", {
+      method: "POST",
+    })
+      .then((r) => {
+        setActiveRefreshMsg(
+          `Check Active (All) complete: scanned ${r.total}, updated ${r.updated}, active ${r.active_now}, inactive ${r.inactive_now}.`,
+        );
+      })
+      .catch((e: Error) => setActiveRefreshMsg(e.message))
+      .finally(() => setActiveCheckAllBusy(false));
+  };
+
+  const applyExcludedWordsNow = () => {
+    setActiveRefreshMsg(null);
+    setApplyExcludedBusy(true);
+    fetchJson<{
+      status: string;
+      scanned: number;
+      matched: number;
+      updated: number;
+    }>("/api/ingest/apply-excluded-words-all", {
+      method: "POST",
+    })
+      .then((r) => {
+        setActiveRefreshMsg(
+          `Apply excluded words complete: scanned ${r.scanned}, matched ${r.matched}, marked inactive ${r.updated}.`,
+        );
+      })
+      .catch((e: Error) => setActiveRefreshMsg(e.message))
+      .finally(() => setApplyExcludedBusy(false));
   };
 
   if (err && !data) {
@@ -402,28 +445,29 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Watch catalog — excluded brands</CardTitle>
+          <CardTitle>Listings — excluded words/phrases</CardTitle>
           <CardDescription>
-            Comma-separated brand names (case-insensitive), e.g. <code className="rounded bg-muted px-1">Apple, Fitbit</code>.
-            Rows with these brands are hidden from the watch database list and listing link pickers, and ingest/backfill
-            will not link or create catalog entries for them. This field is <strong>merged</strong> with the server
+            Comma-separated words or short phrases (case-insensitive, whole-word matching), e.g.{" "}
+            <code className="rounded bg-muted px-1">replica, smartwatch, kids watch</code>. Any listing that
+            matches one of these terms is forced inactive and blocked from being reactivated by ingest/refresh.
+            This field is <strong>merged</strong> with the server
             environment variable <code className="rounded bg-muted px-1">WATCH_CATALOG_EXCLUDED_BRANDS</code> (both apply).
-            Clear this field to rely on env only for UI-saved exclusions.
+            Clear this field to rely on env-only exclusions.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <label className="text-sm font-medium" htmlFor="wc-excl">
-            Excluded brands
+            Excluded words/phrases
           </label>
           <textarea
             id="wc-excl"
             className="min-h-[88px] w-full max-w-2xl rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            placeholder="Apple, Samsung"
-            value={catalogExcludedBrands}
-            onChange={(e) => setCatalogExcludedBrands(e.target.value)}
+            placeholder="replica, fake, smartwatch"
+            value={catalogExcludedWords}
+            onChange={(e) => setCatalogExcludedWords(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            Manual <strong>POST /api/watch-models</strong> and direct detail URLs still work for any brand.
+            Use comma-separated terms. Matching is case-insensitive with whole-word boundaries.
           </p>
         </CardContent>
       </Card>
@@ -733,6 +777,10 @@ export default function SettingsPage() {
             the timer): check container logs for progress or errors. <strong>Stale refresh now</strong> runs
             one batch of <strong>getItem</strong> calls using the max-per-run and min-age limits above,
             independent of the schedule checkbox — useful to test after changing those numbers.
+            <strong>Check Active (All)</strong> recomputes active flags from stored eBay end dates only
+            (fast DB pass, no eBay calls). <strong>Apply excluded words (All)</strong> scans existing listings
+            and marks matched rows inactive. <strong>Refresh ALL active now</strong> performs live eBay checks
+            for currently active rows.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
@@ -744,6 +792,24 @@ export default function SettingsPage() {
           </Button>
           <Button type="button" variant="outline" onClick={staleRefreshNow}>
             Stale refresh now
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={activeCheckAllBusy}
+            onClick={checkActiveAllNow}
+            title="Recompute is_active across all rows using listing end date only (no external API calls)."
+          >
+            {activeCheckAllBusy ? "Checking…" : "Check Active (All)"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={applyExcludedBusy}
+            onClick={applyExcludedWordsNow}
+            title="Scans all listings and marks inactive rows that match any excluded word/phrase."
+          >
+            {applyExcludedBusy ? "Applying…" : "Apply excluded words (All)"}
           </Button>
           <Button
             type="button"

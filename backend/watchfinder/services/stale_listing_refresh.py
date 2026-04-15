@@ -16,6 +16,7 @@ from watchfinder.config import Settings, get_settings
 from watchfinder.models import AppSetting, Listing
 from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ingestion.live_refresh import refresh_listing_from_ebay
+from watchfinder.services.listing_exclusions import listing_excluded_terms
 from watchfinder.util.app_setting_text import truthy_app_value
 
 if TYPE_CHECKING:
@@ -174,6 +175,7 @@ def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> 
             n_active,
         )
     shared_browse: EbayBrowseClient | None = None
+    excluded_terms = listing_excluded_terms(db, settings)
     if ids:
         shared_browse = EbayBrowseClient(settings, EbayAuthClient(settings, db))
     updated = ended = errors = 0
@@ -182,7 +184,11 @@ def run_stale_listing_refresh(db: Session, settings: Settings | None = None) -> 
             time.sleep(_INTER_GET_ITEM_SLEEP_SEC)
         try:
             outcome = refresh_listing_from_ebay(
-                db, lid, settings, browse=shared_browse
+                db,
+                lid,
+                settings,
+                browse=shared_browse,
+                excluded_terms=excluded_terms,
             )
             if outcome == "updated":
                 updated += 1
@@ -229,6 +235,7 @@ def run_full_active_listing_refresh(
             }
         )
     shared_browse: EbayBrowseClient | None = None
+    excluded_terms = listing_excluded_terms(db, settings)
     if ids:
         shared_browse = EbayBrowseClient(settings, EbayAuthClient(settings, db))
     updated = ended = errors = 0
@@ -246,6 +253,7 @@ def run_full_active_listing_refresh(
                 settings,
                 browse=shared_browse,
                 check_page_marker=False,
+                excluded_terms=excluded_terms,
             )
             if outcome == "ended":
                 ended += 1

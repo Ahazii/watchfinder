@@ -13,6 +13,11 @@ from watchfinder.models import Listing, ListingSnapshot, NotInterestedListing
 from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ebay.api_usage import increment_browse_search
 from watchfinder.services.ingestion.mapper import item_summary_to_listing_fields
+from watchfinder.services.listing_exclusions import (
+    listing_excluded_terms,
+    listing_fields_match_excluded_terms,
+)
+from watchfinder.services.listing_status import compute_is_effectively_active
 from watchfinder.services.ingest_settings import (
     get_ingest_max_pages,
     get_ingest_search_limit,
@@ -52,6 +57,9 @@ def run_browse_ingest(
     now = datetime.now(UTC)
     count = 0
     pages_done = 0
+    skipped_excluded = 0
+    deactivated_excluded = 0
+    excluded_terms = listing_excluded_terms(db, settings)
 
     for page_idx in range(max_pages):
         data = browse.search(q, limit=limit, offset=page_idx * limit)
@@ -82,6 +90,14 @@ def run_browse_ingest(
             existing = db.execute(
                 select(Listing).where(Listing.ebay_item_id == ebay_id)
             ).scalar_one_or_none()
+            excluded_term = listing_fields_match_excluded_terms(fields, excluded_terms)
+            if excluded_term:
+                skipped_excluded += 1
+                if existing and existing.is_active:
+                    existing.is_active = False
+                    existing.last_seen_at = now
+                    deactivated_excluded += 1
+                continue
 
             if existing:
                 for k, v in fields.items():
@@ -89,7 +105,7 @@ def run_browse_ingest(
                         continue
                     setattr(existing, k, v)
                 existing.last_seen_at = now
-                existing.is_active = True
+                existing.is_active = compute_is_effectively_active(existing.listing_ended_at, now=now)
                 db.add(
                     ListingSnapshot(
                         listing_id=existing.id,
@@ -99,7 +115,12 @@ def run_browse_ingest(
                 )
                 target = existing
             else:
-                listing = Listing(**fields, first_seen_at=now, last_seen_at=now)
+                listing = Listing(
+                    **fields,
+                    first_seen_at=now,
+                    last_seen_at=now,
+                    is_active=compute_is_effectively_active(fields.get("listing_ended_at"), now=now),
+                )
                 db.add(listing)
                 db.flush()
                 db.add(
@@ -124,6 +145,13 @@ def run_browse_ingest(
         pages_done,
         limit,
     )
+    if skipped_excluded:
+        logger.info(
+            "Ingest exclusions for %r: skipped=%s deactivated_existing=%s",
+            q,
+            skipped_excluded,
+            deactivated_excluded,
+        )
     return count
 
 

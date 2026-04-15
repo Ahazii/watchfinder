@@ -15,6 +15,11 @@ from watchfinder.models import Listing, ListingSnapshot
 from watchfinder.services.ebay import EbayAuthClient, EbayBrowseClient
 from watchfinder.services.ebay.api_usage import increment_browse_get_item
 from watchfinder.services.ingestion.mapper import browse_item_to_listing_fields
+from watchfinder.services.listing_exclusions import (
+    listing_excluded_terms,
+    listing_fields_match_excluded_terms,
+    listing_model_matches_excluded_terms,
+)
 from watchfinder.services.pipeline import analyze_listing
 
 logger = logging.getLogger(__name__)
@@ -27,6 +32,7 @@ def refresh_listing_from_ebay(
     *,
     browse: EbayBrowseClient | None = None,
     check_page_marker: bool = True,
+    excluded_terms: tuple[str, ...] | None = None,
 ) -> Literal["updated", "ended"]:
     """
     GET /item/{id} for this row's ebay_item_id, then verify active state from web page marker.
@@ -49,6 +55,7 @@ def refresh_listing_from_ebay(
     browse_client = browse or EbayBrowseClient(
         settings, EbayAuthClient(settings, db)
     )
+    excluded_terms = excluded_terms or listing_excluded_terms(db, settings)
     now = datetime.now(UTC)
 
     try:
@@ -58,6 +65,11 @@ def refresh_listing_from_ebay(
         db.flush()
 
     if raw is None:
+        if listing_model_matches_excluded_terms(listing, excluded_terms):
+            listing.is_active = False
+            listing.last_seen_at = now
+            db.commit()
+            return "ended"
         ended_marker: bool | None
         if check_page_marker:
             ended_marker = browse_client.page_has_not_found_marker(
@@ -92,6 +104,18 @@ def refresh_listing_from_ebay(
             continue
         setattr(listing, k, v)
     listing.last_seen_at = now
+    if listing_fields_match_excluded_terms(fields, excluded_terms):
+        listing.is_active = False
+        db.add(
+            ListingSnapshot(
+                listing_id=listing.id,
+                snapshot_at=now,
+                raw_item_json=fields["raw_item_json"],
+            )
+        )
+        analyze_listing(db, listing)
+        db.commit()
+        return "ended"
     ended_marker: bool | None = None
     if check_page_marker:
         ended_marker = browse_client.page_has_not_found_marker(
