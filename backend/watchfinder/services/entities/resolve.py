@@ -27,6 +27,8 @@ from watchfinder.services.valuation.effective import effective_caliber, effectiv
 class EntityResolveResult:
     reason_codes: list[str] = field(default_factory=list)
     inferred_brand_display: str | None = None
+    inferred_caliber_display: str | None = None
+    inferred_reference: str | None = None
 
 
 # Tunable fuzzy thresholds (0–100)
@@ -97,12 +99,12 @@ def _get_or_create_caliber(db: Session, raw: str) -> Caliber:
     return c
 
 
-def _get_or_create_stock_reference(
-    db: Session, brand_id: uuid.UUID, ref_raw: str, watch_model_id: uuid.UUID | None
-) -> StockReference:
+def _find_existing_stock_reference(
+    db: Session, brand_id: uuid.UUID, ref_raw: str
+) -> StockReference | None:
     nk = normalize_entity_key(ref_raw)
     if not nk:
-        raise ValueError("empty reference")
+        return None
     row = db.scalar(
         select(StockReference).where(
             StockReference.brand_id == brand_id,
@@ -110,27 +112,38 @@ def _get_or_create_stock_reference(
         )
     )
     if row:
-        if watch_model_id and row.watch_model_id is None:
-            row.watch_model_id = watch_model_id
         return row
     brand_refs = db.scalars(
         select(StockReference).where(StockReference.brand_id == brand_id)
     ).all()
-    if brand_refs:
-        choices = [r.ref_text for r in brand_refs]
-        hit = process.extractOne(
-            ref_raw.strip(),
-            choices,
-            scorer=fuzz.WRatio,
-            score_cutoff=_REF_SCORE,
-        )
-        if hit:
-            _, score, idx = hit
-            if score >= _REF_SCORE:
-                got = brand_refs[idx]
-                if watch_model_id and got.watch_model_id is None:
-                    got.watch_model_id = watch_model_id
-                return got
+    if not brand_refs:
+        return None
+    choices = [r.ref_text for r in brand_refs]
+    hit = process.extractOne(
+        ref_raw.strip(),
+        choices,
+        scorer=fuzz.WRatio,
+        score_cutoff=_REF_SCORE,
+    )
+    if not hit:
+        return None
+    _, score, idx = hit
+    if score >= _REF_SCORE:
+        return brand_refs[idx]
+    return None
+
+
+def _get_or_create_stock_reference(
+    db: Session, brand_id: uuid.UUID, ref_raw: str, watch_model_id: uuid.UUID | None
+) -> StockReference:
+    nk = normalize_entity_key(ref_raw)
+    if not nk:
+        raise ValueError("empty reference")
+    found = _find_existing_stock_reference(db, brand_id, ref_raw)
+    if found:
+        if watch_model_id and found.watch_model_id is None:
+            found.watch_model_id = watch_model_id
+        return found
     sr = StockReference(
         brand_id=brand_id,
         ref_text=ref_raw.strip(),
@@ -140,6 +153,72 @@ def _get_or_create_stock_reference(
     db.add(sr)
     db.flush()
     return sr
+
+
+def _infer_caliber_from_brand_reference(
+    db: Session, brand_id: uuid.UUID, ref_raw: str
+) -> tuple[str | None, bool]:
+    """
+    If dictionary links exactly one caliber to this brand+reference, return its display text.
+    Second value True if multiple calibers are linked (ambiguous).
+    """
+    sr = _find_existing_stock_reference(db, brand_id, ref_raw)
+    if not sr:
+        return None, False
+    stmt = (
+        select(Caliber)
+        .join(
+            CaliberStockReferenceLink,
+            CaliberStockReferenceLink.caliber_id == Caliber.id,
+        )
+        .where(CaliberStockReferenceLink.stock_reference_id == sr.id)
+    )
+    cals = db.scalars(stmt).all()
+    if len(cals) == 1:
+        return cals[0].display_text, False
+    if len(cals) > 1:
+        return None, True
+    return None, False
+
+
+def _infer_reference_from_brand_caliber(
+    db: Session, brand_id: uuid.UUID, cal_raw: str
+) -> tuple[str | None, bool]:
+    """
+    If dictionary links exactly one stock reference for this brand+caliber, return ref_text.
+    Second value True if multiple references match (ambiguous).
+    """
+    cal_clean = cal_raw.strip()
+    all_cal = db.scalars(select(Caliber)).all()
+    if not all_cal:
+        return None, False
+    cal_choices = [c.display_text for c in all_cal]
+    cal_hit = process.extractOne(
+        cal_clean, cal_choices, scorer=fuzz.WRatio, score_cutoff=_CAL_SCORE
+    )
+    if not cal_hit:
+        return None, False
+    _, cal_score, cal_idx = cal_hit
+    if cal_score < _CAL_SCORE:
+        return None, False
+    caliber = all_cal[cal_idx]
+    stmt = (
+        select(StockReference)
+        .join(
+            CaliberStockReferenceLink,
+            CaliberStockReferenceLink.stock_reference_id == StockReference.id,
+        )
+        .where(
+            StockReference.brand_id == brand_id,
+            CaliberStockReferenceLink.caliber_id == caliber.id,
+        )
+    )
+    srs = db.scalars(stmt).all()
+    if len(srs) == 1:
+        return srs[0].ref_text, False
+    if len(srs) > 1:
+        return None, True
+    return None, False
 
 
 def _ensure_caliber_brand(db: Session, caliber_id: uuid.UUID, brand_id: uuid.UUID) -> None:
@@ -226,7 +305,9 @@ def resolve_listing_entities(
     edit: ListingEdit | None,
 ) -> EntityResolveResult:
     reasons: list[str] = []
-    inferred: str | None = None
+    inferred_brand: str | None = None
+    inferred_cal: str | None = None
+    inferred_ref: str | None = None
 
     db.execute(delete(ListingCaliber).where(ListingCaliber.listing_id == listing.id))
     listing.resolved_brand_id = None
@@ -245,11 +326,33 @@ def resolve_listing_entities(
         inferred_br, ambiguous = _infer_brand_from_caliber_and_reference(db, cal_raw, ref_raw)
         if inferred_br:
             brand = inferred_br
-            inferred = inferred_br.display_name
-            parsed["brand"] = inferred
+            inferred_brand = inferred_br.display_name
+            parsed["brand"] = inferred_brand
             reasons.append("entity_brand_inferred_from_caliber_reference")
         elif ambiguous:
             reasons.append("entity_brand_ambiguous")
+
+    # Brand + caliber → infer reference (only when dictionary has a unique ref for that pair)
+    if brand is not None and cal_raw and not ref_raw:
+        inf_ref, ref_amb = _infer_reference_from_brand_caliber(db, brand.id, cal_raw)
+        if inf_ref:
+            inferred_ref = inf_ref
+            parsed["reference"] = inf_ref
+            ref_raw = inf_ref.strip()
+            reasons.append("entity_reference_inferred_from_brand_caliber")
+        elif ref_amb:
+            reasons.append("entity_reference_ambiguous")
+
+    # Brand + reference → infer caliber (only when dictionary links exactly one caliber)
+    if brand is not None and ref_raw and not cal_raw:
+        inf_cal, cal_amb = _infer_caliber_from_brand_reference(db, brand.id, ref_raw)
+        if inf_cal:
+            inferred_cal = inf_cal
+            parsed["caliber"] = inf_cal
+            cal_raw = inf_cal.strip()
+            reasons.append("entity_caliber_inferred_from_brand_reference")
+        elif cal_amb:
+            reasons.append("entity_caliber_ambiguous")
 
     if brand is None and (ref_raw or cal_raw):
         reasons.append("entity_brand_unresolved")
@@ -287,7 +390,9 @@ def resolve_listing_entities(
     db.flush()
     return EntityResolveResult(
         reason_codes=_dedupe_preserve(reasons),
-        inferred_brand_display=inferred,
+        inferred_brand_display=inferred_brand,
+        inferred_caliber_display=inferred_cal,
+        inferred_reference=inferred_ref,
     )
 
 
@@ -304,6 +409,8 @@ def backfill_entity_dictionaries(db: Session) -> dict[str, int]:
         "with_resolved_reference": 0,
         "with_caliber_link": 0,
         "inferred_brand": 0,
+        "inferred_caliber": 0,
+        "inferred_reference": 0,
     }
     stmt = (
         select(Listing)
@@ -322,6 +429,10 @@ def backfill_entity_dictionaries(db: Session) -> dict[str, int]:
             stats["with_resolved_reference"] += 1
         if res.inferred_brand_display:
             stats["inferred_brand"] += 1
+        if res.inferred_caliber_display:
+            stats["inferred_caliber"] += 1
+        if res.inferred_reference:
+            stats["inferred_reference"] += 1
         n_lc = db.scalar(
             select(func.count())
             .select_from(ListingCaliber)

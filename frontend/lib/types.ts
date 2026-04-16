@@ -177,6 +177,8 @@ export type BackfillEntityDictionariesResponse = {
   with_resolved_reference: number;
   with_caliber_link: number;
   inferred_brand: number;
+  inferred_caliber?: number;
+  inferred_reference?: number;
 };
 
 export type WatchLinkReviewBrief = {

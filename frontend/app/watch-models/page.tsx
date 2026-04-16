@@ -208,7 +208,7 @@ export default function WatchModelsPage() {
       })
       .then((r) => {
         setEntityBackfillMsg(
-          `Scanned ${r.scanned}: ${r.with_resolved_brand} with resolved brand, ${r.with_resolved_reference} with stock reference, ${r.with_caliber_link} with caliber link, ${r.inferred_brand} inferred brand from caliber+reference.`,
+          `Scanned ${r.scanned}: ${r.with_resolved_brand} with resolved brand, ${r.with_resolved_reference} with stock reference, ${r.with_caliber_link} with caliber link; inferred ${r.inferred_brand ?? 0} brand (cal+ref), ${r.inferred_caliber ?? 0} caliber (brand+ref), ${r.inferred_reference ?? 0} reference (brand+cal).`,
         );
       })
       .catch((e: Error) => setEntityBackfillMsg(e.message))

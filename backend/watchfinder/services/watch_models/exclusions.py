@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from watchfinder.config import Settings, get_settings
-from watchfinder.models import AppSetting
+from watchfinder.models import AppSetting, Listing
 from watchfinder.services.watch_catalog_settings import KEY_EXCLUDED_BRANDS
 
 
@@ -35,3 +35,27 @@ def brand_is_catalog_excluded(brand: str | None, excluded: frozenset[str]) -> bo
     if not brand or not excluded:
         return False
     return brand.strip().lower() in excluded
+
+
+def listing_matches_catalog_brand_exclusion(
+    listing: Listing,
+    parsed: dict[str, str],
+    excluded: frozenset[str],
+) -> bool:
+    """
+    True if parsed brand is excluded (exact) or any exclusion term appears in title/subtitle.
+    Substring match on title is case-insensitive; terms shorter than 2 chars are ignored for title scan.
+    """
+    if not excluded:
+        return False
+    brand = (parsed.get("brand") or "").strip() or None
+    if brand_is_catalog_excluded(brand, excluded):
+        return True
+    hay = f"{listing.title or ''} {listing.subtitle or ''}".lower()
+    for term in excluded:
+        t = (term or "").strip().lower()
+        if len(t) < 2:
+            continue
+        if t in hay:
+            return True
+    return False

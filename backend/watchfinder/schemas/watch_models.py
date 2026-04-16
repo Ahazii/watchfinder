@@ -198,3 +198,5 @@ class BackfillEntityDictionariesResponse(BaseModel):
     with_resolved_reference: int
     with_caliber_link: int
     inferred_brand: int
+    inferred_caliber: int = 0
+    inferred_reference: int = 0

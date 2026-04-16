@@ -26,6 +26,7 @@ from watchfinder.services.watch_models.link_review import (
 from watchfinder.services.watch_models.exclusions import (
     brand_is_catalog_excluded,
     catalog_excluded_brands,
+    listing_matches_catalog_brand_exclusion,
 )
 from watchfinder.services.watch_models.match import (
     _find_by_brand_family,
@@ -163,9 +164,8 @@ def ensure_watch_catalog_for_listing(
         delete_pending_reviews_for_listing(db, listing.id)
         return CatalogLinkOutcome.ALREADY_LINKED
 
-    brand_check = (parsed.get("brand") or "").strip() or None
     excluded = catalog_excluded_brands(db)
-    if brand_is_catalog_excluded(brand_check, excluded):
+    if listing_matches_catalog_brand_exclusion(listing, parsed, excluded):
         delete_pending_reviews_for_listing(db, listing.id)
         return CatalogLinkOutcome.SKIPPED_EXCLUDED_BRAND
 
