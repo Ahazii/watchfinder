@@ -169,6 +169,7 @@ export type BackfillWatchCatalogResponse = {
   skipped_no_identity: number;
   queued_for_review?: number;
   skipped_excluded_brand?: number;
+  pruned_excluded_from_queue?: number;
 };
 
 export type BackfillEntityDictionariesResponse = {

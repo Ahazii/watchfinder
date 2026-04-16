@@ -277,6 +277,37 @@ def ensure_watch_catalog_for_listing(
     return _create_catalog_row_and_link_listing(db, listing, parsed, edit)
 
 
+def prune_pending_reviews_for_catalog_exclusions(db: Session) -> int:
+    """
+    Drop pending match-queue rows for listings that match catalog brand exclusions.
+    Uses the same text haystack as ensure_watch_catalog (full raw item JSON, aspects, etc.).
+    Covers inactive listings and other rows that sync_unmatched_listings_watch_catalog does not re-analyze.
+    """
+    from sqlalchemy import select
+
+    from watchfinder.models import WatchModelLinkReview
+    from watchfinder.services.parsing import build_listing_corpus, parse_watch_attributes
+
+    excluded = catalog_excluded_brands(db)
+    if not excluded:
+        return 0
+    n = 0
+    for rev in db.scalars(
+        select(WatchModelLinkReview).where(WatchModelLinkReview.status == "pending")
+    ).all():
+        listing = db.get(Listing, rev.listing_id)
+        if not listing:
+            delete_pending_reviews_for_listing(db, rev.listing_id)
+            n += 1
+            continue
+        corpus = build_listing_corpus(listing)
+        parsed = parse_watch_attributes(listing.title or "", corpus)
+        if listing_matches_catalog_brand_exclusion(listing, parsed, excluded):
+            delete_pending_reviews_for_listing(db, listing.id)
+            n += 1
+    return n
+
+
 def sync_unmatched_listings_watch_catalog(db: Session) -> dict[str, int]:
     """
     Re-analyze every active listing with no watch_model_id so catalog linking / match queue
@@ -294,6 +325,7 @@ def sync_unmatched_listings_watch_catalog(db: Session) -> dict[str, int]:
         "skipped_no_identity": 0,
         "queued_for_review": 0,
         "skipped_excluded_brand": 0,
+        "pruned_excluded_from_queue": 0,
     }
     stmt = (
         select(Listing.id)
@@ -318,6 +350,7 @@ def sync_unmatched_listings_watch_catalog(db: Session) -> dict[str, int]:
             stats["skipped_excluded_brand"] += 1
         else:
             stats["skipped_no_identity"] += 1
+    stats["pruned_excluded_from_queue"] = prune_pending_reviews_for_catalog_exclusions(db)
     return stats
 
 
@@ -338,6 +371,7 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
         "skipped_no_identity": 0,
         "queued_for_review": 0,
         "skipped_excluded_brand": 0,
+        "pruned_excluded_from_queue": 0,
     }
     stmt = (
         select(Listing)
@@ -366,6 +400,7 @@ def backfill_watch_catalog(db: Session) -> dict[str, int]:
             refresh_watch_model_observed_bounds(db, listing.watch_model_id)
             enrich_watch_model_image_from_listing(db, listing, get_settings())
             maybe_refresh_market_snapshots_for_model(db, listing.watch_model_id, get_settings())
+    stats["pruned_excluded_from_queue"] = prune_pending_reviews_for_catalog_exclusions(db)
     return stats
 
 

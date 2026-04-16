@@ -70,7 +70,8 @@ export default function WatchReviewQueuePage() {
         setSyncMsg(
           `Processed ${r.scanned} unmatched listing(s): ${r.queued_for_review ?? 0} queued for review, ` +
             `${r.linked_existing} linked to existing catalog rows, ${r.created_new} new catalog rows, ` +
-            `${r.skipped_no_identity} skipped (no identity), ${r.skipped_excluded_brand ?? 0} excluded brand.`,
+            `${r.skipped_no_identity} skipped (no identity), ${r.skipped_excluded_brand ?? 0} excluded brand during analyze, ` +
+            `${r.pruned_excluded_from_queue ?? 0} match-queue row(s) removed (excluded brand in full item text).`,
         );
         return fetchJson<WatchLinkReviewListResponse>("/api/watch-link-reviews?limit=100");
       })

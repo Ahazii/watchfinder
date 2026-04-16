@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from watchfinder.config import Settings, get_settings
 from watchfinder.models import AppSetting, Listing
+from watchfinder.services.listing_exclusions import listing_texts_from_model
 from watchfinder.services.watch_catalog_settings import KEY_EXCLUDED_BRANDS
 
 
@@ -49,17 +50,13 @@ def brand_is_catalog_excluded(brand: str | None, excluded: frozenset[str]) -> bo
 
 
 def _listing_exclusion_haystack(listing: Listing, parsed: dict[str, str]) -> str:
-    """Lowercased blob: title, subtitle, condition, category, item_aspects, all parsed attribute values."""
-    parts: list[str] = [
-        listing.title or "",
-        listing.subtitle or "",
-        listing.condition_description or "",
-        listing.category_path or "",
-    ]
-    if listing.item_aspects:
-        parts.append(str(listing.item_aspects))
-    parts.extend(str(v) for v in parsed.values() if v)
-    return " ".join(parts).lower()
+    """
+    Lowercased searchable blob: same deep text as ingest exclusions (title, raw JSON, aspects, etc.)
+    plus current parse pass values. Brand names often live only under raw_item_json / shortDescription.
+    """
+    texts = listing_texts_from_model(listing)
+    texts.extend(str(v) for v in parsed.values() if v)
+    return "\n".join(t.lower() for t in texts if t)
 
 
 def listing_matches_catalog_brand_exclusion(

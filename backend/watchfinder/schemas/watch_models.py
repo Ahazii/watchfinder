@@ -188,6 +188,7 @@ class BackfillWatchCatalogResponse(BaseModel):
     skipped_no_identity: int
     queued_for_review: int = 0
     skipped_excluded_brand: int = 0
+    pruned_excluded_from_queue: int = 0
 
 
 class BackfillEntityDictionariesResponse(BaseModel):
