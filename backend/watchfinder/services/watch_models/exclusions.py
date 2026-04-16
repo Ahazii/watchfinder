@@ -32,9 +32,34 @@ def catalog_excluded_brands(db: Session, settings: Settings | None = None) -> fr
 
 
 def brand_is_catalog_excluded(brand: str | None, excluded: frozenset[str]) -> bool:
+    """
+    True if the brand string equals an excluded term (exact) or contains an excluded term as substring.
+    Substring match avoids misses when parsed brand is e.g. \"Nintendo Game Watch\" but the list only has \"nintendo\".
+    """
     if not brand or not excluded:
         return False
-    return brand.strip().lower() in excluded
+    bl = brand.strip().lower()
+    if bl in excluded:
+        return True
+    for term in excluded:
+        t = (term or "").strip().lower()
+        if len(t) >= 2 and t in bl:
+            return True
+    return False
+
+
+def _listing_exclusion_haystack(listing: Listing, parsed: dict[str, str]) -> str:
+    """Lowercased blob: title, subtitle, condition, category, item_aspects, all parsed attribute values."""
+    parts: list[str] = [
+        listing.title or "",
+        listing.subtitle or "",
+        listing.condition_description or "",
+        listing.category_path or "",
+    ]
+    if listing.item_aspects:
+        parts.append(str(listing.item_aspects))
+    parts.extend(str(v) for v in parsed.values() if v)
+    return " ".join(parts).lower()
 
 
 def listing_matches_catalog_brand_exclusion(
@@ -43,15 +68,16 @@ def listing_matches_catalog_brand_exclusion(
     excluded: frozenset[str],
 ) -> bool:
     """
-    True if parsed brand is excluded (exact) or any exclusion term appears in title/subtitle.
-    Substring match on title is case-insensitive; terms shorter than 2 chars are ignored for title scan.
+    True if any exclusion term matches parsed brand (exact or substring) or appears anywhere in
+    title, subtitle, condition, category, item_aspects, or parsed attribute values (substring, case-insensitive).
+    Terms shorter than 2 characters are skipped.
     """
     if not excluded:
         return False
     brand = (parsed.get("brand") or "").strip() or None
     if brand_is_catalog_excluded(brand, excluded):
         return True
-    hay = f"{listing.title or ''} {listing.subtitle or ''}".lower()
+    hay = _listing_exclusion_haystack(listing, parsed)
     for term in excluded:
         t = (term or "").strip().lower()
         if len(t) < 2:
