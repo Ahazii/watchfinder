@@ -9,6 +9,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | Document | Purpose |
 |----------|---------|
 | [`README.md`](README.md) (this file) | Quick start, API surface, Docker, Unraid summary, env vars |
+| [`USER_GUIDE.md`](USER_GUIDE.md) | **Day-to-day usage:** ingest, listings/calibers, match queue, finding deals |
 | [`PROGRESS.md`](PROGRESS.md) | What is built (phases 1–6), repo map, backlog, planned work |
 | [`buttons.md`](buttons.md) | Complete UI button/action reference by page and workflow |
 | [`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`](Kickoff%20Documents/SIMPLIFIED_NOVICE_SETUP.md) | Step-by-step Unraid install (folders, network, Postgres, app) |
@@ -54,7 +55,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 |--------|------|---------|
 | GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings (each with **`image_urls`**), plus persisted eBay counters (**`ebay_browse_search_calls`**, **`ebay_oauth_token_calls`**, **`ebay_browse_get_item_calls`**); see [eBay REST rate limiting](https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html) |
 | GET | `/api/listings` | Paginated listings + query filters (**`title_q`**, **`listing_type`**, brand, price, repair, **`listing_active`**: `active` / `inactive` / `all`, **`exclude_quartz`**, etc.); rows include **`listing_type`**, **`listing_type_source`**, **`image_urls`**, **`is_active`**; **`sort_by`** / **`sort_dir`** — see OpenAPI |
-| GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`), **`listing_type`** + **`listing_type_source`** |
+| GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`), **`listing_type`** + **`listing_type_source`**, optional **`donor_movement_hint`** (median/p band from other **`movement_only`** listings for the resolved caliber; this listing excluded) |
 | PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset). Optional **`listing_type`** (sets **`listing_type_source`** to **manual**). Optional **`listing_type_source`**: **`auto`** alone re-runs heuristic classification on analyze. |
 | POST | `/api/listings/{uuid}/not-interested` | Mark listing as **not interested**: add/activate blocklist record for this eBay item id, then remove listing row |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
