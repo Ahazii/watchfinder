@@ -21,7 +21,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 
 - `frontend/` — Next.js 14 (App Router), TypeScript, Tailwind, shadcn-style UI
 - `backend/watchfinder/` — FastAPI app, models, eBay clients, ingestion, parsing, scoring
-- `alembic/` — database migrations through **010** (**`not_interested_listings`**; **009** **`everywatch_url`**; **008** **`market_source_snapshots`**; **007** WatchBase import columns; **006** specs + **`reference_url`**; **005** **`ebay_item_id`** width)
+- `alembic/` — database migrations through **013** (**`listing_type_source`**; **012** **`listing_type`**; **011** entity dictionaries — brands/calibers/stock refs + **`listing_calibers`**; **010** **`not_interested_listings`** … through **001**)
 - `docker/start.sh` — wait for Postgres → `alembic upgrade head` → `uvicorn`
 - `Dockerfile` — multi-stage image (Node build + Python runtime, non-root user, healthcheck)
 - `docker-compose.yml` — local **postgres:16** + app build
@@ -34,16 +34,16 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | URL | What it is |
 |-----|------------|
 | `/` | Dashboard (stats, **eBay Browse / OAuth call counters**, recent listings with thumbs) |
-| `/listings/` | Listings + filters (**Title contains**, **Contains text (any field)** substring across listing + JSON + parsed fields, brand, price, sale-type dropdown, status, etc.), sortable columns, thumbnails, **View on eBay** per row, and persisted **rows per page** |
+| `/listings/` | Listings + filters (**Title contains**, **Contains text (any field)**, **Listing type**: watch / movement / parts / unknown, resolved entity UUIDs, brand, price, etc.), sortable columns, **Type** column, thumbnails, **View on eBay** per row, persisted **rows per page** |
 | `/candidates/` | Repair candidates (same filters as listings where applicable), with persisted **rows per page** |
 | `/settings/` | Browse search lines, **interval** + **items per search line** (1–200), **stale listing refresh** (optional scheduler), **Refresh ALL active now** (full active pass + live progress), **match queue sync** interval, **require identity before queue** (brand + reference/family), watch-catalog mode, **Ingest now** / **Stale refresh now** |
 | `/watch-models/` | **Watch database** — catalog CRUD (canonical models, manual + observed price bounds) |
-| `/watch-models/detail/?id=<uuid>` | Edit one model (all fields); optional **Everywatch watch URL** (exact listing page) drives snapshots and market search; omit `id` to create; **Everywatch import tester** link opens **`/watch-models/everywatch-test/?id=`** for debug fetches |
+| `/watch-models/detail/?id=<uuid>` | Edit one model (all fields); **Donor movement market** card (asking-price bands from ingested **`movement_only`** listings linked to the resolved caliber dictionary row); optional **Everywatch watch URL** (exact listing page) drives snapshots and market search; omit `id` to create; **Everywatch import tester** link opens **`/watch-models/everywatch-test/?id=`** for debug fetches |
 | `/watch-models/everywatch-test/?id=<uuid>` | Debug Everywatch HTML / mapping (optional Cookie header): **`/watch-listing?query=…`** probes, parsed hit table, detail **specs / image / GBP price rows**; does not import into catalog |
 | `/watch-review/` | **Match queue** — pending catalogue links (review mode) |
 | `/watch-review/detail/?id=<review-uuid>` | Resolve one queue item (match / create / dismiss) |
 | `/not-interested/` | Manage blocked eBay items (restore interest or delete history records), with pagination + **rows per page** |
-| `/listings/detail/?id=<uuid>` | Listing detail, **editable valuation**, **watch catalog link** (override / clear), internal comps, **Save** → `PATCH /api/listings/{id}` |
+| `/listings/detail/?id=<uuid>` | Listing detail, **editable valuation**, **listing type** (watch / movement / parts / unknown) with **Auto** vs **Manual** badge, **Re-classify automatically** when manual, **watch catalog link** (override / clear), internal comps, **Save** → `PATCH /api/listings/{id}` |
 | `/api/...` | JSON API (same origin as UI in Docker) |
 | `/docs` | Swagger UI |
 | `/health` | Liveness JSON (`{"status":"ok"}`) — used by Docker **HEALTHCHECK** |
@@ -53,9 +53,9 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/dashboard` | Totals, candidate count, repair-signal count, recent listings (each with **`image_urls`**), plus persisted eBay counters (**`ebay_browse_search_calls`**, **`ebay_oauth_token_calls`**, **`ebay_browse_get_item_calls`**); see [eBay REST rate limiting](https://developer.ebay.com/api-docs/static/rest-rate-limiting-API.html) |
-| GET | `/api/listings` | Paginated listings + query filters (**`title_q`**, brand, price, repair, **`listing_active`**: `active` / `inactive` / `all`, **`exclude_quartz`**, etc.); rows include **`image_urls`**, **`is_active`**; **`sort_by`** / **`sort_dir`** — see OpenAPI |
-| GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`) |
-| PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset) |
+| GET | `/api/listings` | Paginated listings + query filters (**`title_q`**, **`listing_type`**, brand, price, repair, **`listing_active`**: `active` / `inactive` / `all`, **`exclude_quartz`**, etc.); rows include **`listing_type`**, **`listing_type_source`**, **`image_urls`**, **`is_active`**; **`sort_by`** / **`sort_dir`** — see OpenAPI |
+| GET | `/api/listings/{uuid}` | Detail + comps + editable valuation fields (`source_legend`, `field_guidance`), **`listing_type`** + **`listing_type_source`** |
+| PATCH | `/api/listings/{uuid}` | Save **ListingEdit** + optional **`watch_model_id`** (`null` unlinks; re-analyze runs catalog match/create when unset). Optional **`listing_type`** (sets **`listing_type_source`** to **manual**). Optional **`listing_type_source`**: **`auto`** alone re-runs heuristic classification on analyze. |
 | POST | `/api/listings/{uuid}/not-interested` | Mark listing as **not interested**: add/activate blocklist record for this eBay item id, then remove listing row |
 | POST | `/api/listings/{uuid}/promote-watch-catalog` | **Save to watch database** for one listing: match existing catalog row or **create** one from brand + reference (or brand + family) |
 | POST | `/api/listings/{uuid}/refresh-from-ebay` | Browse **getItem** + eBay page check: refresh row and set **`is_active=false`** only when the listing page contains **`<h1 class="error-header-v2__title">We looked everywhere.</h1>`** |
@@ -71,6 +71,8 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 | POST | `/api/not-interested/{uuid}/restore` | Set record inactive (**I am interested**) so ingest can include that eBay item id again |
 | DELETE | `/api/not-interested/{uuid}` | Permanently delete one not-interested history record |
 | GET | `/api/watch-models/{uuid}` | One model; includes **`linked_ebay_urls`** (active linked listings’ **`web_url`** values) |
+| GET | `/api/watch-models/{uuid}/donor-movement-market` | Donor asking-price stats: active **`movement_only`** listings linked to the caliber resolved from **`watch_models.caliber`** (optional **`currency`** query filter); per-currency p25/median/p75 and range |
+| GET | `/api/entities/calibers/{uuid}/donor-movement-market` | Same donor stats for a given **`calibers.id`** (optional **`currency`**) |
 | PATCH | `/api/watch-models/{uuid}` | Update model (observed bounds refreshed after save) |
 | GET | `/api/watchbase/search?q=…` | Proxies WatchBase **`/filter/results?q=`** (their on-site search). Returns watch page URLs + labels for the find wizard. **`WATCHBASE_IMPORT_ENABLED=false`** disables |
 | POST | `/api/everywatch/debug` | **Dev / LAN:** body **`watch_model_id`?**, **`extra_urls`[]** (tried first), **`search_queries`[]** (includes **`/watch-listing`** URLs), **`cookie_header`?** (browser Cookie after login — not stored). Returns **`analysis`** with **`parsed_listing_hits_sample`**, **`detail_import_preview`** on watch pages, plus **`collect_everywatch_snapshot`**. Does not write DB |
@@ -94,6 +96,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **Match queue sync:** Active listings still **unlinked** (`watch_model_id` null) are picked up by a scheduled job (**`match_queue_sync`**, interval from **`MATCH_QUEUE_SYNC_INTERVAL_MINUTES`** / Settings **`match_queue_sync_interval_minutes`**; **0** disables). The job runs the same **analyze** path as ingest. Use **`POST /api/watch-link-reviews/sync-from-unmatched`** or the **Match queue** page button for an immediate pass. When **`watch_catalog_queue_require_identity`** is **true** (default), listings without parseable brand + (reference or family) stay out of the queue in **review** mode; set **`watch_catalog_queue_require_identity`** to **false** in Settings (or the Match queue toggle) if you want those rows queued anyway.
 - **Listing detail (`/listings/detail/?id=`)** — editable fields with **source** dropdown per field: **M** manual, **I** inferred (AI — hook later), **S** searched, **R** rules/parsed text, **O** observed ingest (reserved for future “listing ended” detection), **H** historical, **P** parsed (same idea as R). Guidance strings are returned as **`field_guidance`** on the detail JSON.
 - **Repair:** rule-based core **plus** optional **repair add-on** and **donor cost** (both included in total repair for profit math). Fees/shipping ignored.
+- **Listing kind:** **`listings.listing_type`** (`watch_complete` / `movement_only` / `parts_other` / `unknown`) and **`listing_type_source`** (`auto` / `manual`). Heuristic classification runs on **analyze** unless **manual**. Use for donor listings vs full watches; **Donor movement market** on watch model detail aggregates **`movement_only`** prices by currency for the resolved caliber.
 - **Tuning asking-sample size:** optional **`app_settings`** row **`max_comp_candidates`** (integer string, default **200** in code if unset).
 
 ### UI: currencies and on-screen help
@@ -104,7 +107,7 @@ Self-hosted eBay watch sourcing: **Browse API** ingest → **PostgreSQL** → ru
 - **Settings** includes a **“Prices & currencies in the UI”** card; listing, watch, dashboard, and match-queue pages use **CardDescription** text and table header **tooltips** where prices appear.
 - **Watch database (`/watch-models/`):** **Search and filters** card — global **`q`** plus contains fields (brand, reference, model family, model name, caliber), **Price data** (any/missing/strict), and **WatchBase** (unmatched/matched). **`WATCH_CATALOG_EXCLUDED_BRANDS`** hides brands server-side. Presets use the same filters plus fixed criteria for unmatched / strict pricing gaps. **Rows per page** — **25**, **50**, **100**, **200**, **500**, or **All** (loads every row matching current filters via repeated API calls; choice persisted in **`localStorage`** key **`watchfinder-watch-models-page-size`**). **Delete selected** (batch card) removes all checked rows using **`DELETE /api/watch-models/{uuid}`** (listings unlinked). **Find on markets…** (model detail) and the supervised **batch** wizard call **`GET /api/market/search`** — WatchBase filter hits, **Everywatch** listing URLs + parsed **price hints**, and **Chrono24** search + Google links (automated Chrono24 HTML often returns **403**; use browser). **`market_source_snapshots`** JSON is filled on **analyze** / **backfill** and via **Refresh market snapshots**; comply with each site’s terms. Supervised wizard: side-by-side images, **Delete this catalog entry**, paste WatchBase URL for import, **No match — skip**; jittered delays between WatchBase calls.
 
-After upgrading, run **`alembic upgrade head`** (through **010** / **`not_interested_listings`** and prior migrations).
+After upgrading, run **`alembic upgrade head`** (through **013** / **`listing_type_source`** and prior migrations).
 
 ### Listing `is_active` and live checks
 

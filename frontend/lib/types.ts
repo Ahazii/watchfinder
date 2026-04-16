@@ -26,6 +26,8 @@ export type ListingSummary = {
   watch_model_id?: string | null;
   resolved_brand_id?: string | null;
   resolved_stock_reference_id?: string | null;
+  listing_type?: "watch_complete" | "movement_only" | "parts_other" | "unknown";
+  listing_type_source?: "auto" | "manual";
   score?: OpportunityScore | null;
 };
 
@@ -76,6 +78,27 @@ export type WatchbaseSearchResponse = {
   query: string;
   items: WatchbaseSearchHit[];
   total: number;
+};
+
+/** Active movement_only listings linked to a caliber; prices are asking (current_price), per currency. */
+export type DonorMovementBand = {
+  currency: string;
+  sample_count: number;
+  p25?: string | number | null;
+  median?: string | number | null;
+  p75?: string | number | null;
+  low?: string | number | null;
+  high?: string | number | null;
+};
+
+export type DonorMovementMarket = {
+  caliber_id: string | null;
+  caliber_display_text: string | null;
+  caliber_norm_key: string | null;
+  listing_type: string;
+  total_samples: number;
+  bands: DonorMovementBand[];
+  match_note: string | null;
 };
 
 export type WatchModelBrief = {

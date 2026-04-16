@@ -50,6 +50,7 @@ type ListingsPageState = {
     resolved_brand_id: string;
     resolved_stock_reference_id: string;
     caliber_id: string;
+    listing_type: string;
     price_min: string;
     price_max: string;
     repair_keyword: string;
@@ -77,6 +78,7 @@ export default function ListingsPage() {
     resolved_brand_id: "",
     resolved_stock_reference_id: "",
     caliber_id: "",
+    listing_type: "",
     price_min: "",
     price_max: "",
     repair_keyword: "",
@@ -124,6 +126,7 @@ export default function ListingsPage() {
             resolved_brand_id: pf.resolved_brand_id ?? "",
             resolved_stock_reference_id: pf.resolved_stock_reference_id ?? "",
             caliber_id: pf.caliber_id ?? "",
+            listing_type: pf.listing_type ?? "",
           }));
         }
         if (typeof parsed?.skip === "number" && parsed.skip >= 0) setSkip(parsed.skip);
@@ -188,6 +191,7 @@ export default function ListingsPage() {
       q.set("resolved_stock_reference_id", f.resolved_stock_reference_id.trim());
     }
     if (f.caliber_id.trim()) q.set("caliber_id", f.caliber_id.trim());
+    if (f.listing_type.trim()) q.set("listing_type", f.listing_type.trim());
     if (f.price_min) q.set("price_min", f.price_min);
     if (f.price_max) q.set("price_max", f.price_max);
     if (f.repair_keyword) q.set("repair_keyword", f.repair_keyword);
@@ -334,6 +338,24 @@ export default function ListingsPage() {
               value={filters.caliber_id}
               onChange={(v) => setFilters((f) => ({ ...f, caliber_id: v }))}
             />
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Listing type
+              </label>
+              <select
+                className="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                value={filters.listing_type}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, listing_type: e.target.value }))
+                }
+              >
+                <option value="">Any</option>
+                <option value="watch_complete">Watch</option>
+                <option value="movement_only">Movement</option>
+                <option value="parts_other">Other parts</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
             <Field
               label="Price min (numeric)"
               value={filters.price_min}
@@ -462,6 +484,7 @@ export default function ListingsPage() {
                   resolved_brand_id: "",
                   resolved_stock_reference_id: "",
                   caliber_id: "",
+                  listing_type: "",
                   price_min: "",
                   price_max: "",
                   repair_keyword: "",
@@ -633,6 +656,7 @@ function ListingsTable({
         <TableRow>
           <TableHead className="min-w-[3rem] text-muted-foreground">Photo</TableHead>
           <TableHead className="w-24 text-muted-foreground">Status</TableHead>
+          <TableHead className="w-32 text-muted-foreground">Type</TableHead>
           <SortableTableHead
             label="Title"
             column="title"
@@ -701,6 +725,11 @@ function ListingsTable({
                   Active
                 </Badge>
               )}
+            </TableCell>
+            <TableCell className="align-top">
+              <Badge variant="secondary" className="whitespace-nowrap">
+                {listingTypeLabel(r.listing_type)}
+              </Badge>
             </TableCell>
             <TableCell className="max-w-xs">
               <Link
@@ -798,4 +827,17 @@ function pct(value: string | number) {
   const n = typeof value === "string" ? parseFloat(value) : value;
   if (Number.isNaN(n)) return "—";
   return `${(n * 100).toFixed(0)}%`;
+}
+
+function listingTypeLabel(value?: string | null) {
+  switch (value) {
+    case "watch_complete":
+      return "Watch";
+    case "movement_only":
+      return "Movement";
+    case "parts_other":
+      return "Parts";
+    default:
+      return "Unknown";
+  }
 }

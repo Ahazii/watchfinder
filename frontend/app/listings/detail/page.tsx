@@ -22,6 +22,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
 const SOURCE_OPTIONS = ["M", "I", "S", "R", "O", "H", "P"] as const;
+const LISTING_TYPE_OPTIONS = [
+  { value: "watch_complete", label: "Watch" },
+  { value: "movement_only", label: "Movement only" },
+  { value: "parts_other", label: "Other parts" },
+  { value: "unknown", label: "Unknown" },
+] as const;
 
 export default function ListingDetailPage() {
   return (
@@ -89,6 +95,9 @@ function DetailBody() {
   const [saleSrc, setSaleSrc] = useState("M");
   const [notes, setNotes] = useState("");
   const [watchModelId, setWatchModelId] = useState("");
+  const [listingType, setListingType] = useState<
+    "watch_complete" | "movement_only" | "parts_other" | "unknown"
+  >("unknown");
   const [catalog, setCatalog] = useState<WatchModel[]>([]);
   const [promoteBusy, setPromoteBusy] = useState(false);
   const [promoteErr, setPromoteErr] = useState<string | null>(null);
@@ -96,6 +105,7 @@ function DetailBody() {
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [notInterestedBusy, setNotInterestedBusy] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const [reclassBusy, setReclassBusy] = useState(false);
 
   useEffect(() => {
     fetchJson<WatchModelListResponse>("/api/watch-models?limit=500")
@@ -128,6 +138,7 @@ function DetailBody() {
     setSaleSrc(d.recorded_sale?.source || "M");
     setNotes(d.notes ?? "");
     setWatchModelId(d.watch_model_id ?? "");
+    setListingType(d.listing_type ?? "unknown");
     setSavedOk(false);
   }, []);
 
@@ -215,6 +226,10 @@ function DetailBody() {
       recorded_sale_source: saleSrc,
       notes: notes.trim() || null,
     };
+    const prevType = row?.listing_type ?? "unknown";
+    if (listingType !== prevType) {
+      body.listing_type = listingType;
+    }
     if (saleAt.trim()) {
       const iso = new Date(saleAt).toISOString();
       body.recorded_sale_at = iso;
@@ -260,9 +275,34 @@ function DetailBody() {
         setSaleSrc(d.recorded_sale?.source || "M");
         setNotes(d.notes ?? "");
         setWatchModelId(d.watch_model_id ?? "");
+        setListingType(d.listing_type ?? "unknown");
       })
       .catch((e: Error) => setSaveErr(e.message))
       .finally(() => setSaving(false));
+  };
+
+  const reclassifyListingTypeAuto = () => {
+    if (!id) return;
+    setSaveErr(null);
+    setReclassBusy(true);
+    fetch(apiUrl(`/api/listings/${id}`), {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ listing_type_source: "auto" }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json() as Promise<ListingDetail>;
+      })
+      .then((d) => {
+        applyDetail(d);
+        setSavedOk(true);
+      })
+      .catch((e: Error) => setSaveErr(e.message))
+      .finally(() => setReclassBusy(false));
   };
 
   if (!id) {
@@ -321,6 +361,16 @@ function DetailBody() {
                 {row.brand.source}
               </Badge>
             ) : null}
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Listing type</span>{" "}
+            <Badge variant="secondary" className="text-xs">
+              {LISTING_TYPE_OPTIONS.find((x) => x.value === (row.listing_type ?? "unknown"))
+                ?.label ?? "Unknown"}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              {row.listing_type_source === "manual" ? "Manual" : "Auto"}
+            </Badge>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -705,6 +755,46 @@ function DetailBody() {
             </div>
           </div>
           <Hint text={g.recorded_sale} />
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[200px] flex-1">
+              <label className="text-sm font-medium" htmlFor="listing-type">
+                Listing type
+              </label>
+              <select
+                id="listing-type"
+                className="mt-1 flex h-9 w-full max-w-sm rounded-md border border-border bg-background px-2 text-sm"
+                value={listingType}
+                onChange={(e) =>
+                  setListingType(
+                    e.target.value as
+                      | "watch_complete"
+                      | "movement_only"
+                      | "parts_other"
+                      | "unknown",
+                  )
+                }
+              >
+                {LISTING_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <Hint text="Changing the value and saving marks the type as manual. Other saves leave auto/manual unchanged." />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mb-0.5"
+              disabled={reclassBusy || row.listing_type_source !== "manual"}
+              title="Clear manual lock and re-run automatic classification"
+              onClick={reclassifyListingTypeAuto}
+            >
+              {reclassBusy ? "Working…" : "Re-classify automatically"}
+            </Button>
+          </div>
 
           <div>
             <label className="text-sm font-medium" htmlFor="notes">

@@ -28,6 +28,8 @@ from watchfinder.services.entities.resolve import backfill_entity_dictionaries
 from watchfinder.services.watch_models import backfill_watch_catalog, refresh_watch_model_observed_bounds
 from watchfinder.services.watch_models.exclusions import catalog_excluded_brands
 from watchfinder.services.watchbase_import import WatchBaseImportError, import_watchbase_for_model
+from watchfinder.schemas.donor_market import DonorMovementMarketOut
+from watchfinder.services.donor_movement_market import donor_market_for_watch_model
 
 PricingListFilter = Literal["all", "has_signal", "missing_signal", "strict_needs", "strict_ok"]
 ImportStatusFilter = Literal["all", "unmatched", "matched"]
@@ -310,6 +312,26 @@ def post_refresh_market_snapshots(
         merged_manual_bounds=bool(out.get("merged_manual_bounds")),
         everywatch_specs_applied=bool(out.get("everywatch_specs_applied")),
     )
+
+
+@router.get(
+    "/{model_id}/donor-movement-market",
+    response_model=DonorMovementMarketOut,
+    summary="Donor movement market stats for this catalog row’s caliber (if resolvable)",
+)
+def get_watch_model_donor_movement_market(
+    model_id: UUID,
+    db: Session = Depends(get_db),
+    currency: str | None = Query(
+        None,
+        description="If set, only prices in this currency (e.g. GBP)",
+    ),
+) -> DonorMovementMarketOut:
+    wm = db.get(WatchModel, model_id)
+    if not wm:
+        raise HTTPException(status_code=404, detail="Watch model not found")
+    payload = donor_market_for_watch_model(db, wm, currency=currency)
+    return DonorMovementMarketOut.model_validate(payload)
 
 
 @router.get("/{model_id}", response_model=WatchModelOut)

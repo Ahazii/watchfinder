@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiUrl, fetchJson, mediaUrl } from "@/lib/api";
 import type {
+  DonorMovementMarket,
   MarketSnapshotsRefreshResponse,
   UnifiedMarketSearchResponse,
   WatchBaseImportResult,
@@ -100,6 +101,9 @@ function DetailBody() {
   const [findUnified, setFindUnified] = useState<UnifiedMarketSearchResponse | null>(null);
   const [marketSnap, setMarketSnap] = useState<Record<string, unknown> | null>(null);
   const [marketRefreshBusy, setMarketRefreshBusy] = useState(false);
+  const [donorMarket, setDonorMarket] = useState<DonorMovementMarket | null>(null);
+  const [donorMarketErr, setDonorMarketErr] = useState<string | null>(null);
+  const [donorLoading, setDonorLoading] = useState(false);
 
   const {
     sizeId: wbFindThumbId,
@@ -144,6 +148,19 @@ function DetailBody() {
       window.removeEventListener("mouseup", onUp);
     };
   }, [findModalOpen]);
+
+  const loadDonorMarket = useCallback(() => {
+    if (!id || isNew) return;
+    setDonorLoading(true);
+    setDonorMarketErr(null);
+    fetchJson<DonorMovementMarket>(`/api/watch-models/${id}/donor-movement-market`)
+      .then(setDonorMarket)
+      .catch((e: Error) => {
+        setDonorMarket(null);
+        setDonorMarketErr(e.message);
+      })
+      .finally(() => setDonorLoading(false));
+  }, [id, isNew]);
 
   const applyModel = useCallback((m: WatchModel) => {
     setBrand(m.brand ?? "");
@@ -224,6 +241,10 @@ function DetailBody() {
       .then(applyModel)
       .catch((e: Error) => setErr(e.message));
   }, [id, isNew, applyModel]);
+
+  useEffect(() => {
+    loadDonorMarket();
+  }, [loadDonorMarket]);
 
   const num = (s: string) => {
     const t = s.trim();
@@ -422,7 +443,10 @@ function DetailBody() {
         if (!res.ok) throw new Error(await res.text());
         return res.json() as Promise<WatchModel>;
       })
-      .then(applyModel)
+      .then((m) => {
+        applyModel(m);
+        loadDonorMarket();
+      })
       .catch((e: Error) => setSaveErr(e.message))
       .finally(() => setSaving(false));
   };
@@ -821,6 +845,78 @@ function DetailBody() {
           <Field label="Caliber" id="cal" value={caliber} onChange={setCaliber} />
         </CardContent>
       </Card>
+
+      {!isNew ? (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle>Donor movement market</CardTitle>
+                <CardDescription>
+                  Asking prices from your ingested listings classified{" "}
+                  <strong>movement_only</strong> and linked to the same caliber dictionary row as this
+                  model&apos;s caliber text (when it resolves). One row per currency; refresh after you change
+                  caliber or ingest new donor listings.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={donorLoading}
+                onClick={() => loadDonorMarket()}
+              >
+                {donorLoading ? "Loading…" : "Refresh"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {donorMarketErr ? (
+              <p className="text-destructive">{donorMarketErr}</p>
+            ) : null}
+            {donorMarket?.match_note ? (
+              <p className="text-xs text-muted-foreground">{donorMarket.match_note}</p>
+            ) : null}
+            {donorLoading && !donorMarket ? (
+              <p className="text-muted-foreground">Loading…</p>
+            ) : null}
+            {donorMarket && donorMarket.total_samples === 0 && donorMarket.caliber_id ? (
+              <p className="text-muted-foreground">
+                No active movement-only listings with a price linked to this caliber (
+                <span className="font-mono">{donorMarket.caliber_display_text}</span>). Classify donor
+                listings as movement, ensure they parse a caliber, and run ingest/analyze.
+              </p>
+            ) : null}
+            {donorMarket && donorMarket.bands.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Total samples: {donorMarket.total_samples} · dictionary caliber:{" "}
+                  <span className="font-mono">
+                    {donorMarket.caliber_display_text ?? "—"}
+                  </span>
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {donorMarket.bands.map((b) => (
+                    <div
+                      key={b.currency}
+                      className="rounded-md border border-border p-3 tabular-nums"
+                    >
+                      <p className="font-medium">{b.currency}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        n={b.sample_count} · median {money(b.median, b.currency)} · p25–p75{" "}
+                        {money(b.p25, b.currency)} – {money(b.p75, b.currency)}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        range {money(b.low, b.currency)} – {money(b.high, b.currency)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

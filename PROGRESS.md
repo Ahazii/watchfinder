@@ -1,6 +1,6 @@
 # WatchFinder — implementation progress
 
-Last updated: **13 April 2026**
+Last updated: **16 April 2026**
 
 This document records what is implemented in the repository versus the phased plan in **`Kickoff Documents/CURSOR_PROMPT.txt`**, plus later features (settings, valuation).
 
@@ -58,7 +58,7 @@ This document records what is implemented in the repository versus the phased pl
 - **Settings** via `pydantic-settings` (`watchfinder/config.py`): `DATABASE_URL`, eBay credentials, marketplace, search query/limit, **`ingest_max_pages`**, etc.
 - **PostgreSQL** via SQLAlchemy 2 + **psycopg** (`watchfinder/db.py`).
 - **Models** (`watchfinder/models/listing.py`): `listings`, `listing_snapshots`, `parsed_attributes`, `repair_signals`, `opportunity_scores`, `saved_searches`, `app_settings`, **`listing_edits`**, **`watch_sale_records`**, **`watch_models`** (listing **`watch_model_id`** FK **SET NULL**), **`not_interested_listings`** (migration **010**).
-- **Alembic**: **001**–**010** (latest: **`not_interested_listings`**; prior: **`market_source_snapshots`**, WatchBase import columns, specs + **`reference_url`**, etc.).
+- **Alembic**: **001**–**013** (latest: **`listing_type_source`**; **`012`** **`listing_type`**; **`011`** entity dictionaries / **`listing_calibers`**; … **`010`** **`not_interested_listings`**).
 - **eBay**: client-credentials OAuth (`services/ebay/auth.py`), **Browse** search + **getItem** (`browse.py`), **Taxonomy** client stub (`taxonomy.py`).
 - **Ingestion**: `mapper.py`, `job.py`, `live_refresh.py`; multi-query cycle from **`saved_searches`** or env fallback; shared **`EbayBrowseClient`** per cycle.
 - **Docker** / **CI** / **Kickoff docs** as before.
@@ -114,6 +114,16 @@ OpenAPI: **`/docs`**.
 
 ---
 
+## Listing classification & donor market (Apr 2026)
+
+- **Migrations `012`–`013`:** **`listings.listing_type`** (`watch_complete` | `movement_only` | `parts_other` | `unknown`, default unknown) and **`listings.listing_type_source`** (`auto` | `manual`, default auto).
+- **Heuristic classifier** (`services/listing_type_infer.py`): runs on **`analyze_listing`** when source is **auto**; **PATCH** with explicit **`listing_type`** sets **manual**; **`listing_type_source: auto`** alone clears the lock and re-infers on analyze.
+- **UI:** Listings table **Type** column + filter; listing detail dropdown, **Auto/Manual** badge, **Re-classify automatically** (manual only). Saving valuation **only sends `listing_type` when the dropdown changed** so notes-only saves do not flip to manual.
+- **Donor movement market:** **`services/donor_movement_market.py`** — active **`movement_only`** listings with **`current_price`**, linked via **`listing_calibers`**, grouped **by currency** (p25 / median / p75 / low / high). **`GET /api/watch-models/{id}/donor-movement-market`** resolves caliber from **`watch_models.caliber`** (norm + fuzzy match to **`calibers`**). **`GET /api/entities/calibers/{id}/donor-movement-market`** for a fixed caliber id. Watch model detail: **Donor movement market** card + **Refresh**.
+- **Tests:** **`tests/test_listing_type_infer.py`**, **`tests/test_donor_movement_market.py`** (percentiles via **`numeric_stats.py`**).
+
+---
+
 ## Planned / not done yet
 
 | Item | Notes |
@@ -123,7 +133,7 @@ OpenAPI: **`/docs`**.
 | **Reference-tight sale comps** | Listing comp bands could weight **`watch_model`** link more heavily. |
 | **Saved searches** (generic filters) | `saved_searches` used for ingest lines only. |
 | **Taxonomy**-driven ingest | Client stub only. |
-| **Tests** | **Started:** mapper + stale-refresh helpers; expand to API, refresh, ingest job with mocks. |
+| **Tests** | **Started:** mapper + stale-refresh + listing-type + donor percentile helpers; expand to API, refresh, ingest job with mocks. |
 | **npm audit** / Next upgrades | Per your policy. |
 
 ---
@@ -146,20 +156,24 @@ OpenAPI: **`/docs`**.
 | `backend/watchfinder/services/market_unified_search.py` | Aggregates WatchBase + Everywatch + Chrono24 for UI |
 | `backend/watchfinder/services/watch_models/exclusions.py` | Parse **`WATCH_CATALOG_EXCLUDED_BRANDS`** for list + catalog skip |
 | `backend/watchfinder/services/scoring/` | **`engine.py`**, **`catalog_anchor.py`** (watch DB £ anchor), **`listing_gbp.py`** (Frankfurter → GBP), **`constants.py`** |
+| `backend/watchfinder/services/listing_type_infer.py` | Heuristic **watch vs movement vs parts** on analyze |
+| `backend/watchfinder/services/donor_movement_market.py` | Donor **movement_only** price bands by caliber + currency |
+| `backend/watchfinder/numeric_stats.py` | **`percentile_sorted`** (no DB import) |
 | `backend/watchfinder/services/stale_listing_refresh.py` | Stale **getItem** batch, **`run_full_active_listing_refresh`**, scheduler sync |
 | `backend/watchfinder/stale_refresh_worker.py` | APScheduler job entry |
 | `backend/watchfinder/services/ingest_settings.py` | Ingest queries, interval, **`ingest_search_limit`**, **`ingest_max_pages`** |
 | `tests/` | **`pytest`** targets |
-| `alembic/versions/` | **001**–**010** |
+| `alembic/versions/` | **001**–**013** |
 | `pytest.ini` | `pythonpath = backend` |
 
 ---
 
 ## How to continue
 
-1. Expand **pytest** (refresh endpoint with mocked httpx, stale batch with test DB).
-2. **Reference-tight** comp bands when **`watch_model_id`** is set.
-3. Tune repair scoring (parts factor, margin) now that **`watch_models`** anchors resale when linked.
-4. First-class **O** (ended / last sold) if you want beyond **getItem** + inactive.
+1. **Wire donor median into scoring** — optional **`estimated_donor_cost`** from **`donor-movement-market`** when caliber matches and listing is a repair candidate (or expose as UI hint only).
+2. Expand **pytest** (refresh endpoint with mocked httpx, stale batch with test DB, donor market query with test DB).
+3. **Reference-tight** comp bands when **`watch_model_id`** is set.
+4. Tune repair scoring (parts factor, margin) now that **`watch_models`** anchors resale when linked.
+5. First-class **O** (ended / last sold) if you want beyond **getItem** + inactive.
 
-For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **010** / **`not_interested_listings`**; container startup normally runs this automatically).
+For Unraid deployment, use **`Kickoff Documents/SIMPLIFIED_NOVICE_SETUP.md`**. After pull, run **`alembic upgrade head`** (through **013**; container startup normally runs this automatically).

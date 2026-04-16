@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from watchfinder.schemas.watch_link_reviews import WatchLinkReviewBriefOut
 from watchfinder.schemas.watch_models import WatchModelBriefOut
+
+ListingType = Literal["watch_complete", "movement_only", "parts_other", "unknown"]
+ListingTypeSource = Literal["auto", "manual"]
 
 
 class ValuedStringOut(BaseModel):
@@ -84,6 +88,8 @@ class ListingSummary(BaseModel):
     watch_model_id: UUID | None = None
     resolved_brand_id: UUID | None = None
     resolved_stock_reference_id: UUID | None = None
+    listing_type: ListingType = "unknown"
+    listing_type_source: ListingTypeSource = "auto"
     score: OpportunityScoreOut | None = None
 
 
@@ -131,6 +137,8 @@ class ListingEditsPatch(BaseModel):
     recorded_sale_at: datetime | None = None
     recorded_sale_source: str | None = Field(None, max_length=1)
     notes: str | None = None
+    listing_type: ListingType | None = None
+    listing_type_source: ListingTypeSource | None = None
 
 
 class ListingListResponse(BaseModel):

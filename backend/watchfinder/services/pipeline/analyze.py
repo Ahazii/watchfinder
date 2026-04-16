@@ -25,6 +25,7 @@ from watchfinder.services.watch_models import (
     refresh_watch_model_observed_bounds,
 )
 from watchfinder.services.watch_models.catalog import CatalogLinkOutcome
+from watchfinder.services.listing_type_infer import maybe_apply_auto_listing_type
 
 
 def analyze_listing(db: Session, listing: Listing) -> CatalogLinkOutcome:
@@ -57,6 +58,8 @@ def analyze_listing(db: Session, listing: Listing) -> CatalogLinkOutcome:
                 source_field=s.source_field,
             )
         )
+
+    maybe_apply_auto_listing_type(listing, corpus, parsed)
 
     catalog_out = ensure_watch_catalog_for_listing(
         db,

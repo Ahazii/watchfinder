@@ -15,6 +15,7 @@ from watchfinder.api.listing_sort import apply_listing_sort, normalize_sort
 from watchfinder.api.query import base_listing_select, count_listings
 from watchfinder.models import Listing, ListingEdit, WatchModel
 from watchfinder.schemas.listings import (
+    ListingType,
     ListingDetail,
     ListingEditsPatch,
     ListingListResponse,
@@ -88,6 +89,10 @@ def list_listings(
         None,
         description="Filter listings linked to this caliber row",
     ),
+    listing_type: ListingType | None = Query(
+        None,
+        description="Filter by listing type classification",
+    ),
     sort_by: str | None = Query(
         None,
         description="Sort column: last_seen, title, price, confidence, profit",
@@ -114,6 +119,7 @@ def list_listings(
         resolved_brand_id=resolved_brand_id,
         resolved_stock_reference_id=resolved_stock_reference_id,
         caliber_id=caliber_id,
+        listing_type=listing_type,
     )
     total = count_listings(db, base)
     sk, desc = normalize_sort(sort_by, sort_dir)
@@ -251,6 +257,14 @@ def patch_listing(
     patch = body.model_dump(exclude_unset=True)
     if "watch_model_id" in patch:
         listing.watch_model_id = patch.pop("watch_model_id")
+
+    lt = patch.pop("listing_type", None)
+    lts = patch.pop("listing_type_source", None)
+    if lt is not None:
+        listing.listing_type = str(lt)
+        listing.listing_type_source = "manual"
+    elif lts == "auto":
+        listing.listing_type_source = "auto"
 
     for key, val in patch.items():
         if hasattr(edit, key):

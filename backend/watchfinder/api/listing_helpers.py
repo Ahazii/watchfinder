@@ -38,5 +38,7 @@ def listing_to_summary(
         watch_model_id=listing.watch_model_id,
         resolved_brand_id=listing.resolved_brand_id,
         resolved_stock_reference_id=listing.resolved_stock_reference_id,
+        listing_type=listing.listing_type or "unknown",
+        listing_type_source=listing.listing_type_source or "auto",
         score=OpportunityScoreOut.model_validate(score) if score else None,
     )

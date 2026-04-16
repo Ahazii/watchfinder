@@ -40,6 +40,7 @@ def base_listing_select(
     resolved_brand_id: uuid.UUID | None = None,
     resolved_stock_reference_id: uuid.UUID | None = None,
     caliber_id: uuid.UUID | None = None,
+    listing_type: str | None = None,
 ) -> Select:
     stmt: Select = select(Listing)
 
@@ -115,6 +116,8 @@ def base_listing_select(
                 )
             )
         )
+    if listing_type and str(listing_type).strip():
+        stmt = stmt.where(Listing.listing_type == str(listing_type).strip())
 
     if price_min is not None:
         stmt = stmt.where(Listing.current_price.is_not(None)).where(

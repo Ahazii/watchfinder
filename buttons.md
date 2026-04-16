@@ -25,6 +25,7 @@ No action buttons on this page.
 - `Apply`: runs the listing query with current filters and resets pagination to page 1.
 - `Clear`: resets all listing filters to defaults and reloads.
 - `Recheck active (this page)` / `Rechecking…`: calls live eBay refresh on visible rows to update active/inactive status.
+- **Listing type** (select, not a button): filter rows by **`watch_complete`** / **`movement_only`** / **`parts_other`** / **`unknown`** (stored on each listing).
 
 ### Table row actions
 - `View`: opens listing on eBay in a new tab.
@@ -51,7 +52,8 @@ No action buttons on this page.
 - `Save to watch database` / `Working…`: triggers promote/link/create catalog action for this listing.
 
 ### Form actions
-- `Save changes` / `Saving…`: saves manual valuation and field overrides.
+- `Save changes` / `Saving…`: saves manual valuation and field overrides. **`listing_type`** is sent to the API **only when the listing-type dropdown value changed** since load (so other edits do not force a manual classification).
+- `Re-classify automatically` / `Working…`: sets **`listing_type_source`** back to **auto** and re-runs heuristic classification (enabled when the row is **Manual**).
 
 ### Error fallback
 - `Back to listings`: visible on error state.
@@ -109,6 +111,9 @@ No action buttons on this page.
 - `Open detail page`: opens parsed detail result URL.
 - `Cancel`: closes modal.
 - `Confirm import` / `Importing…`: runs WatchBase import with selected/pasted WatchBase URL.
+
+### Donor movement market card (existing model only)
+- `Refresh` / `Loading…`: reloads **`GET /api/watch-models/{id}/donor-movement-market`** (asking-price bands from active **`movement_only`** listings linked to the resolved caliber for this model’s **Caliber** field).
 
 ### Page-level actions
 - `← Watch database`: back to model list.

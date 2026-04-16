@@ -21,6 +21,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from watchfinder.db import Base
 
+LISTING_TYPE_UNKNOWN = "unknown"
+
 
 class WatchModel(Base):
     """Canonical watch type (many listings can link here). Price bounds: observed auto + manual."""
@@ -123,6 +125,12 @@ class Listing(Base):
         ForeignKey("stock_references.id", ondelete="SET NULL"),
         index=True,
         nullable=True,
+    )
+    listing_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=text(f"'{LISTING_TYPE_UNKNOWN}'")
+    )
+    listing_type_source: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'auto'")
     )
 
     snapshots = relationship(

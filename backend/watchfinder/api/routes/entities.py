@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from watchfinder.api.deps import get_db
 from watchfinder.models import Brand, Caliber, StockReference
+from watchfinder.schemas.donor_market import DonorMovementMarketOut
+from watchfinder.services.donor_movement_market import build_donor_market_payload
 from watchfinder.schemas.entities import (
     BrandListResponse,
     BrandOut,
@@ -18,6 +20,28 @@ from watchfinder.schemas.entities import (
 )
 
 router = APIRouter(prefix="/entities", tags=["entities"])
+
+
+@router.get(
+    "/calibers/{caliber_id}/donor-movement-market",
+    response_model=DonorMovementMarketOut,
+    summary="Donor movement asking-price bands (movement_only listings for this caliber)",
+)
+def get_caliber_donor_movement_market(
+    caliber_id: UUID,
+    db: Session = Depends(get_db),
+    currency: str | None = Query(
+        None,
+        description="If set, only prices in this currency (e.g. GBP)",
+    ),
+) -> DonorMovementMarketOut:
+    cal = db.get(Caliber, caliber_id)
+    if not cal:
+        raise HTTPException(status_code=404, detail="Caliber not found")
+    payload = build_donor_market_payload(
+        db, caliber=cal, currency=currency, match_note=None
+    )
+    return DonorMovementMarketOut.model_validate(payload)
 
 
 @router.get("/brands", response_model=BrandListResponse)
